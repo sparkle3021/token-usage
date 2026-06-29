@@ -349,7 +349,7 @@ func (m *Manager) QueryDaily() ([]model.DailyUsage, error) {
 func (m *Manager) QuerySessions() ([]model.SessionUsage, error) {
 	start := time.Now()
 	rows, err := m.db.Query(`
-		SELECT device, source, session_id, last_activity, project_path,
+		SELECT device, source, session_id, COALESCE(last_activity,''), COALESCE(project_path,''),
 			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 			reasoning_output_tokens, total_tokens, cost_usd
 		FROM session_usage

@@ -17,13 +17,13 @@ export default function TopModels({ rows, onDrillModel }) {
   const max = list[0]?.total || 1;
 
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div><CardTitle>Top 模型</CardTitle><CardDescription>按总 Token 排序 · {list.length} 个</CardDescription></div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="overflow-y-auto max-h-[calc(100%-4.5rem)] scrollbar-subtle">
         <div className="space-y-1.5">
           {list.map(m => (
             <div key={m.model} className="grid grid-cols-[1fr_auto] items-center gap-3 px-1.5 py-1.5 rounded-md cursor-pointer hover:bg-muted/50" onClick={() => onDrillModel?.(m)}>

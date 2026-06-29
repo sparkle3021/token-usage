@@ -78,7 +78,7 @@ func LocalDateFromTimestamp(value interface{}, fallback string) string {
 		if err != nil {
 			return fallback
 		}
-		return t.Format("2006-01-02")
+		return t.Local().Format("2006-01-02")
 	default:
 		return fallback
 	}
@@ -89,7 +89,7 @@ func LocalDateFromTimestamp(value interface{}, fallback string) string {
 		ms *= 1000
 	}
 
-	return time.UnixMilli(ms).Format("2006-01-02")
+	return time.UnixMilli(ms).Local().Format("2006-01-02")
 }
 
 func parseTime(s string) (time.Time, error) {

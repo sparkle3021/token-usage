@@ -128,3 +128,21 @@
     @apply font-sans;
     }
 }
+
+.scrollbar-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.85 0 0) transparent;
+}
+.scrollbar-subtle::-webkit-scrollbar {
+  width: 5px;
+}
+.scrollbar-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-subtle::-webkit-scrollbar-thumb {
+  background: oklch(0.85 0 0);
+  border-radius: 3px;
+}
+.scrollbar-subtle::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.75 0 0);
+}

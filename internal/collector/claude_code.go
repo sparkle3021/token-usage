@@ -180,6 +180,9 @@ func (c *ClaudeCodeCollector) parseFile(filePath string) []claudeRecord {
 		if rec.model == "" {
 			rec.model = "unknown"
 		}
+			if strings.Contains(rec.model, "synthetic") {
+				continue
+			}
 
 		rec.input = posIntFromJSON(usage.InputTokens)
 		rec.output = posIntFromJSON(usage.OutputTokens)

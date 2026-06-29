@@ -7,11 +7,8 @@ import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs.jsx';
 
 // Lazy-load chart/table components
 import TrendChart from './components/charts/TrendChart.jsx';
-import SourceDonut from './components/charts/SourceDonut.jsx';
 import TopModels from './components/charts/TopModels.jsx';
-import Gauge from './components/charts/Gauge.jsx';
 import Heatmap from './components/charts/Heatmap.jsx';
-import GrowthPanel from './components/charts/GrowthPanel.jsx';
 import TablePanel from './components/tables/TablePanel.jsx';
 import DrillDrawer from './components/tables/DrillDrawer.jsx';
 
@@ -85,16 +82,13 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
   const [f, setF] = useState(defaults);
   const [trendMode, setTrendMode] = useState('stacked');
   const [drill, setDrill] = useState(null);
-  const [focusedSource, setFocusedSource] = useState(null);
 
   const allSources = useMemo(() => [...new Set(M.daily.map(r => r.source))], [M.daily]);
   const allModels = useMemo(() => [...new Set(M.daily.map(r => r.model))].filter(Boolean), [M.daily]);
 
   const filtered = useMemo(() => {
-    const ff = { ...f };
-    if (focusedSource) ff.sources = new Set([focusedSource]);
-    return U.filterDaily(M.daily, ff);
-  }, [f, focusedSource, M.daily]);
+    return U.filterDaily(M.daily, f);
+  }, [f, M.daily]);
 
   const totals = useMemo(() => U.aggregateTotals(filtered), [filtered]);
   const dates = useMemo(() => U.rangeDates(f.startDate, f.endDate), [f]);
@@ -186,14 +180,6 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
         </div>
       </Card>
 
-      {/* Focus banner */}
-      {focusedSource && (
-        <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs bg-indigo-50 border border-indigo-200 text-indigo-700">
-          <span>聚焦：<strong>{focusedSource}</strong></span>
-          <Button size="xs" variant="ghost" className="ml-auto" onClick={() => setFocusedSource(null)}>取消</Button>
-        </div>
-      )}
-
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KPI label="总 Token" value={U.compactCN(totals.totalTokens)} delta={U.deltaPct(totals.totalTokens, compareData.totals?.totalTokens)} spark={sparkValues} color="oklch(0.55 0.16 265)" />
@@ -210,16 +196,7 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
           <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} />
         </div>
         <div className="col-span-12 lg:col-span-4">
-          <SourceDonut rows={filtered} focused={focusedSource} onFocusSource={setFocusedSource} />
-        </div>
-        <div className="col-span-12 lg:col-span-6">
           <TopModels rows={filtered} onDrillModel={r => setDrill({ kind: 'model', row: r })} />
-        </div>
-        <div className="col-span-6 lg:col-span-3">
-          <Gauge rate={totals.cacheHitRate} cacheRead={totals.cacheReadTokens} cacheCreation={totals.cacheCreationTokens} prevRate={compareData.totals?.cacheHitRate} />
-        </div>
-        <div className="col-span-6 lg:col-span-3">
-          <GrowthPanel totalsByDay={dailyMap} />
         </div>
         <div className="col-span-12">
           <Heatmap rows={filtered} dates={dates} />

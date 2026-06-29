@@ -37,7 +37,7 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
         </div>
       </CardHeader>
       <CardContent>
-        <div style={{ height: 320 }}>
+        <div style={{ height: 325 }}>
           <ResponsiveContainer width="100%" height="100%">
             {mode === 'line' ? (
               <LineChart data={chartData}>
