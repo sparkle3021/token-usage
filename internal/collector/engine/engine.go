@@ -71,6 +71,10 @@ func (e *Engine) SetEventCallback(cb EventCallback) {
 	e.onEvent = cb
 }
 
+func (e *Engine) Collectors() []collector.Collector {
+	return e.collectors
+}
+
 func (e *Engine) emit(event string, data interface{}) {
 	if e.onEvent != nil {
 		e.onEvent(event, data)
@@ -87,6 +91,7 @@ func (e *Engine) StartCollection() bool {
 	e.mu.Lock()
 	if e.active {
 		e.mu.Unlock()
+		log.Printf("[engine] StartCollection skipped (already active)")
 		return false
 	}
 	e.active = true
@@ -97,6 +102,7 @@ func (e *Engine) StartCollection() bool {
 		StartedAt: &now,
 	}
 	e.mu.Unlock()
+	log.Printf("[engine] StartCollection beginning collectors=%d", len(e.collectors))
 	go e.runCollection()
 	return true
 }
@@ -150,6 +156,9 @@ func (e *Engine) runCollection() {
 	e.active = false
 	e.mu.Unlock()
 	e.emit("collection:done", map[string]string{"status": status, "message": msg})
+
+	elapsed := time.Now().UTC().Sub(mustParseRFC3339(startedAt))
+	log.Printf("[engine] runCollection complete status=%s elapsed=%v", status, elapsed)
 }
 
 func (e *Engine) processCollector(result *collector.CollectResult, col collector.Collector) bool {
@@ -205,6 +214,8 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 	e.emit("collector:done", map[string]interface{}{
 		"source": col.Source(), "status": "ok", "summary": summary,
 	})
+	log.Printf("[engine] processCollector source=%s ok daily=%d sessions=%d events=%d",
+		col.Source(), len(result.Daily), len(result.Session), len(result.Events))
 	return true
 }
 
@@ -346,4 +357,12 @@ func truncateStr(s string, max int) string {
 		return s[len(s)-max:]
 	}
 	return s
+}
+
+func mustParseRFC3339(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Now().UTC()
+	}
+	return t
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,7 +38,9 @@ func hermesDBPath() string {
 
 func (c *HermesCollector) Collect(ctx context.Context, pricing TokenCalc) (*CollectResult, error) {
 	dbPath := hermesDBPath()
+	log.Printf("[collector] Hermes dbPath=%s", dbPath)
 	if _, err := os.Stat(dbPath); err != nil {
+		log.Printf("[collector] Hermes db not found path=%s", dbPath)
 		return emptyResult("hermes", "Hermes Agent"), nil
 	}
 
@@ -74,6 +77,8 @@ func (c *HermesCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 		}
 	}
 
+	log.Printf("[collector] Hermes done daily=%d", len(dailyMap))
+
 	return buildResult("hermes", "Hermes Agent", dailyMap, sessionMap, nil), nil
 }
 
@@ -100,7 +105,9 @@ func opencodeDBPath() string {
 
 func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*CollectResult, error) {
 	dbPath := opencodeDBPath()
+	log.Printf("[collector] OpenCode dbPath=%s", dbPath)
 	if _, err := os.Stat(dbPath); err != nil {
+		log.Printf("[collector] OpenCode db not found path=%s", dbPath)
 		return emptyResult("opencode", "OpenCode"), nil
 	}
 
@@ -136,6 +143,8 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 		}
 	}
 
+	log.Printf("[collector] OpenCode done daily=%d", len(dailyMap))
+
 	return buildResult("opencode", "OpenCode", dailyMap, sessionMap, nil), nil
 }
 
@@ -169,10 +178,16 @@ func (c *OpenClawCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	sessionMap := make(map[string]*sessionAgg)
 	var events []EventRow
 
-	for _, root := range openclawRoots() {
+	roots := openclawRoots()
+	log.Printf("[collector] OpenClaw roots=%v", roots)
+	totalFiles := 0
+	totalRecords := 0
+	for _, root := range roots {
 		files := CollectJSONLFiles(root)
+		totalFiles += len(files)
 		for _, fp := range files {
 			records := c.parseFile(fp)
+			totalRecords += len(records)
 			for _, rec := range records {
 				date := LocalDateFromTimestamp(rec.timestamp, time.Now().Format("2006-01-02"))
 				model := NormalizeModelForGrouping(rec.model)
@@ -198,6 +213,9 @@ func (c *OpenClawCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 			}
 		}
 	}
+
+	log.Printf("[collector] OpenClaw done files=%d records=%d daily=%d sessions=%d events=%d",
+		totalFiles, totalRecords, len(dailyMap), len(sessionMap), len(events))
 
 	return buildResult("openclaw", "OpenClaw", dailyMap, sessionMap, events), nil
 }

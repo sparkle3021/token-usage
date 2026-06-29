@@ -3,8 +3,10 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	_ "modernc.org/sqlite"
 
@@ -44,6 +46,7 @@ func New(dbPath string) (*Manager, error) {
 		db.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
+	log.Printf("[db] New opened path=%s", dbPath)
 	return m, nil
 }
 
@@ -150,6 +153,7 @@ func (m *Manager) initSchema() error {
 // ---------------------------------------------------------------------------
 
 func (m *Manager) UpsertDaily(row *model.DailyUsage) error {
+	start := time.Now()
 	_, err := m.db.Exec(`
 		INSERT INTO daily_usage (
 			device, source, usage_date, model,
@@ -181,6 +185,11 @@ func (m *Manager) UpsertDaily(row *model.DailyUsage) error {
 		row.ReasoningOutputTokens, row.TotalTokens, row.CostUSD,
 		row.UsageDate,
 	)
+	if err != nil {
+		log.Printf("[db] UpsertDaily error source=%s date=%s model=%s err=%v", row.Source, row.UsageDate, row.Model, err)
+	} else {
+		log.Printf("[db] UpsertDaily ok source=%s date=%s model=%s total=%d elapsed=%v", row.Source, row.UsageDate, row.Model, row.TotalTokens, time.Since(start))
+	}
 	return err
 }
 
@@ -189,6 +198,7 @@ func (m *Manager) UpsertDaily(row *model.DailyUsage) error {
 // ---------------------------------------------------------------------------
 
 func (m *Manager) UpsertSession(row *model.SessionUsage) error {
+	start := time.Now()
 	_, err := m.db.Exec(`
 		INSERT INTO session_usage (
 			device, source, session_id, last_activity, project_path,
@@ -210,6 +220,11 @@ func (m *Manager) UpsertSession(row *model.SessionUsage) error {
 		row.InputTokens, row.OutputTokens, row.CacheCreationTokens, row.CacheReadTokens,
 		row.ReasoningOutputTokens, row.TotalTokens, row.CostUSD,
 	)
+	if err != nil {
+		log.Printf("[db] UpsertSession error source=%s session=%s err=%v", row.Source, row.SessionID, err)
+	} else {
+		log.Printf("[db] UpsertSession ok source=%s session=%s total=%d elapsed=%v", row.Source, truncateID(row.SessionID), row.TotalTokens, time.Since(start))
+	}
 	return err
 }
 
@@ -218,11 +233,19 @@ func (m *Manager) UpsertSession(row *model.SessionUsage) error {
 // ---------------------------------------------------------------------------
 
 func (m *Manager) DeleteTimeUsageForSource(device, source string) error {
-	_, err := m.db.Exec(`DELETE FROM time_usage WHERE device = ? AND source = ?`, device, source)
+	start := time.Now()
+	result, err := m.db.Exec(`DELETE FROM time_usage WHERE device = ? AND source = ?`, device, source)
+	if err != nil {
+		log.Printf("[db] DeleteTimeUsageForSource error source=%s err=%v", source, err)
+	} else {
+		n, _ := result.RowsAffected()
+		log.Printf("[db] DeleteTimeUsageForSource ok source=%s deleted=%d elapsed=%v", source, n, time.Since(start))
+	}
 	return err
 }
 
 func (m *Manager) UpsertTimeUsage(row *model.TimeUsage) error {
+	start := time.Now()
 	_, err := m.db.Exec(`
 		INSERT INTO time_usage (
 			device, source, event_key, event_time, usage_date, model, project_path, session_id,
@@ -248,6 +271,11 @@ func (m *Manager) UpsertTimeUsage(row *model.TimeUsage) error {
 		row.InputTokens, row.OutputTokens, row.CacheCreationTokens, row.CacheReadTokens,
 		row.ReasoningOutputTokens, row.TotalTokens, row.CostUSD,
 	)
+	if err != nil {
+		log.Printf("[db] UpsertTimeUsage error source=%s key=%s err=%v", row.Source, truncateID(row.EventKey), err)
+	} else {
+		log.Printf("[db] UpsertTimeUsage ok source=%s key=%s total=%d elapsed=%v", row.Source, truncateID(row.EventKey), row.TotalTokens, time.Since(start))
+	}
 	return err
 }
 
@@ -260,6 +288,11 @@ func (m *Manager) RecordRun(device, source, status, message, command string) err
 		INSERT INTO collection_runs(device, source, status, message, collected_at, command)
 		VALUES (?, ?, ?, ?, datetime('now'), ?)
 	`, device, source, status, nullIfEmpty(message), nullIfEmpty(command))
+	if err != nil {
+		log.Printf("[db] RecordRun error source=%s status=%s err=%v", source, status, err)
+	} else {
+		log.Printf("[db] RecordRun ok source=%s status=%s message=%s", source, status, truncateID(message))
+	}
 	return err
 }
 
@@ -267,12 +300,17 @@ func (m *Manager) pruneCollectionRuns(keep int) {
 	if keep <= 0 {
 		keep = 500
 	}
-	_, _ = m.db.Exec(`
+	result, err := m.db.Exec(`
 		DELETE FROM collection_runs
 		WHERE id NOT IN (
 			SELECT id FROM collection_runs ORDER BY id DESC LIMIT ?
 		)
 	`, keep)
+	if err != nil {
+		log.Printf("[db] pruneCollectionRuns error keep=%d err=%v", keep, err)
+	} else if n, _ := result.RowsAffected(); n > 0 {
+		log.Printf("[db] pruneCollectionRuns pruned=%d keep=%d", n, keep)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +318,7 @@ func (m *Manager) pruneCollectionRuns(keep int) {
 // ---------------------------------------------------------------------------
 
 func (m *Manager) QueryDaily() ([]model.DailyUsage, error) {
+	start := time.Now()
 	rows, err := m.db.Query(`
 		SELECT device, source, usage_date, model,
 			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
@@ -303,10 +342,12 @@ func (m *Manager) QueryDaily() ([]model.DailyUsage, error) {
 		}
 		results = append(results, r)
 	}
+	log.Printf("[db] QueryDaily rows=%d elapsed=%v", len(results), time.Since(start))
 	return results, rows.Err()
 }
 
 func (m *Manager) QuerySessions() ([]model.SessionUsage, error) {
+	start := time.Now()
 	rows, err := m.db.Query(`
 		SELECT device, source, session_id, last_activity, project_path,
 			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
@@ -330,10 +371,12 @@ func (m *Manager) QuerySessions() ([]model.SessionUsage, error) {
 		}
 		results = append(results, r)
 	}
+	log.Printf("[db] QuerySessions rows=%d elapsed=%v", len(results), time.Since(start))
 	return results, rows.Err()
 }
 
 func (m *Manager) QueryRuns(limit int) ([]model.CollectionRun, error) {
+	start := time.Now()
 	rows, err := m.db.Query(`
 		SELECT id, device, source, status, message, collected_at
 		FROM collection_runs
@@ -355,10 +398,12 @@ func (m *Manager) QueryRuns(limit int) ([]model.CollectionRun, error) {
 		r.CollectedAt = collectedAt
 		results = append(results, r)
 	}
+	log.Printf("[db] QueryRuns rows=%d elapsed=%v", len(results), time.Since(start))
 	return results, rows.Err()
 }
 
 func (m *Manager) QueryTimeUsage() ([]model.TimeUsage, error) {
+	start := time.Now()
 	rows, err := m.db.Query(`
 		SELECT rowid, device, source, event_time, usage_date, model, project_path, session_id,
 			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
@@ -384,11 +429,20 @@ func (m *Manager) QueryTimeUsage() ([]model.TimeUsage, error) {
 		}
 		results = append(results, r)
 	}
+	log.Printf("[db] QueryTimeUsage rows=%d elapsed=%v", len(results), time.Since(start))
 	return results, rows.Err()
 }
 
 func (m *Manager) Exec(query string, args ...any) (sql.Result, error) {
-	return m.db.Exec(query, args...)
+	start := time.Now()
+	result, err := m.db.Exec(query, args...)
+	if err != nil {
+		log.Printf("[db] Exec error query=%s err=%v", truncateStr(query, 80), err)
+	} else {
+		n, _ := result.RowsAffected()
+		log.Printf("[db] Exec ok rows=%d elapsed=%v", n, time.Since(start))
+	}
+	return result, err
 }
 
 // ---------------------------------------------------------------------------
@@ -400,4 +454,15 @@ func nullIfEmpty(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+func truncateID(s string) string {
+	return truncateStr(s, 60)
+}
+
+func truncateStr(s string, max int) string {
+	if len(s) > max {
+		return s[:max] + "..."
+	}
+	return s
 }

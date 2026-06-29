@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -48,13 +49,16 @@ func (c *ClaudeCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*
 	var events []EventRow
 
 	roots := getClaudeRoots()
+	log.Printf("[collector] ClaudeCode roots=%v", roots)
 	for _, root := range roots {
 		projectsDir := filepath.Join(root, "projects")
 		if info, err := os.Stat(projectsDir); err == nil && info.IsDir() {
+			log.Printf("[collector] ClaudeCode scanning projects dir=%s", projectsDir)
 			c.scanAndParse(projectsDir, dailyMap, sessionMap, &events, pricing)
 		}
 		transcriptsDir := filepath.Join(root, "transcripts")
 		if info, err := os.Stat(transcriptsDir); err == nil && info.IsDir() {
+			log.Printf("[collector] ClaudeCode scanning transcripts dir=%s", transcriptsDir)
 			c.scanAndParse(transcriptsDir, dailyMap, sessionMap, &events, pricing)
 		}
 	}
@@ -89,8 +93,10 @@ func (c *ClaudeCodeCollector) scanAndParse(dir string,
 	events *[]EventRow, pricing TokenCalc,
 ) {
 	files := CollectJSONLFiles(dir)
+	recordCount := 0
 	for _, filePath := range files {
 		records := c.parseFile(filePath)
+		recordCount += len(records)
 		for _, rec := range records {
 			date := LocalDateFromTimestamp(rec.timestamp, "unknown")
 			if date == "unknown" {
@@ -131,6 +137,7 @@ func (c *ClaudeCodeCollector) scanAndParse(dir string,
 			sessionMap[sk].add(rec.input, rec.output, rec.cacheRead, rec.cacheWrite, rec.reasoning, cost)
 		}
 	}
+	log.Printf("[collector] ClaudeCode scanAndParse dir=%s files=%d records=%d", dir, len(files), recordCount)
 }
 
 func (c *ClaudeCodeCollector) parseFile(filePath string) []claudeRecord {

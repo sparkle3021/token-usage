@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -264,6 +265,9 @@ func CollectJSONLFiles(dir string) []string {
 		}
 		return nil
 	})
+	if len(results) > 0 {
+		log.Printf("[collector] CollectJSONLFiles dir=%s files=%d", dir, len(results))
+	}
 	return results
 }
 

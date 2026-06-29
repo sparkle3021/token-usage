@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"token-dashboard/internal/collector/engine"
 	"token-dashboard/internal/database"
@@ -38,17 +40,22 @@ func NewApp() *App {
 	db, err := database.New(dbPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[app] database: %v\n", err)
+		log.Printf("[app] NewApp database failed path=%s err=%v", dbPath, err)
 		return &App{ctx: context.Background()}
 	}
+	log.Printf("[app] NewApp database opened path=%s", dbPath)
 
 	// Initialize pricing
 	pr, err := pricing.NewEngine(dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[app] pricing: %v\n", err)
+		log.Printf("[app] NewApp pricing error=%v", err)
 	}
+	log.Printf("[app] NewApp pricing loaded")
 
 	// Initialize collection engine
 	eng := engine.New(db, pr)
+	log.Printf("[app] NewApp engine initialized collectors=%d", len(eng.Collectors()))
 
 	return &App{
 		db:      db,
@@ -75,13 +82,26 @@ func (a *App) startup(ctx context.Context) {
 // ---------------------------------------------------------------------------
 
 func (a *App) GetDashboardData() *model.DashboardData {
+	defer log.Printf("[app] GetDashboardData done")
+	start := time.Now()
+
 	if a.db == nil {
+		log.Printf("[app] GetDashboardData db=nil")
 		return &model.DashboardData{}
 	}
 
-	daily, _ := a.db.QueryDaily()
-	sessions, _ := a.db.QuerySessions()
-	runs, _ := a.db.QueryRuns(500)
+	daily, err := a.db.QueryDaily()
+	if err != nil {
+		log.Printf("[app] GetDashboardData QueryDaily err=%v", err)
+	}
+	sessions, err := a.db.QuerySessions()
+	if err != nil {
+		log.Printf("[app] GetDashboardData QuerySessions err=%v", err)
+	}
+	runs, err := a.db.QueryRuns(500)
+	if err != nil {
+		log.Printf("[app] GetDashboardData QueryRuns err=%v", err)
+	}
 
 	// Enrich daily rows with project path from session data
 	projMap := make(map[string]string)
@@ -108,6 +128,9 @@ func (a *App) GetDashboardData() *model.DashboardData {
 		runs[i].Message = strings.ReplaceAll(runs[i].Message, "\n", " ")
 	}
 
+	log.Printf("[app] GetDashboardData daily=%d sessions=%d runs=%d elapsed=%v",
+		len(daily), len(sessions), len(runs), time.Since(start))
+
 	return &model.DashboardData{
 		Daily:    daily,
 		Sessions: sessions,
@@ -116,10 +139,13 @@ func (a *App) GetDashboardData() *model.DashboardData {
 }
 
 func (a *App) GetTimeSeriesData() *model.TimeSeriesData {
+	start := time.Now()
 	if a.db == nil {
+		log.Printf("[app] GetTimeSeriesData db=nil")
 		return &model.TimeSeriesData{}
 	}
 	timeRows, _ := a.db.QueryTimeUsage()
+	log.Printf("[app] GetTimeSeriesData rows=%d elapsed=%v", len(timeRows), time.Since(start))
 	return &model.TimeSeriesData{Time: timeRows}
 }
 
@@ -129,16 +155,21 @@ func (a *App) GetTimeSeriesData() *model.TimeSeriesData {
 
 func (a *App) StartCollection() bool {
 	if a.engine == nil {
+		log.Printf("[app] StartCollection engine=nil")
 		return false
 	}
-	return a.engine.StartCollection()
+	ok := a.engine.StartCollection()
+	log.Printf("[app] StartCollection result=%v", ok)
+	return ok
 }
 
 func (a *App) CollectStatus() *model.CollectStatus {
 	if a.engine == nil {
+		log.Printf("[app] CollectStatus engine=nil")
 		return &model.CollectStatus{Status: "idle", Message: "未初始化"}
 	}
 	s := a.engine.Status()
+	log.Printf("[app] CollectStatus status=%s message=%s", s.Status, s.Message)
 	return &model.CollectStatus{
 		Status:     s.Status,
 		Message:    s.Message,

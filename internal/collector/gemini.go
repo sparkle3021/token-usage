@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,7 +38,9 @@ func (c *GeminiCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 	sessionMap := make(map[string]*sessionAgg)
 	var events []EventRow
 	tmpDir := geminiTmpDir()
+	log.Printf("[collector] Gemini scanning dir=%s", tmpDir)
 
+	fileCount := 0
 	entries, _ := os.ReadDir(tmpDir)
 	for _, entry := range entries {
 		fullPath := filepath.Join(tmpDir, entry.Name())
@@ -52,6 +55,7 @@ func (c *GeminiCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 				if ext != ".json" && ext != ".jsonl" {
 					continue
 				}
+				fileCount++
 				c.collectFile(filepath.Join(chatsDir, ce.Name()), dailyMap, sessionMap, &events, pricing)
 			}
 		} else {
@@ -63,8 +67,12 @@ func (c *GeminiCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 				continue
 			}
 			c.collectFile(fullPath, dailyMap, sessionMap, &events, pricing)
+			fileCount++
 		}
 	}
+
+	log.Printf("[collector] Gemini done files=%d daily=%d sessions=%d events=%d",
+		fileCount, len(dailyMap), len(sessionMap), len(events))
 
 	return buildResult("gemini", "Gemini CLI", dailyMap, sessionMap, events), nil
 }

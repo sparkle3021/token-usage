@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,10 +36,16 @@ func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*Colle
 	sessionMap := make(map[string]*sessionAgg)
 	var events []EventRow
 
-	for _, root := range codexRoots() {
+	roots := codexRoots()
+	log.Printf("[collector] Codex roots=%v", roots)
+	totalFiles := 0
+	totalRecords := 0
+	for _, root := range roots {
 		files := CollectJSONLFiles(root)
+		totalFiles += len(files)
 		for _, fp := range files {
 			records := c.parseSessionFile(fp)
+			totalRecords += len(records)
 			sessionID := strings.TrimSuffix(filepath.Base(fp), ".jsonl")
 			for _, rec := range records {
 				date := LocalDateFromTimestamp(rec.timestamp, "unknown")
@@ -77,6 +84,9 @@ func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*Colle
 			}
 		}
 	}
+
+	log.Printf("[collector] Codex done files=%d records=%d daily=%d sessions=%d events=%d",
+		totalFiles, totalRecords, len(dailyMap), len(sessionMap), len(events))
 
 	return buildResult("codex", "Codex CLI", dailyMap, sessionMap, events), nil
 }

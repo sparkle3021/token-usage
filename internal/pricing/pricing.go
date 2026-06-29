@@ -3,6 +3,7 @@ package pricing
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -115,11 +116,17 @@ func NewEngine(dataDir string) (*Engine, error) {
 	litellmPath := filepath.Join(dataDir, "pricing-litellm.json")
 	if err := e.loadLiteLLM(litellmPath); err != nil {
 		fmt.Fprintf(os.Stderr, "[pricing] warning: %v\n", err)
+		log.Printf("[pricing] NewEngine loadLiteLLM error=%v", err)
+	} else {
+		log.Printf("[pricing] NewEngine litellm loaded entries=%d", len(e.litellm))
 	}
 
 	openrouterPath := filepath.Join(dataDir, "pricing-openrouter.json")
 	if err := e.loadOpenRouter(openrouterPath); err != nil {
 		fmt.Fprintf(os.Stderr, "[pricing] warning: %v\n", err)
+		log.Printf("[pricing] NewEngine loadOpenRouter error=%v", err)
+	} else {
+		log.Printf("[pricing] NewEngine openrouter loaded entries=%d", len(e.openrouter))
 	}
 
 	return e, nil
@@ -259,6 +266,7 @@ func (e *Engine) lookupPricing(modelID string) *Rates {
 		e.mu.Lock()
 		e.cache[id] = r
 		e.mu.Unlock()
+		log.Printf("[pricing] lookup model=%s via=override hasCost=%v", id, r.Input > 0 || r.Output > 0)
 		return r
 	}
 
@@ -267,10 +275,12 @@ func (e *Engine) lookupPricing(modelID string) *Rates {
 
 	// 3. LiteLLM exact/fuzzy
 	var hit *Rates
+	var via string
 	for _, c := range candidates {
 		if e.litellm != nil {
 			if r := findInDataset(c, e.litellm); r != nil {
 				hit = r
+				via = "litellm"
 				break
 			}
 		}
@@ -283,6 +293,7 @@ func (e *Engine) lookupPricing(modelID string) *Rates {
 				if r := findInDataset(c, e.openrouter); r != nil {
 					if hit == nil || r.CacheRead > 0 {
 						hit = r
+						via = "openrouter"
 					}
 					break
 				}
@@ -292,15 +303,27 @@ func (e *Engine) lookupPricing(modelID string) *Rates {
 
 	// 5. Fuzzy fallback
 	if hit == nil && e.litellm != nil {
-		hit = findFuzzy(id, e.litellm)
+		if r := findFuzzy(id, e.litellm); r != nil {
+			hit = r
+			via = "litellm-fuzzy"
+		}
 	}
 	if hit == nil && e.openrouter != nil {
-		hit = findFuzzy(id, e.openrouter)
+		if r := findFuzzy(id, e.openrouter); r != nil {
+			hit = r
+			via = "openrouter-fuzzy"
+		}
 	}
 
 	e.mu.Lock()
 	e.cache[id] = hit
 	e.mu.Unlock()
+
+	if hit == nil {
+		log.Printf("[pricing] lookup model=%s via=nil (no pricing found)", id)
+	} else {
+		log.Printf("[pricing] lookup model=%s via=%s inputRate=%g outputRate=%g", id, via, hit.Input, hit.Output)
+	}
 	return hit
 }
 
