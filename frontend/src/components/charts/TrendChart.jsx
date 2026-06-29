@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card.jsx';
 import { Button } from '../ui/button.jsx';
 import * as U from '../../lib/utils.js';
+import SourceIcon from '../SourceIcon.jsx';
 
 const MODES = [{ id: 'stacked', label: '堆叠' }, { id: 'line', label: '折线' }, { id: 'bar', label: '柱状' }];
 
@@ -70,7 +71,7 @@ function CTooltip({ active, payload, label }) {
       <div className="font-semibold mb-1 text-foreground">{label}</div>
       {payload.map(p => (
         <div key={p.name} className="flex items-center gap-2 mt-0.5">
-          <span className="w-2 h-2 rounded-sm" style={{ background: p.color }} />
+          <SourceIcon name={p.name} className="w-3 h-3" />
           <span className="text-muted-foreground">{p.name}</span>
           <span className="font-semibold ml-auto tabular-nums">{U.compactCN(p.value)}</span>
         </div>

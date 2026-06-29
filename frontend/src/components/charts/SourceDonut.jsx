@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card.jsx';
 import * as U from '../../lib/utils.js';
+import SourceIcon from '../SourceIcon.jsx';
 
 export default function SourceDonut({ rows, focused, onFocusSource }) {
   const data = useMemo(() => {
@@ -45,7 +46,7 @@ export default function SourceDonut({ rows, focused, onFocusSource }) {
               <div key={d.name}
                 className={`flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer hover:bg-muted/50 ${focused && focused !== d.name ? 'opacity-40' : ''}`}
                 onClick={() => onFocusSource(focused === d.name ? null : d.name)}>
-                <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: d.color }} />
+                <SourceIcon name={d.name} className="w-4 h-4 shrink-0" />
                 <span className="text-xs truncate flex-1">{d.name}</span>
                 <span className="text-xs text-muted-foreground tabular-nums">{U.compactCN(d.value)}</span>
                 <span className="text-xs font-semibold tabular-nums w-10 text-right">{sum ? ((d.value / sum) * 100).toFixed(1) : 0}%</span>

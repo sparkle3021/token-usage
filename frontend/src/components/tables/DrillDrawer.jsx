@@ -3,16 +3,30 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../ui/dia
 import { Button } from '../ui/button.jsx';
 import { XIcon } from 'lucide-react';
 import * as U from '../../lib/utils.js';
+import SourceIcon from '../SourceIcon.jsx';
 
 export default function DrillDrawer({ drill, daily, onClose }) {
   const detail = useMemo(() => {
     if (!drill) return null;
     const { kind, row } = drill;
     let title, sub, filterFn;
-    if (kind === 'source') { title = row.source; sub = row.device; filterFn = r => r.source === row.source && r.device === row.device; }
-    else if (kind === 'model') { title = row.model; sub = row.source; filterFn = r => r.source === row.source && r.model === row.model; }
-    else if (kind === 'session') { title = row.projectPath || row.sessionId; sub = `${row.source} · ${row.device}`; filterFn = r => r.source === row.source; }
-    else { title = `采集: ${row.source}`; sub = U.formatTs(row.collectedAt); filterFn = () => false; }
+    if (kind === 'source') {
+      title = <div className="flex items-center gap-1.5"><SourceIcon name={row.source} className="w-4 h-4" />{row.source}</div>;
+      sub = row.device;
+      filterFn = r => r.source === row.source && r.device === row.device;
+    } else if (kind === 'model') {
+      title = row.model;
+      sub = <div className="flex items-center gap-1"><SourceIcon name={row.source} className="w-3 h-3" />{row.source}</div>;
+      filterFn = r => r.source === row.source && r.model === row.model;
+    } else if (kind === 'session') {
+      title = row.projectPath || row.sessionId;
+      sub = <div className="flex items-center gap-1"><SourceIcon name={row.source} className="w-3 h-3" />{row.source} · {row.device}</div>;
+      filterFn = r => r.source === row.source;
+    } else {
+      title = <div className="flex items-center gap-1.5"><SourceIcon name={row.source} className="w-4 h-4" />采集: {row.source}</div>;
+      sub = U.formatTs(row.collectedAt);
+      filterFn = () => false;
+    }
 
     const matching = daily.filter(filterFn);
     const totals = U.aggregateTotals(matching);

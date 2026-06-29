@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card.jsx';
 import * as U from '../../lib/utils.js';
+import SourceIcon from '../SourceIcon.jsx';
 
 export default function TopModels({ rows, onDrillModel }) {
   const list = useMemo(() => {
@@ -30,7 +31,7 @@ export default function TopModels({ rows, onDrillModel }) {
               <div className="min-w-0">
                 <div className="text-xs font-medium truncate">{m.model}</div>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 gap-1" style={{ borderColor: U.getSourceColor(m.source), color: U.getSourceColor(m.source) }}>{m.source}</Badge>
+                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 gap-1" style={{ borderColor: U.getSourceColor(m.source), color: U.getSourceColor(m.source) }}><SourceIcon name={m.source} className="w-2.5 h-2.5" />{m.source}</Badge>
                   <span className="text-[10px] text-muted-foreground">{m.count} 条</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">

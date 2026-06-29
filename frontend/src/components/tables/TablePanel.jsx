@@ -4,6 +4,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs.jsx';
 import { Badge } from '../ui/badge.jsx';
 import * as U from '../../lib/utils.js';
+import SourceIcon from '../SourceIcon.jsx';
 
 export default function TablePanel({ daily = [], sessions = [], runs = [], onDrill }) {
   const [tab, setTab] = useState('sources');
@@ -179,7 +180,7 @@ function RunTable({ rows, search, onDrill }) {
 
 function SourceBadge({ s }) {
   return <Badge variant="outline" className="text-[10px] gap-1" style={{ borderColor: U.getSourceColor(s || ''), color: U.getSourceColor(s || '') }}>
-    <span className="w-1.5 h-1.5 rounded-full" style={{ background: U.getSourceColor(s || '') }} />{s || 'unknown'}
+    <SourceIcon name={s} className="w-3 h-3" />{s || 'unknown'}
   </Badge>;
 }
 

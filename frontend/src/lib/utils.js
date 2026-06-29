@@ -5,6 +5,28 @@ export function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
+// ── Source Icons ─────────────────────────────────────────────────
+
+import claudeIcon from '../assets/icons/claude.svg';
+import geminiIcon from '../assets/icons/gemini.svg';
+import gptIcon from '../assets/icons/gpt.svg';
+import hermesIcon from '../assets/icons/hermes.svg';
+import openclawIcon from '../assets/icons/openclaw.svg';
+import opencodeIcon from '../assets/icons/opencode.svg';
+
+const SOURCE_ICONS = {
+  'Claude Code': claudeIcon,
+  'Codex CLI': gptIcon,
+  'Gemini CLI': geminiIcon,
+  'Hermes Agent': hermesIcon,
+  'OpenClaw': openclawIcon,
+  'OpenCode': opencodeIcon,
+};
+
+export function getSourceIconUrl(name) {
+  return SOURCE_ICONS[name] || null;
+}
+
 // ── Color palette ──────────────────────────────────────────────
 
 const PALETTE = {
