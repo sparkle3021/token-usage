@@ -1,19 +1,48 @@
-# README
+# Token Dashboard
 
-## About
+个人 AI Token 消耗看板，基于 Wails v2 构建。直接读取本机会话日志，聚合写入本地 SQLite，估算各模型费用。
 
-This is the official Wails React template.
+## 技术栈
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+- **桌面框架**: Wails v2 (Go + WebView2)
+- **后端**: Go 1.25, modernc.org/sqlite
+- **前端**: React 19, Vite 8, Tailwind CSS v4, shadcn/ui
+- **图表**: Recharts
 
-## Live Development
+## 开发
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+```bash
+# 启动开发模式（Vite HMR + Go 后端热重载）
+wails dev
 
-## Building
+# 单独启动前端开发服务器
+cd frontend && npm run dev
 
-To build a redistributable, production mode package, use `wails build`.
+# 构建生产包
+wails build
+```
+
+## 采集用法
+
+启动应用后，点击右上角「采集」按钮读取本机以下 AI 工具的使用数据：
+
+| 工具 | 数据位置 |
+|------|---------|
+| Claude Code | `~/.claude/projects/` |
+| Codex CLI | `~/.codex/sessions/` |
+| Gemini CLI | `~/.gemini/tmp/` |
+| Hermes Agent | `~/.hermes/state.db` |
+| OpenCode | `~/.local/share/opencode/` |
+| OpenClaw | `~/.openclaw/agents/` |
+
+采集的数据写入 `data/usage.sqlite`，不联网、不上传。
+
+## 数据目录
+
+| 路径 | 说明 |
+|------|------|
+| `data/usage.sqlite` | SQLite 数据库 |
+| `data/pricing-litellm.json` | LiteLLM 定价缓存 |
+| `data/pricing-openrouter.json` | OpenRouter 定价缓存 |
+
+设 `DATA_DIR` 环境变量可自定义数据目录。

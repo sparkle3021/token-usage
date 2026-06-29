@@ -2,21 +2,150 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
-	"token-dashboard/internal/service"
+	"token-dashboard/internal/collector/engine"
+	"token-dashboard/internal/database"
+	"token-dashboard/internal/model"
+	"token-dashboard/internal/pricing"
 )
 
 type App struct {
 	ctx     context.Context
-	service *service.Service
+	db      *database.Manager
+	pricing *pricing.Engine
+	engine  *engine.Engine
 }
 
 func NewApp() *App {
+	// Resolve data directory
+	dataDir := "data"
+	if env := os.Getenv("DATA_DIR"); env != "" {
+		dataDir = env
+	}
+	absData, err := filepath.Abs(dataDir)
+	if err == nil {
+		dataDir = absData
+	}
+	os.MkdirAll(dataDir, 0755)
+
+	dbPath := filepath.Join(dataDir, "usage.sqlite")
+
+	// Initialize database
+	db, err := database.New(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[app] database: %v\n", err)
+		return &App{ctx: context.Background()}
+	}
+
+	// Initialize pricing
+	pr, err := pricing.NewEngine(dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[app] pricing: %v\n", err)
+	}
+
+	// Initialize collection engine
+	eng := engine.New(db, pr)
+
 	return &App{
-		service: service.New(),
+		db:      db,
+		pricing: pr,
+		engine:  eng,
 	}
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// Wire engine events to Wails runtime
+	if a.engine != nil {
+		a.engine.SetEventCallback(func(event string, data interface{}) {
+			// In a full implementation, this would use runtime.EventsEmit
+			// For now, just log
+			fmt.Printf("[event] %s: %v\n", event, data)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard API
+// ---------------------------------------------------------------------------
+
+func (a *App) GetDashboardData() *model.DashboardData {
+	if a.db == nil {
+		return &model.DashboardData{}
+	}
+
+	daily, _ := a.db.QueryDaily()
+	sessions, _ := a.db.QuerySessions()
+	runs, _ := a.db.QueryRuns(500)
+
+	// Enrich daily rows with project path from session data
+	projMap := make(map[string]string)
+	for _, s := range sessions {
+		proj := s.ProjectPath
+		if proj == "" {
+			parts := strings.Split(s.SessionID, "/")
+			proj = parts[len(parts)-1]
+		}
+		key := s.Device + "::" + s.Source
+		if _, ok := projMap[key]; !ok {
+			projMap[key] = proj
+		}
+	}
+
+	for i := range daily {
+		if key, ok := projMap[daily[i].Device+"::"+daily[i].Source]; ok {
+			daily[i].ProjectPath = key
+		}
+	}
+
+	// Normalize runs
+	for i := range runs {
+		runs[i].Message = strings.ReplaceAll(runs[i].Message, "\n", " ")
+	}
+
+	return &model.DashboardData{
+		Daily:    daily,
+		Sessions: sessions,
+		Runs:     runs,
+	}
+}
+
+func (a *App) GetTimeSeriesData() *model.TimeSeriesData {
+	if a.db == nil {
+		return &model.TimeSeriesData{}
+	}
+	timeRows, _ := a.db.QueryTimeUsage()
+	return &model.TimeSeriesData{Time: timeRows}
+}
+
+// ---------------------------------------------------------------------------
+// Collection API
+// ---------------------------------------------------------------------------
+
+func (a *App) StartCollection() bool {
+	if a.engine == nil {
+		return false
+	}
+	return a.engine.StartCollection()
+}
+
+func (a *App) CollectStatus() *model.CollectStatus {
+	if a.engine == nil {
+		return &model.CollectStatus{Status: "idle", Message: "未初始化"}
+	}
+	s := a.engine.Status()
+	return &model.CollectStatus{
+		Status:     s.Status,
+		Message:    s.Message,
+		StartedAt:  s.StartedAt,
+		FinishedAt: s.FinishedAt,
+		ExitCode:   s.ExitCode,
+		Stdout:     s.Stdout,
+		Stderr:     s.Stderr,
+	}
 }
