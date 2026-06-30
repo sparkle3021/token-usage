@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as U from './lib/utils.js';
 import { Card, CardContent } from './components/ui/card.jsx';
-import { Badge } from './components/ui/badge.jsx';
 import { Button } from './components/ui/button.jsx';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs.jsx';
 
@@ -20,7 +19,6 @@ function App() {
   const [loadError, setLoadError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [collecting, setCollecting] = useState(false);
-  const [collectStatus, setCollectStatus] = useState(null);
   const pollingRef = useRef(null);
 
   const loadData = useCallback(() => {
@@ -56,8 +54,8 @@ function App() {
 
   useEffect(() => {
     const check = () => window.go.main.App.CollectStatus().then(s => {
-      if (s.status === 'running') { setCollecting(true); setCollectStatus(s); }
-      else if (s.status === 'ok' || s.status === 'error') { setCollecting(false); setCollectStatus(s); if (s.status === 'ok') loadData(); }
+      if (s.status === 'running') { setCollecting(true); }
+      else if (s.status === 'ok' || s.status === 'error') { setCollecting(false); if (s.status === 'ok') loadData(); }
     }).catch(() => {});
     check();
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
@@ -65,7 +63,6 @@ function App() {
 
   const runCollect = useCallback(() => {
     setCollecting(true);
-    setCollectStatus({ status: 'running', message: '正在采集本机用量…' });
     window.go.main.App.StartCollection();
     if (pollingRef.current) clearInterval(pollingRef.current);
     pollingRef.current = setInterval(() => {
@@ -74,7 +71,6 @@ function App() {
           clearInterval(pollingRef.current);
           pollingRef.current = null;
           setCollecting(false);
-          setCollectStatus(s);
           if (s.status === 'ok') loadData();
         }
       }).catch(() => {});
@@ -95,10 +91,10 @@ function App() {
     </div>
   );
 
-  return <Dashboard M={M} refreshing={refreshing} collecting={collecting} collectStatus={collectStatus} onRefresh={loadData} onCollect={runCollect} />;
+  return <Dashboard M={M} refreshing={refreshing} collecting={collecting} onRefresh={loadData} onCollect={runCollect} />;
 }
 
-function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onCollect }) {
+function Dashboard({ M, refreshing, collecting, onRefresh, onCollect }) {
   const defaults = { rangeId: 'today', startDate: U.daysAgo(0), endDate: U.daysAgo(0), sources: new Set(), devices: new Set(), models: new Set(), compare: false };
   const [f, setF] = useState(defaults);
   const [trendMode, setTrendMode] = useState('stacked');
@@ -177,9 +173,6 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {collectStatus && collectStatus.status === 'running' && <Badge variant="outline" className="text-indigo-600">采集中</Badge>}
-          {collectStatus && collectStatus.status === 'ok' && <Badge variant="outline" className="text-green-600">采集完成</Badge>}
-          {collectStatus && collectStatus.status === 'error' && <Badge variant="outline" className="text-red-500">采集失败</Badge>}
           <span className="text-xs text-muted-foreground whitespace-nowrap">最后同步 <strong>{lastSync}</strong></span>
           <Button size="sm" variant="default" onClick={onCollect} disabled={collecting || refreshing}>
             {collecting ? '同步中' : '同步'}
