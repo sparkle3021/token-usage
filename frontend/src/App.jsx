@@ -8,7 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs.jsx';
 // Lazy-load components
 import TrendChart from './components/charts/TrendChart.jsx';
 import TopModels from './components/charts/TopModels.jsx';
-import Heatmap from './components/charts/Heatmap.jsx';
+import Heatmap from './components/charts/Heatmap/Heatmap.jsx';
 import TablePanel from './components/tables/TablePanel.jsx';
 import DrillDrawer from './components/tables/DrillDrawer.jsx';
 import SourceBadge from './components/SourceBadge.jsx';
@@ -147,6 +147,12 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
 
   const sparkValues = useMemo(() => dates.map(d => dailyMap.get(d) || 0), [dates, dailyMap]);
 
+  const heatmapData = useMemo(() => {
+    const m = new Map();
+    for (const r of M.daily) m.set(r.usageDate, (m.get(r.usageDate) || 0) + (r.totalTokens || 0));
+    return [...m.entries()].map(([date, count]) => ({ date, count }));
+  }, [M.daily]);
+
   const sparkBy = useMemo(() => (key) => {
     const m = new Map();
     for (const r of filtered) m.set(r.usageDate, (m.get(r.usageDate) || 0) + (r[key] || 0));
@@ -244,7 +250,7 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
       </div>
 
       {/* Heatmap */}
-      <Heatmap rows={filtered} dates={dates} />
+      <Heatmap data={heatmapData} />
 
       {/* Table */}
       <TablePanel daily={filtered} sessions={M.sessions} runs={M.runs} onDrill={setDrill} />
