@@ -306,6 +306,9 @@ func (m *Manager) initSchema() error {
 	// Migration: add last_file_mtime to collection_runs for incremental collection
 	m.db.Exec("ALTER TABLE collection_runs ADD COLUMN last_file_mtime INTEGER")
 
+	// Migration: remove deprecated cc-switch config keys
+	m.db.Exec("DELETE FROM app_config WHERE key IN ('cc_switch_enabled', 'cc_switch_auto_sync')")
+
 	m.pruneCollectionRuns(500)
 	return nil
 }

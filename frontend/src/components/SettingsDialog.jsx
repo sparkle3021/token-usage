@@ -120,16 +120,6 @@ export default function SettingsDialog({ onSettingsChange }) {
                     </p>
                   )}
                 </div>
-
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={cfg.ccSwitchEnabled} onChange={e => setCfg(c => ({ ...c, ccSwitchEnabled: e.target.checked }))}
-                    className="rounded border-input" />
-                  <span className="text-sm">启用自动采集</span>
-                </label>
-                <p className="text-xs text-muted-foreground mt-1 ml-6">
-                  开启后，每次同步时会自动从 CC-Switch 数据库读取数据。
-                  关闭时，可在导入弹窗中手动选择 SQLite 导入。
-                </p>
               </div>
             </div>
           )}

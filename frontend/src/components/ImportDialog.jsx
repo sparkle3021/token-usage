@@ -3,26 +3,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { DatabaseIcon, FileTextIcon } from 'lucide-react';
+import { DatabaseIcon } from 'lucide-react';
 
 export default function ImportDialog({ onRefresh }) {
   const [open, setOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null);
-
-  const importCSV = useCallback(async () => {
-    setImporting(true);
-    setResult(null);
-    try {
-      const r = await window.go.main.App.ImportCSV();
-      setResult(r);
-      if (!r.error && r.imported > 0 && onRefresh) onRefresh();
-    } catch (err) {
-      setResult({ error: String(err) });
-    } finally {
-      setImporting(false);
-    }
-  }, [onRefresh]);
 
   const importDB = useCallback(async () => {
     setImporting(true);
@@ -67,18 +53,6 @@ export default function ImportDialog({ onRefresh }) {
           </div>
         ) : (
           <div className="space-y-3 py-4">
-            <p className="text-xs text-muted-foreground mb-2">选择数据来源方式：</p>
-            <button
-              onClick={importCSV}
-              disabled={importing}
-              className="w-full flex items-center gap-3 p-3 rounded-lg border border-input hover:bg-accent transition-colors text-left disabled:opacity-50"
-            >
-              <FileTextIcon className="size-5 text-muted-foreground shrink-0" />
-              <div>
-                <p className="text-sm font-medium">CSV 文件</p>
-                <p className="text-xs text-muted-foreground">选择 cc-switch 导出的 CSV 文件</p>
-              </div>
-            </button>
             <button
               onClick={importDB}
               disabled={importing}
@@ -87,7 +61,7 @@ export default function ImportDialog({ onRefresh }) {
               <DatabaseIcon className="size-5 text-muted-foreground shrink-0" />
               <div>
                 <p className="text-sm font-medium">SQLite 数据库</p>
-                <p className="text-xs text-muted-foreground">直接从 cc-switch 数据库读取</p>
+                <p className="text-xs text-muted-foreground">从 cc-switch 数据库读取增量数据</p>
               </div>
             </button>
             {importing && <p className="text-xs text-center text-muted-foreground pt-2">导入中…</p>}

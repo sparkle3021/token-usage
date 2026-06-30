@@ -276,12 +276,9 @@ func (a *App) GetSettings() model.AppConfig {
 	}
 
 	cfg := model.AppConfig{
-		AutoSyncMinutes:  atoiDef(s["auto_sync_minutes"], 5),
-		CCSwitchDBPath:   s["cc_switch_db_path"],
-		CCSwitchEnabled:  s["cc_switch_enabled"] == "true",
-		CCSwitchAutoSync: s["cc_switch_auto_sync"] == "true",
+		AutoSyncMinutes: atoiDef(s["auto_sync_minutes"], 5),
+		CCSwitchDBPath:  s["cc_switch_db_path"],
 	}
-
 	// Auto-detect default CC-Switch DB path if not configured
 	if cfg.CCSwitchDBPath == "" {
 		if home, err := os.UserHomeDir(); err == nil {
@@ -294,9 +291,6 @@ func (a *App) GetSettings() model.AppConfig {
 			}
 		}
 	}
-
-	log.Printf("[app] GetSettings autoSync=%d ccSwitchPath=%q enabled=%v",
-		cfg.AutoSyncMinutes, cfg.CCSwitchDBPath, cfg.CCSwitchEnabled)
 
 	// Sync runtime auto-sync with config
 	a.autoSyncMu.Lock()
@@ -312,10 +306,8 @@ func (a *App) GetSettings() model.AppConfig {
 
 func (a *App) SaveSettings(cfg model.AppConfig) error {
 	pairs := map[string]string{
-		"auto_sync_minutes":  strconv.Itoa(cfg.AutoSyncMinutes),
-		"cc_switch_db_path":  cfg.CCSwitchDBPath,
-		"cc_switch_enabled":  strconv.FormatBool(cfg.CCSwitchEnabled),
-		"cc_switch_auto_sync": strconv.FormatBool(cfg.CCSwitchAutoSync),
+		"auto_sync_minutes": strconv.Itoa(cfg.AutoSyncMinutes),
+		"cc_switch_db_path": cfg.CCSwitchDBPath,
 	}
 	for k, v := range pairs {
 		if err := a.db.SetConfig(k, v); err != nil {
@@ -326,8 +318,7 @@ func (a *App) SaveSettings(cfg model.AppConfig) error {
 	// Apply auto-sync immediately
 	a.SetAutoSyncInterval(cfg.AutoSyncMinutes)
 
-	log.Printf("[app] SaveSettings ok autoSync=%d ccSwitch=%v",
-		cfg.AutoSyncMinutes, cfg.CCSwitchEnabled)
+	log.Printf("[app] SaveSettings ok autoSync=%d", cfg.AutoSyncMinutes)
 	return nil
 }
 
