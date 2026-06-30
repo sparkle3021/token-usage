@@ -32,6 +32,8 @@ type Engine struct {
 	db         *database.Manager
 	pricing    *pricing.Engine
 
+	ccSwitchCol *collector.CCSwitchCollector
+
 	mu      sync.Mutex
 	status  Status
 	active  bool
@@ -55,6 +57,12 @@ func New(db *database.Manager, pr *pricing.Engine) *Engine {
 		collector.NewOpenCodeCollector(),
 		collector.NewOpenClawCollector(),
 	}
+
+	// CCSwitchCollector: needs database store for checkpoint + config access
+	ccCol := collector.NewCCSwitchCollector()
+	ccCol.SetStore(db)
+	e.ccSwitchCol = ccCol
+	e.collectors = append(e.collectors, ccCol)
 
 	// Read parallelism from env, default to 4
 	if p := os.Getenv("COLLECTOR_PARALLELISM"); p != "" {
@@ -136,6 +144,19 @@ func (e *Engine) StartFullCollection() bool {
 	e.forceFull = true
 	e.mu.Unlock()
 	return e.StartCollection()
+}
+
+// SyncCCSwitch runs the CC-Switch collector synchronously and returns stats.
+// Unlike StartCollection/StartFullCollection, this blocks until complete.
+func (e *Engine) SyncCCSwitch() (collector.CCSwitchStats, error) {
+	if e.ccSwitchCol == nil {
+		return collector.CCSwitchStats{}, fmt.Errorf("cc-switch collector not initialized")
+	}
+	// Reset checkpoints to force full sync, then run synchronously
+	e.db.ResetCCSwitchCheckpoints()
+	e.ccSwitchCol.SetStore(e.db)
+	_, err := e.ccSwitchCol.Collect(context.Background(), &pricingEngine{e.pricing})
+	return e.ccSwitchCol.Stats(), err
 }
 
 func (e *Engine) runCollection() {

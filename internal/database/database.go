@@ -803,6 +803,38 @@ func (m *Manager) GetConfig(key string) (string, error) {
 	return value, err
 }
 
+// ---------------------------------------------------------------------------
+// Checkpoint (incremental sync cursor via app_config)
+// ---------------------------------------------------------------------------
+
+const (
+	// CCSwitchCursorProxyLogs is the checkpoint key for proxy_request_logs cursor (UNIX timestamp).
+	CCSwitchCursorProxyLogs = "cc_switch_cursor_proxy_request_logs"
+	// CCSwitchRollupMaxDate is the checkpoint key for usage_daily_rollups max synced date (ISO date).
+	CCSwitchRollupMaxDate = "cc_switch_rollup_max_date"
+)
+
+// GetCheckpoint reads a checkpoint value by key. Returns empty string if not set.
+func (m *Manager) GetCheckpoint(key string) (string, error) {
+	return m.GetConfig(key)
+}
+
+// SetCheckpoint writes a checkpoint value by key.
+func (m *Manager) SetCheckpoint(key, value string) error {
+	return m.SetConfig(key, value)
+}
+
+// DeleteCheckpointsByPrefix deletes all app_config rows whose key starts with the given prefix.
+func (m *Manager) DeleteCheckpointsByPrefix(prefix string) error {
+	_, err := m.db.Exec(`DELETE FROM app_config WHERE key LIKE ?`, prefix+"%")
+	return err
+}
+
+// ResetCCSwitchCheckpoints clears all CC-Switch related checkpoints, forcing a full re-sync.
+func (m *Manager) ResetCCSwitchCheckpoints() error {
+	return m.DeleteCheckpointsByPrefix("cc_switch_cursor_")
+}
+
 func (m *Manager) SetConfig(key, value string) error {
 	_, err := m.db.Exec(`
 		INSERT INTO app_config(key, value, updated_at) VALUES (?, ?, datetime('now','localtime'))

@@ -57,9 +57,9 @@ export default function ImportDialog({ onRefresh }) {
               <p className="text-sm text-red-500">{result.error}</p>
             ) : (
               <div>
-                <p className="text-sm text-green-600 font-medium">导入完成</p>
+                <p className="text-sm text-green-600 font-medium">操作成功</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  共 {result.total} 条记录，导入 {result.imported} 条
+                  {result.message || `共 ${result.total} 条记录，导入 ${result.imported} 条`}
                 </p>
               </div>
             )}

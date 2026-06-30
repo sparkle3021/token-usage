@@ -24,6 +24,7 @@ export namespace model {
 	    total: number;
 	    imported: number;
 	    error?: string;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new CCSwitchImportResult(source);
@@ -34,6 +35,7 @@ export namespace model {
 	        this.total = source["total"];
 	        this.imported = source["imported"];
 	        this.error = source["error"];
+	        this.message = source["message"];
 	    }
 	}
 	export class CSVImportResult {
