@@ -1,3 +1,14 @@
 build/bin
 frontend/dist
 frontend/node_modules
+
+# Build artifacts
+*.exe
+
+# Old local data directory (migrated to ~/.token-dashboard/)
+data/usage.sqlite*
+
+# Artifacts
+frontend/package.json.md5
+.playwright-mcp/
+openspec/
