@@ -114,7 +114,7 @@ func (e *Engine) StartCollection() bool {
 		return false
 	}
 	e.active = true
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().Format(time.RFC3339)
 	e.status = Status{
 		Status:    "running",
 		Message:   "正在采集本机用量",
@@ -139,7 +139,7 @@ func (e *Engine) StartFullCollection() bool {
 }
 
 func (e *Engine) runCollection() {
-	startedAt := time.Now().UTC().Format(time.RFC3339)
+	startedAt := time.Now().Format(time.RFC3339)
 
 	type collectorResult struct {
 		col    collector.Collector
@@ -219,7 +219,7 @@ func (e *Engine) runCollection() {
 	}
 
 	e.mu.Lock()
-	finishedAt := time.Now().UTC().Format(time.RFC3339)
+	finishedAt := time.Now().Format(time.RFC3339)
 	status := "ok"
 	msg := "采集完成"
 	exitCode := 0
@@ -238,7 +238,7 @@ func (e *Engine) runCollection() {
 	e.mu.Unlock()
 	e.emit("collection:done", map[string]string{"status": status, "message": msg})
 
-	elapsed := time.Now().UTC().Sub(mustParseRFC3339(startedAt))
+	elapsed := time.Now().Sub(mustParseRFC3339(startedAt))
 	log.Printf("[engine] runCollection complete status=%s elapsed=%v", status, elapsed)
 }
 
@@ -362,7 +362,7 @@ func truncateStr(s string, max int) string {
 func mustParseRFC3339(s string) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
-		return time.Now().UTC()
+		return time.Now()
 	}
 	return t
 }

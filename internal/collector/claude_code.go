@@ -100,7 +100,7 @@ func (c *ClaudeCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*
 	})
 	for _, agg := range sessionMap {
 		result.Session = append(result.Session, SessionRow{
-			SessionID: agg.sessionID, LastActivity: time.Now().UTC().Format(time.RFC3339),
+			SessionID: agg.sessionID, LastActivity: time.Now().Format(time.RFC3339),
 			ProjectPath: agg.projectPath, Model: agg.model,
 			InputTokens: agg.input, OutputTokens: agg.output,
 			CacheReadTokens: agg.cacheRead, CacheWriteTokens: agg.cacheWrite,
