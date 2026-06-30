@@ -8,11 +8,19 @@ export default function TopModels({ rows, onDrillModel }) {
     const m = new Map();
     for (const r of rows) {
       if (!r.model) continue;
-      if (!m.has(r.model)) m.set(r.model, { model: r.model, source: r.source, total: 0, cost: 0, count: 0 });
+      if (!m.has(r.model)) m.set(r.model, { model: r.model, source: r.source, sources: new Map(), total: 0, cost: 0, count: 0 });
       const x = m.get(r.model);
       x.total += r.totalTokens || 0; x.cost += r.costUSD || 0; x.count += 1;
+      x.sources.set(r.source, (x.sources.get(r.source) || 0) + (r.totalTokens || 0));
     }
-    return [...m.values()].sort((a, b) => b.total - a.total).slice(0, 8);
+    return [...m.values()]
+      .map(x => {
+        const srcArr = [...x.sources.entries()]
+          .map(([source, total]) => ({ source, total }))
+          .sort((a, b) => b.total - a.total);
+        return { ...x, source: srcArr[0]?.source || x.source, sources: srcArr };
+      })
+      .sort((a, b) => b.total - a.total).slice(0, 8);
   }, [rows]);
 
   const max = list[0]?.total || 1;
@@ -31,11 +39,18 @@ export default function TopModels({ rows, onDrillModel }) {
               <div className="min-w-0">
                 <div className="text-xs font-medium truncate">{m.model}</div>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <SourceBadge source={m.source} />
-                  <span className="text-[10px] text-muted-foreground">{m.count} 条</span>
+                  <div className="flex items-center gap-1 min-w-0">
+                    <SourceBadge source={m.sources[0]?.source || m.source} />
+                    {m.sources.length > 1 && <span className="text-[10px] text-muted-foreground shrink-0">+{m.sources.length - 1}</span>}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{m.count} 条</span>
                 </div>
-                <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">
-                  <div className="h-full rounded-full transition-all" style={{ width: `${(m.total / max) * 100}%`, background: U.getSourceColor(m.source) }} />
+                <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden" style={{ width: `${(m.total / max) * 100}%` }}>
+                  <div className="h-full flex">
+                    {m.sources.slice(0, 4).map(s => (
+                      <div key={s.source} className="h-full transition-all" style={{ width: `${(s.total / m.total) * 100}%`, background: U.getSourceColor(s.source) }} />
+                    ))}
+                  </div>
                 </div>
               </div>
               <div className="text-right shrink-0">

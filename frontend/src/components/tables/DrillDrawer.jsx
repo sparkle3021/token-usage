@@ -1,9 +1,8 @@
 import React, { useMemo } from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../ui/dialog.jsx';
-import { Button } from '../ui/button.jsx';
-import { XIcon } from 'lucide-react';
 import * as U from '../../lib/utils.js';
 import SourceIcon from '../SourceIcon.jsx';
+import SourceBadge from '../SourceBadge.jsx';
 
 export default function DrillDrawer({ drill, daily, onClose }) {
   const detail = useMemo(() => {
@@ -16,8 +15,18 @@ export default function DrillDrawer({ drill, daily, onClose }) {
       filterFn = r => r.source === row.source && r.device === row.device;
     } else if (kind === 'model') {
       title = row.model;
-      sub = <div className="flex items-center gap-1"><SourceIcon name={row.source} className="w-3 h-3" />{row.source}</div>;
-      filterFn = r => r.source === row.source && r.model === row.model;
+      const srcList = row.sources || [{ source: row.source, total: row.total }];
+      sub = (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {srcList.map(s => (
+            <span key={s.source} className="flex items-center gap-1 text-xs">
+              <SourceIcon name={s.source} className="w-3 h-3" />
+              {s.source}
+            </span>
+          ))}
+        </div>
+      );
+      filterFn = r => r.model === row.model;
     } else if (kind === 'session') {
       title = row.projectPath || row.sessionId;
       sub = <div className="flex items-center gap-1"><SourceIcon name={row.source} className="w-3 h-3" />{row.source} · {row.device}</div>;
@@ -34,7 +43,15 @@ export default function DrillDrawer({ drill, daily, onClose }) {
     for (const r of matching) byDate.set(r.usageDate, (byDate.get(r.usageDate) || 0) + (r.totalTokens || 0));
     const dates = [...byDate.keys()].sort();
     const values = dates.map(d => byDate.get(d));
-    return { kind, row, title, sub, totals, dates, values, count: matching.length };
+
+    const srcMap = new Map();
+    for (const r of matching) srcMap.set(r.source, (srcMap.get(r.source) || 0) + (r.totalTokens || 0));
+    const sourceBreakdown = [...srcMap.entries()].map(([source, total]) => ({ source, total })).sort((a, b) => b.total - a.total);
+
+    const projectSet = new Set();
+    for (const r of matching) if (r.projectPath) projectSet.add(r.projectPath);
+
+    return { kind, row, title, sub, totals, dates, values, count: matching.length, sourceBreakdown, projectCount: projectSet.size };
   }, [drill, daily]);
 
   const open = !!drill;
@@ -42,7 +59,7 @@ export default function DrillDrawer({ drill, daily, onClose }) {
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
       {detail && (
-        <DialogContent className="fixed top-0 right-0 bottom-0 left-auto w-[500px] max-w-[92vw] translate-x-0 translate-y-0 rounded-none rounded-l-xl data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:slide-out-to-right overflow-auto">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto" showCloseButton>
           <DialogTitle className="sr-only">{detail.title}</DialogTitle>
           <DialogDescription className="sr-only">{detail.sub}</DialogDescription>
 
@@ -57,14 +74,13 @@ export default function DrillDrawer({ drill, daily, onClose }) {
               <h3 className="text-sm font-semibold">{detail.title}</h3>
               <p className="text-xs text-muted-foreground">{detail.sub}</p>
             </div>
-            <Button size="icon-sm" variant="ghost" onClick={onClose}><XIcon className="size-4" /></Button>
           </div>
 
           {detail.kind !== 'run' ? (
             <>
-              <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="grid grid-cols-4 gap-2 mb-4">
                 <div className="p-2.5 bg-muted rounded-lg">
-                  <div className="text-[10px] uppercase text-muted-foreground">Total</div>
+                  <div className="text-[10px] uppercase text-muted-foreground">总 Token</div>
                   <div className="text-lg font-semibold tabular-nums">{U.compactCN(detail.totals.totalTokens)}</div>
                 </div>
                 <div className="p-2.5 bg-muted rounded-lg">
@@ -73,9 +89,31 @@ export default function DrillDrawer({ drill, daily, onClose }) {
                 </div>
                 <div className="p-2.5 bg-muted rounded-lg">
                   <div className="text-[10px] uppercase text-muted-foreground">活跃</div>
-                  <div className="text-lg font-semibold tabular-nums">{detail.dates.length} 天</div>
+                  <div className="text-lg font-semibold tabular-nums">{detail.dates.length}<span className="text-xs text-muted-foreground font-normal"> 天</span></div>
+                </div>
+                <div className="p-2.5 bg-muted rounded-lg">
+                  <div className="text-[10px] uppercase text-muted-foreground">项目</div>
+                  <div className="text-lg font-semibold tabular-nums">{detail.projectCount || <span className="text-muted-foreground font-normal">—</span>}</div>
                 </div>
               </div>
+
+              {detail.kind === 'model' && detail.sourceBreakdown.length > 1 && (
+                <div className="mb-4">
+                  <h4 className="text-[10px] font-semibold uppercase text-muted-foreground mb-2">来源分布</h4>
+                  <div className="space-y-1.5">
+                    {detail.sourceBreakdown.map(s => (
+                      <div key={s.source} className="flex items-center gap-2 text-xs">
+                        <span className="w-20 shrink-0"><SourceBadge source={s.source} /></span>
+                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${(s.total / detail.totals.totalTokens) * 100}%`, background: U.getSourceColor(s.source) }} />
+                        </div>
+                        <span className="tabular-nums font-medium w-16 text-right">{U.compactCN(s.total)}</span>
+                        <span className="text-muted-foreground w-10 text-right">{(s.total / detail.totals.totalTokens * 100).toFixed(1)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {detail.dates.length > 1 && <SparkLine dates={detail.dates} values={detail.values} />}
 
