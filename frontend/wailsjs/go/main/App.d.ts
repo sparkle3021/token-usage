@@ -4,13 +4,21 @@ import {model} from '../models';
 
 export function CollectStatus():Promise<model.CollectStatus>;
 
+export function DetectCCSwitchDB():Promise<string>;
+
 export function GetAutoSyncInterval():Promise<number>;
 
 export function GetDashboardData():Promise<model.DashboardData>;
 
+export function GetSettings():Promise<model.AppConfig>;
+
 export function GetTimeSeriesData():Promise<model.TimeSeriesData>;
 
+export function ImportCCSwitchDB():Promise<model.CCSwitchImportResult>;
+
 export function ImportCSV():Promise<model.CSVImportResult>;
+
+export function SaveSettings(arg1:model.AppConfig):Promise<void>;
 
 export function SetAutoSyncInterval(arg1:number):Promise<void>;
 

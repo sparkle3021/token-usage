@@ -89,3 +89,19 @@ type CSVImportResult struct {
 	Skipped  int    `json:"skipped"`
 	Error    string `json:"error,omitempty"`
 }
+
+// AppConfig holds persistent application settings.
+type AppConfig struct {
+	AutoSyncMinutes    int    `json:"autoSyncMinutes"`
+	RefreshSeconds     int    `json:"refreshSeconds"`
+	CCSwitchDBPath     string `json:"ccSwitchDBPath"`
+	CCSwitchEnabled    bool   `json:"ccSwitchEnabled"`
+	CCSwitchAutoSync   bool   `json:"ccSwitchAutoSync"`
+}
+
+// CCSwitchImportResult is returned by import operations.
+type CCSwitchImportResult struct {
+	Total    int    `json:"total"`
+	Imported int    `json:"imported"`
+	Error    string `json:"error,omitempty"`
+}

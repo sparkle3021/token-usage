@@ -249,6 +249,13 @@ func (m *Manager) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_session_usage_total ON session_usage(total_tokens DESC);
 	CREATE INDEX IF NOT EXISTS idx_time_usage_time ON time_usage(event_time);
 	CREATE INDEX IF NOT EXISTS idx_time_usage_date_source ON time_usage(usage_date, source);
+
+	CREATE TABLE IF NOT EXISTS app_config (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+	);
+
 	CREATE TABLE IF NOT EXISTS parse_cache (
 		source TEXT NOT NULL,
 		file_path TEXT NOT NULL,
@@ -579,6 +586,45 @@ func (m *Manager) PruneParseCache(maxAgeDays, maxRows int) {
 	}
 	m.db.Exec(`DELETE FROM parse_cache WHERE updated_at < datetime('now', ?)`, fmt.Sprintf("-%d days", maxAgeDays))
 	m.db.Exec(`DELETE FROM parse_cache WHERE rowid NOT IN (SELECT rowid FROM parse_cache ORDER BY updated_at DESC LIMIT ?)`, maxRows)
+}
+
+// ---------------------------------------------------------------------------
+// App config (key-value store)
+// ---------------------------------------------------------------------------
+
+func (m *Manager) GetConfig(key string) (string, error) {
+	var value string
+	err := m.db.QueryRow(`SELECT value FROM app_config WHERE key = ?`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return value, err
+}
+
+func (m *Manager) SetConfig(key, value string) error {
+	_, err := m.db.Exec(`
+		INSERT INTO app_config(key, value, updated_at) VALUES (?, ?, datetime('now'))
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+	`, key, value)
+	return err
+}
+
+// GetAllConfigs returns all config rows as a map.
+func (m *Manager) GetAllConfigs() (map[string]string, error) {
+	rows, err := m.db.Query(`SELECT key, value FROM app_config`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string]string)
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, err
+		}
+		result[k] = v
+	}
+	return result, rows.Err()
 }
 
 // ---------------------------------------------------------------------------

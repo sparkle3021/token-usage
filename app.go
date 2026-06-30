@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/csv"
 	"fmt"
 	"log"
@@ -19,6 +20,8 @@ import (
 	"token-dashboard/internal/pricing"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
+	_ "modernc.org/sqlite"
 )
 
 type App struct {
@@ -30,6 +33,10 @@ type App struct {
 	autoSyncMu      sync.Mutex
 	autoSyncCancel  context.CancelFunc
 	autoSyncMinutes int
+
+	refreshMu       sync.Mutex
+	refreshCancel   context.CancelFunc
+	refreshSeconds  int
 }
 
 func NewApp() *App {
@@ -80,10 +87,24 @@ func (a *App) startup(ctx context.Context) {
 	// Wire engine events to Wails runtime
 	if a.engine != nil {
 		a.engine.SetEventCallback(func(event string, data interface{}) {
-			// In a full implementation, this would use runtime.EventsEmit
-			// For now, just log
 			fmt.Printf("[event] %s: %v\n", event, data)
 		})
+	}
+
+	// Auto-detect CC-Switch DB path on startup if not configured
+	if a.db != nil {
+		existing, _ := a.db.GetConfig("cc_switch_db_path")
+		if existing == "" {
+			if home, err := os.UserHomeDir(); err == nil {
+				defaultPath := filepath.Join(home, ".cc-switch", "cc-switch.db")
+				if _, err := os.Stat(defaultPath); err == nil {
+					a.db.SetConfig("cc_switch_db_path", defaultPath)
+					log.Printf("[app] startup auto-detected cc-switch db at %s", defaultPath)
+				} else {
+					log.Printf("[app] startup cc-switch db not found at %s", defaultPath)
+				}
+			}
+		}
 	}
 }
 
@@ -245,6 +266,178 @@ func (a *App) GetAutoSyncInterval() int {
 	a.autoSyncMu.Lock()
 	defer a.autoSyncMu.Unlock()
 	return a.autoSyncMinutes
+}
+
+// ---------------------------------------------------------------------------
+// Settings API
+// ---------------------------------------------------------------------------
+
+func (a *App) GetSettings() model.AppConfig {
+	s, err := a.db.GetAllConfigs()
+	if err != nil {
+		return model.AppConfig{AutoSyncMinutes: 5, RefreshSeconds: 30}
+	}
+
+	cfg := model.AppConfig{
+		AutoSyncMinutes:  atoiDef(s["auto_sync_minutes"], 5),
+		RefreshSeconds:   atoiDef(s["refresh_seconds"], 30),
+		CCSwitchDBPath:   s["cc_switch_db_path"],
+		CCSwitchEnabled:  s["cc_switch_enabled"] == "true",
+		CCSwitchAutoSync: s["cc_switch_auto_sync"] == "true",
+	}
+
+	// Auto-detect default CC-Switch DB path if not configured
+	if cfg.CCSwitchDBPath == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			defaultPath := filepath.Join(home, ".cc-switch", "cc-switch.db")
+			if _, err := os.Stat(defaultPath); err == nil {
+				cfg.CCSwitchDBPath = defaultPath
+				log.Printf("[app] GetSettings auto-detected cc-switch db at %s", defaultPath)
+			} else {
+				log.Printf("[app] GetSettings cc-switch db not found at %s", defaultPath)
+			}
+		}
+	}
+
+	log.Printf("[app] GetSettings autoSync=%d ccSwitchPath=%q enabled=%v",
+		cfg.AutoSyncMinutes, cfg.CCSwitchDBPath, cfg.CCSwitchEnabled)
+
+	// Sync runtime auto-sync with config
+	a.autoSyncMu.Lock()
+	if cfg.AutoSyncMinutes != a.autoSyncMinutes {
+		a.autoSyncMu.Unlock()
+		a.SetAutoSyncInterval(cfg.AutoSyncMinutes)
+	} else {
+		a.autoSyncMu.Unlock()
+	}
+
+	return cfg
+}
+
+func (a *App) SaveSettings(cfg model.AppConfig) error {
+	pairs := map[string]string{
+		"auto_sync_minutes":  strconv.Itoa(cfg.AutoSyncMinutes),
+		"refresh_seconds":    strconv.Itoa(cfg.RefreshSeconds),
+		"cc_switch_db_path":  cfg.CCSwitchDBPath,
+		"cc_switch_enabled":  strconv.FormatBool(cfg.CCSwitchEnabled),
+		"cc_switch_auto_sync": strconv.FormatBool(cfg.CCSwitchAutoSync),
+	}
+	for k, v := range pairs {
+		if err := a.db.SetConfig(k, v); err != nil {
+			return fmt.Errorf("save config %s: %w", k, err)
+		}
+	}
+
+	// Apply auto-sync immediately
+	a.SetAutoSyncInterval(cfg.AutoSyncMinutes)
+
+	log.Printf("[app] SaveSettings ok autoSync=%d refresh=%d ccSwitch=%v",
+		cfg.AutoSyncMinutes, cfg.RefreshSeconds, cfg.CCSwitchEnabled)
+	return nil
+}
+
+// DetectCCSwitchDB checks the default cc-switch database path and returns it if found.
+func (a *App) DetectCCSwitchDB() string {
+	if home, err := os.UserHomeDir(); err == nil {
+		defaultPath := filepath.Join(home, ".cc-switch", "cc-switch.db")
+		if _, err := os.Stat(defaultPath); err == nil {
+			log.Printf("[app] DetectCCSwitchDB found at %s", defaultPath)
+			return defaultPath
+		}
+		log.Printf("[app] DetectCCSwitchDB not found at %s", defaultPath)
+	}
+	return ""
+}
+
+// ImportCCSwitchDB reads directly from a cc-switch SQLite database.
+func (a *App) ImportCCSwitchDB() model.CCSwitchImportResult {
+	if a.db == nil {
+		return model.CCSwitchImportResult{Error: "数据库未初始化"}
+	}
+
+	cfg := a.GetSettings()
+	if cfg.CCSwitchDBPath == "" {
+		return model.CCSwitchImportResult{Error: "请先在设置中配置 CC-Switch 数据库路径"}
+	}
+
+	dbPath := collector.ExpandPath(cfg.CCSwitchDBPath)
+	if _, err := os.Stat(dbPath); err != nil {
+		return model.CCSwitchImportResult{Error: fmt.Sprintf("数据库文件不存在: %s", dbPath)}
+	}
+
+	extDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return model.CCSwitchImportResult{Error: fmt.Sprintf("打开数据库失败: %v", err)}
+	}
+	defer extDB.Close()
+
+	rows, err := extDB.Query(`SELECT date, app_type, model, input_tokens, output_tokens,
+		cache_read_tokens, cache_creation_tokens, total_cost_usd FROM usage_daily_rollups
+		ORDER BY date`)
+	if err != nil {
+		return model.CCSwitchImportResult{Error: fmt.Sprintf("查询失败: %v", err)}
+	}
+	defer rows.Close()
+
+	device, _ := os.Hostname()
+	if device == "" {
+		device = "unknown"
+	}
+
+	// Accumulate by (source, date, model) same as CSV import
+	type accKey struct{ source, date, model string }
+	acc := make(map[accKey]*model.DailyUsage)
+	var totalRows int
+
+	for rows.Next() {
+		var date, appType, modelName string
+		var inputTokens, outputTokens, cacheRead, cacheCreation int64
+		var costStr string
+		if err := rows.Scan(&date, &appType, &modelName, &inputTokens, &outputTokens,
+			&cacheRead, &cacheCreation, &costStr); err != nil {
+			continue
+		}
+
+		usageDate := normalizeCSVDate(date)
+		if usageDate == "" {
+			continue
+		}
+		modelName = collector.NormalizeModelForGrouping(modelName)
+		if modelName == "" {
+			modelName = "unknown"
+		}
+		costUSD, _ := strconv.ParseFloat(costStr, 64)
+		source := sourceFromAppType(appType)
+
+		key := accKey{source: source, date: usageDate, model: modelName}
+		existing, ok := acc[key]
+		if !ok {
+			acc[key] = &model.DailyUsage{
+				Device: device, Source: source, UsageDate: usageDate, Model: modelName,
+			}
+			existing = acc[key]
+		}
+		existing.InputTokens += inputTokens
+		existing.OutputTokens += outputTokens
+		existing.CacheReadTokens += cacheRead
+		existing.CacheCreationTokens += cacheCreation
+		existing.CostUSD += costUSD
+		totalRows++
+	}
+
+	var imported int
+	for _, row := range acc {
+		row.TotalTokens = row.InputTokens + row.OutputTokens + row.CacheCreationTokens + row.CacheReadTokens
+		if err := a.db.UpsertDaily(row); err != nil {
+			log.Printf("[app] ImportCCSwitchDB upsert error source=%s date=%s model=%s err=%v",
+				row.Source, row.UsageDate, row.Model, err)
+			continue
+		}
+		imported++
+	}
+
+	log.Printf("[app] ImportCCSwitchDB done total=%d imported=%d", totalRows, imported)
+	return model.CCSwitchImportResult{Total: totalRows, Imported: imported}
 }
 
 // ---------------------------------------------------------------------------
@@ -417,4 +610,15 @@ func padNum(s string) string {
 		return "0" + s
 	}
 	return s
+}
+
+func atoiDef(s string, def int) int {
+	if s == "" {
+		return def
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return n
 }

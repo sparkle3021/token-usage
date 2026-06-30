@@ -1,5 +1,41 @@
 export namespace model {
 	
+	export class AppConfig {
+	    autoSyncMinutes: number;
+	    refreshSeconds: number;
+	    ccSwitchDBPath: string;
+	    ccSwitchEnabled: boolean;
+	    ccSwitchAutoSync: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.autoSyncMinutes = source["autoSyncMinutes"];
+	        this.refreshSeconds = source["refreshSeconds"];
+	        this.ccSwitchDBPath = source["ccSwitchDBPath"];
+	        this.ccSwitchEnabled = source["ccSwitchEnabled"];
+	        this.ccSwitchAutoSync = source["ccSwitchAutoSync"];
+	    }
+	}
+	export class CCSwitchImportResult {
+	    total: number;
+	    imported: number;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CCSwitchImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.imported = source["imported"];
+	        this.error = source["error"];
+	    }
+	}
 	export class CSVImportResult {
 	    total: number;
 	    imported: number;

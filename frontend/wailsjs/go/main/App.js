@@ -6,6 +6,10 @@ export function CollectStatus() {
   return window['go']['main']['App']['CollectStatus']();
 }
 
+export function DetectCCSwitchDB() {
+  return window['go']['main']['App']['DetectCCSwitchDB']();
+}
+
 export function GetAutoSyncInterval() {
   return window['go']['main']['App']['GetAutoSyncInterval']();
 }
@@ -14,12 +18,24 @@ export function GetDashboardData() {
   return window['go']['main']['App']['GetDashboardData']();
 }
 
+export function GetSettings() {
+  return window['go']['main']['App']['GetSettings']();
+}
+
 export function GetTimeSeriesData() {
   return window['go']['main']['App']['GetTimeSeriesData']();
 }
 
+export function ImportCCSwitchDB() {
+  return window['go']['main']['App']['ImportCCSwitchDB']();
+}
+
 export function ImportCSV() {
   return window['go']['main']['App']['ImportCSV']();
+}
+
+export function SaveSettings(arg1) {
+  return window['go']['main']['App']['SaveSettings'](arg1);
 }
 
 export function SetAutoSyncInterval(arg1) {

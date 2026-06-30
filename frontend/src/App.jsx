@@ -4,15 +4,16 @@ import { Card, CardContent } from './components/ui/card.jsx';
 import { Badge } from './components/ui/badge.jsx';
 import { Button } from './components/ui/button.jsx';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs.jsx';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select.jsx';
 
-// Lazy-load chart/table components
+// Lazy-load components
 import TrendChart from './components/charts/TrendChart.jsx';
 import TopModels from './components/charts/TopModels.jsx';
 import Heatmap from './components/charts/Heatmap.jsx';
 import TablePanel from './components/tables/TablePanel.jsx';
 import DrillDrawer from './components/tables/DrillDrawer.jsx';
 import SourceIcon from './components/SourceIcon.jsx';
+import SettingsDialog from './components/SettingsDialog.jsx';
+import ImportDialog from './components/ImportDialog.jsx';
 
 function App() {
   const [M, setM] = useState(null);
@@ -34,6 +35,21 @@ function App() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Load settings on mount
+  useEffect(() => {
+    try {
+      window.go.main.App.GetSettings().then(cfg => {
+        console.log('[settings] loaded:', JSON.stringify(cfg));
+        window.go.main.App.SetAutoSyncInterval(cfg.autoSyncMinutes || 5);
+      }).catch(err => {
+        console.error('[settings] .catch:', err);
+        window.go.main.App.SetAutoSyncInterval(5);
+      });
+    } catch(err) {
+      console.error('[settings] try/catch:', err);
+    }
+  }, []);
 
   useEffect(() => {
     const check = () => window.go.main.App.CollectStatus().then(s => {
@@ -84,40 +100,22 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
   const [f, setF] = useState(defaults);
   const [trendMode, setTrendMode] = useState('stacked');
   const [drill, setDrill] = useState(null);
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState(null);
   const [autoSync, setAutoSync] = useState(5);
+  const [refreshSec, setRefreshSec] = useState(30);
+  const refreshTimerRef = useRef(null);
 
-  // Initialize auto-sync on mount
+  // Auto-refresh timer
   useEffect(() => {
-    window.go.main.App.SetAutoSyncInterval(5);
-  }, []);
-
-  const runImport = useCallback(async () => {
-    setImporting(true);
-    setImportResult(null);
-    try {
-      const result = await window.go.main.App.ImportCSV();
-      setImportResult(result);
-      if (result.error && result.error !== '已取消') {
-        console.error('[import]', result.error);
-      }
-      if (!result.error && result.imported > 0) onRefresh();
-    } catch (err) {
-      setImportResult({ error: String(err), total: 0, imported: 0, skipped: 0 });
-      console.error('[import]', err);
-    } finally {
-      setImporting(false);
+    if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+    if (refreshSec > 0) {
+      refreshTimerRef.current = setInterval(() => onRefresh(), refreshSec * 1000);
     }
-  }, [onRefresh]);
+    return () => { if (refreshTimerRef.current) clearInterval(refreshTimerRef.current); };
+  }, [refreshSec, onRefresh]);
 
-  const handleAutoSyncChange = useCallback(async (minutes) => {
-    setAutoSync(minutes);
-    try {
-      await window.go.main.App.SetAutoSyncInterval(minutes);
-    } catch (err) {
-      console.error('[autoSync]', err);
-    }
+  const handleSettingsChange = useCallback((cfg) => {
+    setAutoSync(cfg.autoSyncMinutes);
+    setRefreshSec(cfg.refreshSeconds);
   }, []);
 
   const allSources = useMemo(() => [...new Set(M.daily.map(r => r.source))], [M.daily]);
@@ -185,23 +183,15 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
           {collectStatus && collectStatus.status === 'running' && <Badge variant="outline" className="text-indigo-600">采集中</Badge>}
           {collectStatus && collectStatus.status === 'ok' && <Badge variant="outline" className="text-green-600">采集完成</Badge>}
           {collectStatus && collectStatus.status === 'error' && <Badge variant="outline" className="text-red-500">采集失败</Badge>}
-          {importResult && !importResult.error && importResult.imported > 0 && <Badge variant="outline" className="text-green-600">已导入 {importResult.imported} 条</Badge>}
-          {importResult && importResult.error && importResult.error !== '已取消' && <Badge variant="outline" className="text-red-500">导入失败</Badge>}
           <span className="text-xs text-muted-foreground whitespace-nowrap">最后同步 <strong>{lastSync}</strong></span>
-          <Button size="sm" variant="default" onClick={onCollect} disabled={collecting || refreshing}>{collecting ? '同步中' : '同步'}</Button>
-          <Select value={String(autoSync)} onValueChange={v => handleAutoSyncChange(Number(v))}>
-            <SelectTrigger className="h-8 text-xs w-28">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent side="bottom" align="start">
-              <SelectItem value="5">每 5 分钟</SelectItem>
-              <SelectItem value="10">每 10 分钟</SelectItem>
-              <SelectItem value="30">每 30 分钟</SelectItem>
-              <SelectItem value="0">不同步</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button size="sm" variant="outline" onClick={onRefresh} disabled={refreshing}>{refreshing ? '同步中' : '刷新'}</Button>
-          <Button size="sm" variant="outline" onClick={runImport} disabled={importing}>{importing ? '导入中…' : '导入CC-Switch数据'}</Button>
+          <Button size="sm" variant="default" onClick={onCollect} disabled={collecting || refreshing}>
+            {collecting ? '同步中' : '同步'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={onRefresh} disabled={refreshing}>
+            {refreshing ? '刷新中…' : '刷新'}
+          </Button>
+          <ImportDialog onRefresh={onRefresh} />
+          <SettingsDialog onSettingsChange={handleSettingsChange} />
         </div>
       </div>
 
