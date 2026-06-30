@@ -2,9 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Card, CardHeader, CardContent } from '../ui/card.jsx';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table.jsx';
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs.jsx';
-import { Badge } from '../ui/badge.jsx';
 import * as U from '../../lib/utils.js';
-import SourceIcon from '../SourceIcon.jsx';
+import SourceBadge from '../SourceBadge.jsx';
 
 export default function TablePanel({ daily = [], sessions = [], runs = [], onDrill }) {
   const [tab, setTab] = useState('sources');
@@ -112,7 +111,7 @@ function DTable({ rows, columns, sortField = 'total', search }) {
 
 function SourceTable({ rows, search, onDrill }) {
   const cols = [
-    { field: 'source', label: '来源', render: r => <SourceBadge s={r.source} /> },
+    { field: 'source', label: '来源', render: r => <SourceBadgeLabel s={r.source} /> },
     { field: 'device', label: '设备', render: r => <span className="text-muted-foreground text-[11px]">{r.device}</span> },
     { field: 'modelCount', label: '模型', right: true },
     { field: 'total', label: 'Total', right: true, render: r => <span className="font-semibold">{U.fmt.format(r.total || 0)}</span> },
@@ -126,7 +125,7 @@ function SourceTable({ rows, search, onDrill }) {
 
 function ModelTable({ rows, search, onDrill }) {
   const cols = [
-    { field: 'source', label: '来源', render: r => <SourceBadge s={r.source} /> },
+    { field: 'source', label: '来源', render: r => <SourceBadgeLabel s={r.source} /> },
     { field: 'model', label: '模型', render: r => <span className="font-mono text-[11px]">{r.model}</span> },
     { field: 'dayCount', label: '活跃天', right: true },
     { field: 'total', label: 'Total', right: true, render: r => <span className="font-semibold">{U.fmt.format(r.total || 0)}</span> },
@@ -139,7 +138,7 @@ function ModelTable({ rows, search, onDrill }) {
 
 function SessionTable({ rows, search, onDrill }) {
   const cols = [
-    { field: 'source', label: '来源', width: 100, render: r => <SourceBadge s={r?.source} /> },
+    { field: 'source', label: '来源', width: 100, render: r => <SourceBadgeLabel s={r?.source} /> },
     { field: 'projectPath', label: '项目', render: r => <span className="font-mono text-[11px]" title={r?.sessionId}>{r?.projectPath || (r?.sessionId ? String(r.sessionId).split('/').slice(-1)[0] : '—')}</span> },
     { field: 'lastActivity', label: '活动', render: r => <span className="text-muted-foreground text-[11px]">{r?.lastActivity || '—'}</span> },
     { field: 'inputTokens', label: 'Input', right: true, render: r => U.compact(r?.inputTokens) },
@@ -150,7 +149,7 @@ function SessionTable({ rows, search, onDrill }) {
   return <DTable rows={rows} columns={cols} search={search} sortField="totalTokens" onDrill={r => onDrill?.({ kind: 'session', row: r })} />;
 }
 
-function RunTable({ rows, search, onDrill }) {
+function RunTable({ rows, onDrill }) {
   return (
     <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
       <Table>
@@ -167,7 +166,7 @@ function RunTable({ rows, search, onDrill }) {
           {(rows || []).map((r, i) => (
             <TableRow key={i} onClick={() => onDrill?.({ kind: 'run', row: r })}>
               <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{U.formatTs(r?.collectedAt)}</TableCell>
-              <TableCell className="text-xs"><SourceBadge s={r?.source} /></TableCell>
+              <TableCell className="text-xs"><SourceBadgeLabel s={r?.source} /></TableCell>
               <TableCell className="text-xs"><StatusBadge s={r?.status} /></TableCell>
               <TableCell className="text-xs text-muted-foreground max-w-[300px] truncate" title={r?.message}>{r?.message || ''}</TableCell>
             </TableRow>
@@ -178,10 +177,8 @@ function RunTable({ rows, search, onDrill }) {
   );
 }
 
-function SourceBadge({ s }) {
-  return <Badge variant="outline" className="text-[10px] gap-1" style={{ borderColor: U.getSourceColor(s || ''), color: U.getSourceColor(s || '') }}>
-    <SourceIcon name={s} className="w-3 h-3" />{s || 'unknown'}
-  </Badge>;
+function SourceBadgeLabel({ s }) {
+  return <SourceBadge source={s || 'unknown'} />;
 }
 
 function StatusBadge({ s }) {

@@ -11,7 +11,7 @@ import TopModels from './components/charts/TopModels.jsx';
 import Heatmap from './components/charts/Heatmap.jsx';
 import TablePanel from './components/tables/TablePanel.jsx';
 import DrillDrawer from './components/tables/DrillDrawer.jsx';
-import SourceIcon from './components/SourceIcon.jsx';
+import SourceBadge from './components/SourceBadge.jsx';
 import SettingsDialog from './components/SettingsDialog.jsx';
 import ImportDialog from './components/ImportDialog.jsx';
 
@@ -209,10 +209,7 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-1">来源</span>
           {allSources.map(s => (
-            <Badge key={s} variant={f.sources.has(s) ? 'default' : 'outline'} className="cursor-pointer text-xs gap-1"
-              onClick={() => { const n = new Set(f.sources); n.has(s) ? n.delete(s) : n.add(s); setF({ ...f, sources: n }); }}>
-              <SourceIcon name={s} className="w-3 h-3" />{s}
-            </Badge>
+            <SourceBadge key={s} source={s} selected={f.sources.has(s)} onClick={() => { const n = new Set(f.sources); n.has(s) ? n.delete(s) : n.add(s); setF({ ...f, sources: n }); }} />
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t">
