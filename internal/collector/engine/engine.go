@@ -239,7 +239,11 @@ func (e *Engine) runCollection() {
 	e.emit("collection:done", map[string]string{"status": status, "message": msg})
 
 	elapsed := time.Now().Sub(mustParseRFC3339(startedAt))
-	log.Printf("[engine] runCollection complete status=%s elapsed=%v", status, elapsed)
+			// Rebuild daily_usage from hour_usage after all collectors finish
+		if err := e.db.BuildDailyFromHourUsage(); err != nil {
+			log.Printf("[engine] BuildDailyFromHourUsage error: %v", err)
+		}
+		log.Printf("[engine] runCollection complete status=%s elapsed=%v", status, elapsed)
 }
 
 func (e *Engine) processCollector(result *collector.CollectResult, col collector.Collector) bool {
@@ -267,13 +271,7 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 		}
 	}
 
-	// Bulk upsert with per-call atomicity (UPSERT semantics ensure correctness)
-	if err := e.db.BulkUpsertDaily(dailyToModel(result.Device, col.Source(), filteredDaily)); err != nil {
-		e.db.RecordRun(result.Device, col.Source(), "error",
-			fmt.Sprintf("[%s] bulk daily: %v", col.Source(), err), "go-collector:"+col.ID())
-		return false
-	}
-
+	// Bulk upsert session (session data not in hour_usage, write directly)
 	if err := e.db.BulkUpsertSession(sessionToModel(result.Device, col.Source(), result.Session)); err != nil {
 		e.db.RecordRun(result.Device, col.Source(), "error",
 			fmt.Sprintf("[%s] bulk session: %v", col.Source(), err), "go-collector:"+col.ID())
@@ -288,6 +286,18 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 		}
 	}
 
+		// Build hour_usage from time_usage for all dates in this collection run
+		dateSeen := make(map[string]bool)
+		for _, r := range result.Daily {
+			if !dateSeen[r.UsageDate] {
+				dateSeen[r.UsageDate] = true
+				if err := e.db.BuildHourUsageFromTimeUsage(result.Device, col.Source(), r.UsageDate); err != nil {
+					log.Printf("[engine] BuildHourUsageFromTimeUsage error source=%s date=%s err=%v",
+						col.Source(), r.UsageDate, err)
+				}
+			}
+		}
+
 	summary := fmt.Sprintf("daily=%d, time=%d, workspace_model=%d", len(result.Daily), len(result.Events), len(result.Session))
 	e.db.RecordRun(result.Device, col.Source(), "ok", summary, "go-collector:"+col.ID())
 	e.emit("collector:done", map[string]interface{}{
@@ -298,20 +308,6 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 	return true
 }
 
-// dailyToModel converts collector DailyRow to model.DailyUsage slice for bulk upsert.
-func dailyToModel(device, source string, rows []collector.DailyRow) []model.DailyUsage {
-	out := make([]model.DailyUsage, len(rows))
-	for i, r := range rows {
-		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
-		out[i] = model.DailyUsage{
-			Device: device, Source: source, UsageDate: r.UsageDate, Model: r.Model,
-			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
-			CacheCreationTokens: r.CacheWriteTokens, CacheReadTokens: r.CacheReadTokens,
-			ReasoningOutputTokens: r.ReasoningTokens, TotalTokens: total, CostUSD: r.CostUSD,
-		}
-	}
-	return out
-}
 
 // sessionToModel converts collector SessionRow to model.SessionUsage slice.
 func sessionToModel(device, source string, rows []collector.SessionRow) []model.SessionUsage {

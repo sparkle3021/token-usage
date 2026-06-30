@@ -105,3 +105,20 @@ type CCSwitchImportResult struct {
 	Imported int    `json:"imported"`
 	Error    string `json:"error,omitempty"`
 }
+
+// HourUsage holds hourly aggregated token usage from both JSONL and CC-Switch.
+type HourUsage struct {
+	Device                string  `json:"device"`
+	Source                string  `json:"source"`
+	UsageDate             string  `json:"usageDate"`
+	Hour                  int     `json:"hour"`
+	Model                 string  `json:"model"`
+	InputTokens           int64   `json:"inputTokens"`
+	OutputTokens          int64   `json:"outputTokens"`
+	CacheCreationTokens   int64   `json:"cacheCreationTokens"`
+	CacheReadTokens       int64   `json:"cacheReadTokens"`
+	ReasoningOutputTokens int64   `json:"reasoningOutputTokens"`
+	TotalTokens           int64   `json:"totalTokens"`
+	CostUSD               float64 `json:"costUSD"`
+	UpdatedAt             string  `json:"-"`
+}

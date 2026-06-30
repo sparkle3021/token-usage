@@ -138,7 +138,7 @@ func (c *ClaudeCodeCollector) scanAndParse(dir string,
 				*events = append(*events, EventRow{
 					EventKey:   fmt.Sprintf("%s:%s:%s:%d", filePath, rec.timestamp, model, rec.input+rec.output),
 					EventTime: rec.timestamp, UsageDate: date, Model: model,
-					SessionID: filePath, ProjectPath: workspaceLabel,
+					SessionID: strings.TrimSuffix(filepath.Base(filePath), ".jsonl"), ProjectPath: workspaceLabel,
 					InputTokens: rec.input, OutputTokens: rec.output,
 					CacheReadTokens: rec.cacheRead, CacheWriteTokens: rec.cacheWrite,
 					ReasoningTokens: rec.reasoning, CostUSD: cost,
@@ -154,7 +154,7 @@ func (c *ClaudeCodeCollector) scanAndParse(dir string,
 			sk := workspaceKey + "::" + model
 			if _, ok := sessionMap[sk]; !ok {
 				sessionMap[sk] = &sessionAgg{
-					sessionID: filePath, projectPath: workspaceLabel, model: model,
+					sessionID: strings.TrimSuffix(filepath.Base(filePath), ".jsonl"), projectPath: workspaceLabel, model: model,
 				}
 			}
 			sessionMap[sk].add(rec.input, rec.output, rec.cacheRead, rec.cacheWrite, rec.reasoning, cost)
@@ -209,13 +209,8 @@ func (c *ClaudeCodeCollector) parseFile(filePath string) []claudeRecord {
 
 		rec.input = posIntFromJSON(usage.InputTokens)
 		rec.output = posIntFromJSON(usage.OutputTokens)
-		cr := posIntFromJSON(usage.CacheReadInputTokens)
-		cc := posIntFromJSON(usage.CacheCreationInputTokens)
-		if cr > cc {
-			rec.cacheRead = cr
-		} else {
-			rec.cacheRead = cc
-		}
+		rec.cacheRead = posIntFromJSON(usage.CacheReadInputTokens)
+		rec.cacheWrite = posIntFromJSON(usage.CacheCreationInputTokens)
 		rec.reasoning = maxInt64(posIntFromJSON(usage.ReasoningTokens), posIntFromJSON(usage.ThinkingTokens))
 		if obj.CostUSD > 0 {
 			rec.cost = obj.CostUSD
@@ -240,6 +235,9 @@ func (c *ClaudeCodeCollector) parseFile(filePath string) []claudeRecord {
 				}
 				if rec.cacheRead > existing.cacheRead {
 					existing.cacheRead = rec.cacheRead
+				}
+				if rec.cacheWrite > existing.cacheWrite {
+					existing.cacheWrite = rec.cacheWrite
 				}
 				if rec.reasoning > existing.reasoning {
 					existing.reasoning = rec.reasoning

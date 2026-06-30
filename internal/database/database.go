@@ -282,6 +282,27 @@ func (m *Manager) initSchema() error {
 		return fmt.Errorf("lock past pricing: %w", err)
 	}
 
+		// Create hour_usage table (separate from main schema for backward compat)
+		if _, err := m.db.Exec(`CREATE TABLE IF NOT EXISTS hour_usage (
+			device TEXT NOT NULL,
+			source TEXT NOT NULL,
+			usage_date TEXT NOT NULL,
+			hour INTEGER NOT NULL,
+			model TEXT NOT NULL DEFAULT '',
+			input_tokens INTEGER NOT NULL DEFAULT 0,
+			output_tokens INTEGER NOT NULL DEFAULT 0,
+			cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+			cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+			reasoning_output_tokens INTEGER NOT NULL DEFAULT 0,
+			total_tokens INTEGER NOT NULL DEFAULT 0,
+			cost_usd REAL NOT NULL DEFAULT 0,
+			updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+			PRIMARY KEY (device, source, usage_date, hour, model)
+		);
+		CREATE INDEX IF NOT EXISTS idx_hour_usage_date_source ON hour_usage(usage_date, source);
+		`); err != nil {
+			return fmt.Errorf("create hour_usage table: %w", err)
+		}
 	// Migration: add last_file_mtime to collection_runs for incremental collection
 	m.db.Exec("ALTER TABLE collection_runs ADD COLUMN last_file_mtime INTEGER")
 
@@ -406,6 +427,187 @@ func bulkExec[T any](db *sql.DB, rows []T, batchSize int, build func([]T) (strin
 // ---------------------------------------------------------------------------
 // Daily usage
 // ---------------------------------------------------------------------------
+
+// BulkUpsertHourUsage inserts or updates hourly usage records with MAX semantics.
+// When a record for the same key exists, each field is set to the larger of the
+// existing and incoming value. This allows JSONL and CC-Switch data to coexist:
+// whichever source observed more tokens for a given hour wins per field.
+func (m *Manager) BulkUpsertHourUsage(rows []model.HourUsage) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	return bulkExec(m.db, rows, bulkBatchSize, func(batch []model.HourUsage) (string, []interface{}) {
+		var sqlBuf strings.Builder
+		sqlBuf.WriteString(`INSERT INTO hour_usage (device,source,usage_date,hour,model,
+			input_tokens,output_tokens,cache_creation_tokens,cache_read_tokens,
+			reasoning_output_tokens,total_tokens,cost_usd,updated_at) VALUES `)
+		var args []interface{}
+		for i, r := range batch {
+			if i > 0 {
+				sqlBuf.WriteString(", ")
+			}
+			sqlBuf.WriteString("(?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))")
+			args = append(args, r.Device, r.Source, r.UsageDate, r.Hour, r.Model,
+				r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens,
+				r.ReasoningOutputTokens, r.TotalTokens, r.CostUSD)
+		}
+		sqlBuf.WriteString(` ON CONFLICT(device,source,usage_date,hour,model) DO UPDATE SET
+			input_tokens=MAX(excluded.input_tokens,hour_usage.input_tokens),
+			output_tokens=MAX(excluded.output_tokens,hour_usage.output_tokens),
+			cache_creation_tokens=MAX(excluded.cache_creation_tokens,hour_usage.cache_creation_tokens),
+			cache_read_tokens=MAX(excluded.cache_read_tokens,hour_usage.cache_read_tokens),
+			reasoning_output_tokens=MAX(excluded.reasoning_output_tokens,hour_usage.reasoning_output_tokens),
+			total_tokens=MAX(excluded.total_tokens,hour_usage.total_tokens),
+			cost_usd=MAX(excluded.cost_usd,hour_usage.cost_usd),
+			updated_at=datetime('now','localtime')`)
+		return sqlBuf.String(), args
+	})
+}
+
+// BuildHourUsageFromTimeUsage rebuilds hour_usage from time_usage for a given source and date.
+// Parses event_time in Go (ISO 8601 -> local time) to extract hour correctly,
+// then aggregates into hour_usage with MAX semantics.
+func (m *Manager) BuildHourUsageFromTimeUsage(device, source, date string) error {
+	rows, err := m.db.Query(`SELECT device, source, usage_date, model,
+		input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+		reasoning_output_tokens, total_tokens, cost_usd, event_time
+		FROM time_usage
+		WHERE device = ? AND source = ? AND usage_date = ?`, device, source, date)
+	if err != nil {
+		return fmt.Errorf("query time_usage: %w", err)
+	}
+	defer rows.Close()
+
+	type hourKey struct{ device, source, date, model string; hour int }
+	acc := make(map[hourKey]*model.HourUsage)
+
+	for rows.Next() {
+		var dev, src, d, mdl string
+		var inp, out, cc, cr, reas, total int64
+		var cost float64
+		var eventTime string
+		if err := rows.Scan(&dev, &src, &d, &mdl,
+			&inp, &out, &cc, &cr, &reas, &total, &cost, &eventTime); err != nil {
+			continue
+		}
+
+		// Parse ISO 8601 UTC timestamp, convert to local time, extract hour
+		hour := extractLocalHour(eventTime)
+		if hour < 0 {
+			continue
+		}
+
+		key := hourKey{device: dev, source: src, date: d, hour: hour, model: mdl}
+		existing, ok := acc[key]
+		if !ok {
+			acc[key] = &model.HourUsage{
+				Device: dev, Source: src, UsageDate: d, Hour: hour, Model: mdl,
+			}
+			existing = acc[key]
+		}
+		existing.InputTokens += inp
+		existing.OutputTokens += out
+		existing.CacheCreationTokens += cc
+		existing.CacheReadTokens += cr
+		existing.ReasoningOutputTokens += reas
+		existing.TotalTokens += total
+		existing.CostUSD += cost
+	}
+
+	if rows.Err() != nil {
+		return fmt.Errorf("rows iteration: %w", rows.Err())
+	}
+
+	// Bulk upsert into hour_usage with MAX semantics
+	var batch []model.HourUsage
+	for _, row := range acc {
+		batch = append(batch, *row)
+	}
+	if len(batch) > 0 {
+		if err := m.BulkUpsertHourUsage(batch); err != nil {
+			return fmt.Errorf("upsert hour_usage: %w", err)
+		}
+	}
+
+	log.Printf("[db] BuildHourUsageFromTimeUsage ok device=%s source=%s date=%s rows=%d hour_keys=%d", device, source, date, len(batch), len(batch))
+	return nil
+}
+
+// extractLocalHour parses an ISO 8601 UTC timestamp string and returns the local hour (0-23).
+// Returns -1 on parse failure.
+func extractLocalHour(ts string) int {
+	if ts == "" {
+		return -1
+	}
+	// Try parsing ISO 8601 with timezone
+	layouts := []string{
+		time.RFC3339Nano,           // "2026-06-29T16:22:00.130Z"
+		time.RFC3339,               // "2026-06-29T16:22:00Z"
+		"2006-01-02T15:04:05",      // "2026-06-29T16:22:00" (no TZ)
+		"2006-01-02 15:04:05",      // "2026-06-29 16:22:00"
+	}
+	var t time.Time
+	var err error
+	for _, layout := range layouts {
+		t, err = time.Parse(layout, ts)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return -1
+	}
+	// Convert to local timezone and extract hour
+	return t.Local().Hour()
+}
+
+// BuildDailyFromHourUsage rebuilds daily_usage from hour_usage.
+// Should be called after all sources (JSONL collectors + CC-Switch import) have
+// written their data to hour_usage for the target dates.
+func (m *Manager) BuildDailyFromHourUsage() error {
+	tx, err := m.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`
+		INSERT INTO daily_usage (device, source, usage_date, model,
+			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+			reasoning_output_tokens, total_tokens, cost_usd, pricing_locked_at, updated_at)
+		SELECT device, source, usage_date, model,
+			SUM(input_tokens), SUM(output_tokens),
+			SUM(cache_creation_tokens), SUM(cache_read_tokens),
+			SUM(reasoning_output_tokens), SUM(total_tokens), SUM(cost_usd),
+			NULL, datetime('now','localtime')
+		FROM hour_usage
+		GROUP BY device, source, usage_date, model
+		ON CONFLICT(device, source, usage_date, model) DO UPDATE SET
+			input_tokens=excluded.input_tokens,
+			output_tokens=excluded.output_tokens,
+			cache_creation_tokens=excluded.cache_creation_tokens,
+			cache_read_tokens=excluded.cache_read_tokens,
+			reasoning_output_tokens=excluded.reasoning_output_tokens,
+			total_tokens=excluded.total_tokens,
+			cost_usd=CASE
+				WHEN daily_usage.usage_date < date('now','localtime') THEN daily_usage.cost_usd
+				ELSE excluded.cost_usd
+			END,
+			pricing_locked_at=CASE
+				WHEN daily_usage.usage_date < date('now','localtime')
+				THEN COALESCE(daily_usage.pricing_locked_at, datetime('now','localtime'))
+				ELSE NULL
+			END,
+			updated_at=datetime('now','localtime')
+	`)
+	if err != nil {
+		return fmt.Errorf("build daily from hour_usage: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+
 
 func (m *Manager) UpsertDaily(row *model.DailyUsage) error {
 	start := time.Now()

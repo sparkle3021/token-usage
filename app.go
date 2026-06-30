@@ -354,66 +354,57 @@ func (a *App) ImportCCSwitchDB() model.CCSwitchImportResult {
 	if a.db == nil {
 		return model.CCSwitchImportResult{Error: "数据库未初始化"}
 	}
-
 	cfg := a.GetSettings()
 	if cfg.CCSwitchDBPath == "" {
 		return model.CCSwitchImportResult{Error: "请先在设置中配置 CC-Switch 数据库路径"}
 	}
-
 	dbPath := collector.ExpandPath(cfg.CCSwitchDBPath)
 	if _, err := os.Stat(dbPath); err != nil {
 		return model.CCSwitchImportResult{Error: fmt.Sprintf("数据库文件不存在: %s", dbPath)}
 	}
-
 	extDB, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return model.CCSwitchImportResult{Error: fmt.Sprintf("打开数据库失败: %v", err)}
 	}
 	defer extDB.Close()
-
-	rows, err := extDB.Query(`SELECT date, app_type, model, input_tokens, output_tokens,
-		cache_read_tokens, cache_creation_tokens, total_cost_usd FROM usage_daily_rollups
-		ORDER BY date`)
-	if err != nil {
-		return model.CCSwitchImportResult{Error: fmt.Sprintf("查询失败: %v", err)}
-	}
-	defer rows.Close()
-
 	device, _ := os.Hostname()
 	if device == "" {
 		device = "unknown"
 	}
-
-	// Accumulate by (source, date, model) same as CSV import
-	type accKey struct{ source, date, model string }
-	acc := make(map[accKey]*model.DailyUsage)
+	type hourAccKey struct{ date, source, model string; hour int }
+	acc := make(map[hourAccKey]*model.HourUsage)
+	rows, err := extDB.Query(`SELECT date(created_at, 'unixepoch', 'localtime') as date,
+		CAST(strftime('%H', datetime(created_at, 'unixepoch', 'localtime')) AS INTEGER) as hour,
+		app_type, model, input_tokens, output_tokens,
+		cache_read_tokens, cache_creation_tokens, total_cost_usd
+		FROM proxy_request_logs
+		WHERE app_type = 'claude'
+		  AND data_source = 'proxy'
+		  AND status_code >= 200 AND status_code < 300
+		ORDER BY date, hour`)
+	if err != nil {
+		return model.CCSwitchImportResult{Error: fmt.Sprintf("查询失败: %v", err)}
+	}
+	defer rows.Close()
 	var totalRows int
-
 	for rows.Next() {
-		var date, appType, modelName string
-		var inputTokens, outputTokens, cacheRead, cacheCreation int64
-		var costStr string
-		if err := rows.Scan(&date, &appType, &modelName, &inputTokens, &outputTokens,
-			&cacheRead, &cacheCreation, &costStr); err != nil {
+		var dateStr string; var hour int; var appType, modelName string
+		var inputTokens, outputTokens, cacheRead, cacheCreation int64; var costStr string
+		if err := rows.Scan(&dateStr, &hour, &appType, &modelName,
+			&inputTokens, &outputTokens, &cacheRead, &cacheCreation, &costStr); err != nil {
 			continue
 		}
-
-		usageDate := normalizeCSVDate(date)
-		if usageDate == "" {
-			continue
-		}
+		usageDate := normalizeCSVDate(dateStr)
+		if usageDate == "" { continue }
 		modelName = collector.NormalizeModelForGrouping(modelName)
-		if modelName == "" {
-			modelName = "unknown"
-		}
+		if modelName == "" { modelName = "unknown" }
 		costUSD, _ := strconv.ParseFloat(costStr, 64)
 		source := sourceFromAppType(appType)
-
-		key := accKey{source: source, date: usageDate, model: modelName}
+		key := hourAccKey{date: usageDate, hour: hour, source: source, model: modelName}
 		existing, ok := acc[key]
 		if !ok {
-			acc[key] = &model.DailyUsage{
-				Device: device, Source: source, UsageDate: usageDate, Model: modelName,
+			acc[key] = &model.HourUsage{
+				Device: device, Source: source, UsageDate: usageDate, Hour: hour, Model: modelName,
 			}
 			existing = acc[key]
 		}
@@ -425,25 +416,20 @@ func (a *App) ImportCCSwitchDB() model.CCSwitchImportResult {
 		totalRows++
 	}
 
-	var imported int
+	var batch []model.HourUsage
 	for _, row := range acc {
 		row.TotalTokens = row.InputTokens + row.OutputTokens + row.CacheCreationTokens + row.CacheReadTokens
-		if err := a.db.UpsertDaily(row); err != nil {
-			log.Printf("[app] ImportCCSwitchDB upsert error source=%s date=%s model=%s err=%v",
-				row.Source, row.UsageDate, row.Model, err)
-			continue
-		}
-		imported++
+		batch = append(batch, *row)
 	}
-
-	log.Printf("[app] ImportCCSwitchDB done total=%d imported=%d", totalRows, imported)
-	return model.CCSwitchImportResult{Total: totalRows, Imported: imported}
+	if err := a.db.BulkUpsertHourUsage(batch); err != nil {
+		return model.CCSwitchImportResult{Error: fmt.Sprintf("写入 hour_usage 失败: %v", err)}
+	}
+	if err := a.db.BuildDailyFromHourUsage(); err != nil {
+		return model.CCSwitchImportResult{Error: fmt.Sprintf("重建日表失败: %v", err)}
+	}
+	log.Printf("[app] ImportCCSwitchDB done total=%d hour_keys=%d", totalRows, len(batch))
+	return model.CCSwitchImportResult{Total: totalRows, Imported: len(batch)}
 }
-
-// ---------------------------------------------------------------------------
-// CSV Import API
-// ---------------------------------------------------------------------------
-
 func (a *App) ImportCSV() model.CSVImportResult {
 	if a.db == nil {
 		return model.CSVImportResult{Error: "数据库未初始化"}
