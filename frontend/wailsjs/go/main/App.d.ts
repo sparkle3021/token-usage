@@ -4,8 +4,14 @@ import {model} from '../models';
 
 export function CollectStatus():Promise<model.CollectStatus>;
 
+export function GetAutoSyncInterval():Promise<number>;
+
 export function GetDashboardData():Promise<model.DashboardData>;
 
 export function GetTimeSeriesData():Promise<model.TimeSeriesData>;
+
+export function ImportCSV():Promise<model.CSVImportResult>;
+
+export function SetAutoSyncInterval(arg1:number):Promise<void>;
 
 export function StartCollection():Promise<boolean>;

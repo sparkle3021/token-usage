@@ -1,5 +1,23 @@
 export namespace model {
 	
+	export class CSVImportResult {
+	    total: number;
+	    imported: number;
+	    skipped: number;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CSVImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.imported = source["imported"];
+	        this.skipped = source["skipped"];
+	        this.error = source["error"];
+	    }
+	}
 	export class CollectStatus {
 	    status: string;
 	    message: string;

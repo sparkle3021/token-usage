@@ -4,6 +4,7 @@ import { Card, CardContent } from './components/ui/card.jsx';
 import { Badge } from './components/ui/badge.jsx';
 import { Button } from './components/ui/button.jsx';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs.jsx';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select.jsx';
 
 // Lazy-load chart/table components
 import TrendChart from './components/charts/TrendChart.jsx';
@@ -83,6 +84,41 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
   const [f, setF] = useState(defaults);
   const [trendMode, setTrendMode] = useState('stacked');
   const [drill, setDrill] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [autoSync, setAutoSync] = useState(5);
+
+  // Initialize auto-sync on mount
+  useEffect(() => {
+    window.go.main.App.SetAutoSyncInterval(5);
+  }, []);
+
+  const runImport = useCallback(async () => {
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const result = await window.go.main.App.ImportCSV();
+      setImportResult(result);
+      if (result.error && result.error !== '已取消') {
+        console.error('[import]', result.error);
+      }
+      if (!result.error && result.imported > 0) onRefresh();
+    } catch (err) {
+      setImportResult({ error: String(err), total: 0, imported: 0, skipped: 0 });
+      console.error('[import]', err);
+    } finally {
+      setImporting(false);
+    }
+  }, [onRefresh]);
+
+  const handleAutoSyncChange = useCallback(async (minutes) => {
+    setAutoSync(minutes);
+    try {
+      await window.go.main.App.SetAutoSyncInterval(minutes);
+    } catch (err) {
+      console.error('[autoSync]', err);
+    }
+  }, []);
 
   const allSources = useMemo(() => [...new Set(M.daily.map(r => r.source))], [M.daily]);
   const allModels = useMemo(() => [...new Set(M.daily.map(r => r.model))].filter(Boolean), [M.daily]);
@@ -149,9 +185,23 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
           {collectStatus && collectStatus.status === 'running' && <Badge variant="outline" className="text-indigo-600">采集中</Badge>}
           {collectStatus && collectStatus.status === 'ok' && <Badge variant="outline" className="text-green-600">采集完成</Badge>}
           {collectStatus && collectStatus.status === 'error' && <Badge variant="outline" className="text-red-500">采集失败</Badge>}
+          {importResult && !importResult.error && importResult.imported > 0 && <Badge variant="outline" className="text-green-600">已导入 {importResult.imported} 条</Badge>}
+          {importResult && importResult.error && importResult.error !== '已取消' && <Badge variant="outline" className="text-red-500">导入失败</Badge>}
           <span className="text-xs text-muted-foreground whitespace-nowrap">最后同步 <strong>{lastSync}</strong></span>
-          <Button size="sm" variant="default" onClick={onCollect} disabled={collecting || refreshing}>{collecting ? '采集中' : '采集'}</Button>
+          <Button size="sm" variant="default" onClick={onCollect} disabled={collecting || refreshing}>{collecting ? '同步中' : '同步'}</Button>
+          <Select value={String(autoSync)} onValueChange={v => handleAutoSyncChange(Number(v))}>
+            <SelectTrigger className="h-8 text-xs w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent side="bottom" align="start">
+              <SelectItem value="5">每 5 分钟</SelectItem>
+              <SelectItem value="10">每 10 分钟</SelectItem>
+              <SelectItem value="30">每 30 分钟</SelectItem>
+              <SelectItem value="0">不同步</SelectItem>
+            </SelectContent>
+          </Select>
           <Button size="sm" variant="outline" onClick={onRefresh} disabled={refreshing}>{refreshing ? '同步中' : '刷新'}</Button>
+          <Button size="sm" variant="outline" onClick={runImport} disabled={importing}>{importing ? '导入中…' : '导入CC-Switch数据'}</Button>
         </div>
       </div>
 
@@ -186,26 +236,28 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
         <KPI label="总 Token" value={U.compactCN(totals.totalTokens)} delta={U.deltaPct(totals.totalTokens, compareData.totals?.totalTokens)} spark={sparkValues} color="oklch(0.55 0.16 265)" />
         <KPI label="Input" value={U.compactCN(totals.inputTokens)} delta={U.deltaPct(totals.inputTokens, compareData.totals?.inputTokens)} spark={sparkBy('inputTokens')} color="oklch(0.62 0.13 240)" />
         <KPI label="Output" value={U.compactCN(totals.outputTokens)} delta={U.deltaPct(totals.outputTokens, compareData.totals?.outputTokens)} spark={sparkBy('outputTokens')} color="oklch(0.60 0.15 295)" />
-        <KPI label="Cache" value={U.compactCN(totals.cacheReadTokens)} sub={`${totals.cacheHitRate.toFixed(0)}% 命中`} delta={U.deltaPct(totals.cacheReadTokens, compareData.totals?.cacheReadTokens)} spark={sparkBy('cacheReadTokens')} color="oklch(0.65 0.11 200)" />
+        <KPI label="Cache" value={U.compactCN(totals.cacheReadTokens)} sub={`${totals.cacheHitRate.toFixed(2)}% 命中`} delta={U.deltaPct(totals.cacheReadTokens, compareData.totals?.cacheReadTokens)} spark={sparkBy('cacheReadTokens')} color="oklch(0.65 0.11 200)" />
         <KPI label="Reasoning" value={U.compactCN(totals.reasoningTokens)} delta={U.deltaPct(totals.reasoningTokens, compareData.totals?.reasoningTokens)} spark={sparkBy('reasoningOutputTokens')} color="oklch(0.65 0.12 150)" />
         <KPI label="费用" value={`$${(totals.costUSD || 0).toFixed(2)}`} delta={U.deltaPct(totals.costUSD, compareData.totals?.costUSD)} spark={sparkBy('costUSD')} color="oklch(0.72 0.14 75)" />
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 lg:col-span-8">
+      {/* Charts Row */}
+      <div className="flex flex-col lg:flex-row gap-4">
+        <div className="flex-1 min-w-0">
           <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} />
         </div>
-        <div className="col-span-12 lg:col-span-4">
-          <TopModels rows={filtered} onDrillModel={r => setDrill({ kind: 'model', row: r })} />
-        </div>
-        <div className="col-span-12">
-          <Heatmap rows={filtered} dates={dates} />
-        </div>
-        <div className="col-span-12">
-          <TablePanel daily={filtered} sessions={M.sessions} runs={M.runs} onDrill={setDrill} />
+        <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-[260px] lg:relative">
+          <div className="flex flex-col min-h-0 lg:absolute lg:inset-0">
+            <TopModels rows={filtered} onDrillModel={r => setDrill({ kind: 'model', row: r })} />
+          </div>
         </div>
       </div>
+
+      {/* Heatmap */}
+      <Heatmap rows={filtered} dates={dates} />
+
+      {/* Table */}
+      <TablePanel daily={filtered} sessions={M.sessions} runs={M.runs} onDrill={setDrill} />
 
       <DrillDrawer drill={drill} daily={M.daily} onClose={() => setDrill(null)} />
     </div>

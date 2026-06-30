@@ -6,12 +6,24 @@ export function CollectStatus() {
   return window['go']['main']['App']['CollectStatus']();
 }
 
+export function GetAutoSyncInterval() {
+  return window['go']['main']['App']['GetAutoSyncInterval']();
+}
+
 export function GetDashboardData() {
   return window['go']['main']['App']['GetDashboardData']();
 }
 
 export function GetTimeSeriesData() {
   return window['go']['main']['App']['GetTimeSeriesData']();
+}
+
+export function ImportCSV() {
+  return window['go']['main']['App']['ImportCSV']();
+}
+
+export function SetAutoSyncInterval(arg1) {
+  return window['go']['main']['App']['SetAutoSyncInterval'](arg1);
 }
 
 export function StartCollection() {

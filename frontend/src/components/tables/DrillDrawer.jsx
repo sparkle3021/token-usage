@@ -87,7 +87,7 @@ export default function DrillDrawer({ drill, daily, onClose }) {
                   <Row label="Cache Read" value={U.fmt.format(detail.totals.cacheReadTokens)} />
                   <Row label="Cache Creation" value={U.fmt.format(detail.totals.cacheCreationTokens)} />
                   <Row label="Reasoning" value={U.fmt.format(detail.totals.reasoningTokens)} />
-                  <Row label="缓存命中率" value={detail.totals.cacheHitRate.toFixed(1) + '%'} />
+                  <Row label="缓存命中率" value={detail.totals.cacheHitRate.toFixed(2) + '%'} />
                 </div>
               </div>
             </>
