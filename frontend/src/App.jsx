@@ -95,7 +95,7 @@ function App() {
 }
 
 function Dashboard({ M, refreshing, collecting, onRefresh, onCollect }) {
-  const defaults = { rangeId: 'today', startDate: U.daysAgo(0), endDate: U.daysAgo(0), sources: new Set(), devices: new Set(), models: new Set(), compare: false };
+  const defaults = { rangeId: 'today', startDate: U.daysAgo(0), endDate: U.daysAgo(0), sources: new Set(), devices: new Set(), models: new Set(), compare: true };
   const [f, setF] = useState(defaults);
   const [trendMode, setTrendMode] = useState('stacked');
   const [drill, setDrill] = useState(null);
