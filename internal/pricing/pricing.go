@@ -113,7 +113,7 @@ func NewEngine(dataDir string) (*Engine, error) {
 		cache: make(map[string]*Rates),
 	}
 
-	litellmPath := filepath.Join(dataDir, "pricing-litellm.json")
+	litellmPath := filepath.Join(dataDir, "config", "pricing-litellm.json")
 	if err := e.loadLiteLLM(litellmPath); err != nil {
 		fmt.Fprintf(os.Stderr, "[pricing] warning: %v\n", err)
 		log.Printf("[pricing] NewEngine loadLiteLLM error=%v", err)
@@ -121,7 +121,7 @@ func NewEngine(dataDir string) (*Engine, error) {
 		log.Printf("[pricing] NewEngine litellm loaded entries=%d", len(e.litellm))
 	}
 
-	openrouterPath := filepath.Join(dataDir, "pricing-openrouter.json")
+	openrouterPath := filepath.Join(dataDir, "config", "pricing-openrouter.json")
 	if err := e.loadOpenRouter(openrouterPath); err != nil {
 		fmt.Fprintf(os.Stderr, "[pricing] warning: %v\n", err)
 		log.Printf("[pricing] NewEngine loadOpenRouter error=%v", err)
@@ -130,6 +130,28 @@ func NewEngine(dataDir string) (*Engine, error) {
 	}
 
 	return e, nil
+}
+
+// Reload discards cached entries and re-loads pricing files from disk.
+func (e *Engine) Reload(dataDir string) error {
+	e.mu.Lock()
+	e.cache = make(map[string]*Rates)
+	e.litellm = nil
+	e.openrouter = nil
+	e.mu.Unlock()
+
+	litellmPath := filepath.Join(dataDir, "config", "pricing-litellm.json")
+	if err := e.loadLiteLLM(litellmPath); err != nil {
+		log.Printf("[pricing] Reload litellm error=%v", err)
+	}
+
+	openrouterPath := filepath.Join(dataDir, "config", "pricing-openrouter.json")
+	if err := e.loadOpenRouter(openrouterPath); err != nil {
+		log.Printf("[pricing] Reload openrouter error=%v", err)
+	}
+
+	log.Printf("[pricing] Reload done litellm=%d openrouter=%d", len(e.litellm), len(e.openrouter))
+	return nil
 }
 
 func (e *Engine) loadLiteLLM(path string) error {

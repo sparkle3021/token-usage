@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,6 +29,7 @@ type App struct {
 	db      *database.Manager
 	pricing *pricing.Engine
 	engine  *engine.Engine
+	dataDir string
 
 	autoSyncMu      sync.Mutex
 	autoSyncCancel  context.CancelFunc
@@ -37,18 +41,9 @@ type App struct {
 }
 
 func NewApp() *App {
-	// Resolve data directory
-	dataDir := "data"
-	if env := os.Getenv("DATA_DIR"); env != "" {
-		dataDir = env
-	}
-	absData, err := filepath.Abs(dataDir)
-	if err == nil {
-		dataDir = absData
-	}
-	os.MkdirAll(dataDir, 0755)
-
-	dbPath := filepath.Join(dataDir, "usage.sqlite")
+	// Resolve data directory: ~/.token-dashboard (or DATA_DIR env override)
+	dataDir := resolveDataDir()
+	dbPath := filepath.Join(dataDir, "td.db")
 
 	// Initialize database
 	db, err := database.New(dbPath)
@@ -75,6 +70,7 @@ func NewApp() *App {
 		db:      db,
 		pricing: pr,
 		engine:  eng,
+			dataDir: dataDir,
 	}
 }
 
@@ -360,6 +356,90 @@ func (a *App) ImportCCSwitchDB() model.CCSwitchImportResult {
 			total, imported, stats.ProxyRows, stats.ProxyKeys, stats.RollupRows, stats.ReconSupplement),
 	}
 }
+
+// ── Pricing URLs ──────────────────────────────────────────────────────────
+
+const (
+	pricingLiteLLMURL   = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+	pricingOpenRouterURL = "https://openrouter.ai/api/v1/usage/rates"
+)
+
+// UpdatePricing fetches the latest pricing data and reloads the engine.
+func (a *App) UpdatePricing() model.PricingUpdateResult {
+	log.Printf("[app] UpdatePricing started")
+	priceDir := filepath.Join(a.dataDir, "config")
+	os.MkdirAll(priceDir, 0755)
+
+	result := model.PricingUpdateResult{}
+
+	// Fetch LiteLLM
+	litellmData, err := fetchPricingJSON(pricingLiteLLMURL)
+	if err != nil {
+		log.Printf("[app] UpdatePricing litellm error=%v", err)
+		result.Error = fmt.Sprintf("LiteLLM 获取失败: %v", err)
+		return result
+	}
+	if err := os.WriteFile(filepath.Join(priceDir, "pricing-litellm.json"), wrapPricingJSON(litellmData), 0644); err != nil {
+		log.Printf("[app] UpdatePricing litellm write error=%v", err)
+		result.Error = fmt.Sprintf("LiteLLM 写入失败: %v", err)
+		return result
+	}
+
+	// Count entries in the fetched data
+	var litellmRaw map[string]interface{}
+	json.Unmarshal(litellmData, &litellmRaw)
+	result.Litellm = len(litellmRaw)
+
+	// Fetch OpenRouter (best-effort)
+	openrouterData, err := fetchPricingJSON(pricingOpenRouterURL)
+	if err == nil {
+		if err := os.WriteFile(filepath.Join(priceDir, "pricing-openrouter.json"), openrouterData, 0644); err == nil {
+			var orRaw map[string]interface{}
+			json.Unmarshal(openrouterData, &orRaw)
+			result.OpenRouter = len(orRaw)
+		}
+	} else {
+		log.Printf("[app] UpdatePricing openrouter skipped: %v", err)
+	}
+
+	// Reload pricing engine
+	if a.pricing != nil {
+		if err := a.pricing.Reload(a.dataDir); err != nil {
+			log.Printf("[app] UpdatePricing reload error=%v", err)
+			result.Error = fmt.Sprintf("价格引擎重载失败: %v", err)
+			return result
+		}
+	}
+
+	result.Message = fmt.Sprintf("LiteLLM %d 条, OpenRouter %d 条", result.Litellm, result.OpenRouter)
+	log.Printf("[app] UpdatePricing done %s", result.Message)
+	return result
+}
+
+// fetchPricingJSON fetches a URL and returns the raw JSON body.
+func fetchPricingJSON(url string) ([]byte, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetch %s: HTTP %d", url, resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// wrapPricingJSON wraps raw JSON data in the {fetchedAt, data} format.
+func wrapPricingJSON(raw []byte) []byte {
+	wrapped := map[string]interface{}{
+		"fetchedAt": time.Now().UnixMilli(),
+		"data":      json.RawMessage(raw),
+	}
+	b, _ := json.Marshal(wrapped)
+	return b
+}
+
 func (a *App) ImportCSV() model.CSVImportResult {
 	if a.db == nil {
 		return model.CSVImportResult{Error: "数据库未初始化"}
@@ -537,4 +617,121 @@ func atoiDef(s string, def int) int {
 		return def
 	}
 	return n
+}
+
+// resolveDataDir returns the application data directory.
+// Defaults to ~/.token-dashboard, with DATA_DIR env var override.
+// On first run, migrates existing data/ directory content automatically.
+func resolveDataDir() string {
+	if env := os.Getenv("DATA_DIR"); env != "" {
+		abs, err := filepath.Abs(env)
+		if err == nil {
+			return abs
+		}
+		return env
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("[app] resolveDataDir cannot get home dir, falling back to ./data: %v", err)
+		abs, _ := filepath.Abs("data")
+		return abs
+	}
+	target := filepath.Join(home, ".token-dashboard")
+
+	// Migrate from old data/ directory on first run
+	if err := migrateFromOldData(target); err != nil {
+		log.Printf("[app] resolveDataDir migration warning: %v", err)
+	}
+
+	// Ensure pricing files are in price/ subdirectory
+	migratePricingToSubdir(target)
+
+	os.MkdirAll(target, 0755)
+	return target
+}
+
+// migrateFromOldData migrates data/ content to target dir if target is empty.
+func migrateFromOldData(target string) error {
+	// Skip if target already has a database
+	if _, err := os.Stat(filepath.Join(target, "td.db")); err == nil {
+		return nil
+	}
+
+	oldDir := "data"
+	if _, err := os.Stat(filepath.Join(oldDir, "usage.sqlite")); err != nil {
+		return nil // no old data to migrate
+	}
+
+	log.Printf("[app] migrating data/ → %s", target)
+	if err := os.MkdirAll(target, 0755); err != nil {
+		return fmt.Errorf("create target dir: %w", err)
+	}
+
+	priceDir := filepath.Join(target, "config")
+	os.MkdirAll(priceDir, 0755)
+
+	entries, err := os.ReadDir(oldDir)
+	if err != nil {
+		return fmt.Errorf("read old dir: %w", err)
+	}
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		src := filepath.Join(oldDir, e.Name())
+
+		// Route pricing files to price/ subdirectory
+		dstDir := target
+		if strings.HasPrefix(e.Name(), "pricing-") {
+			dstDir = priceDir
+		}
+
+		dst := filepath.Join(dstDir, e.Name())
+		data, err := os.ReadFile(src)
+		if err != nil {
+			log.Printf("[app] migrate skip %s: %v", e.Name(), err)
+			continue
+		}
+		if err := os.WriteFile(dst, data, 0644); err != nil {
+			return fmt.Errorf("write %s: %w", e.Name(), err)
+		}
+		log.Printf("[app] migrate copied %s", e.Name())
+	}
+
+	log.Printf("[app] migration complete: data/ → %s", target)
+	return nil
+}
+
+// migratePricingToSubdir moves pricing files from target root into price/ subdirectory.
+// This handles the case where files exist from a previous migration before the price/ dir was introduced.
+func migratePricingToSubdir(target string) {
+	priceDir := filepath.Join(target, "config")
+	os.MkdirAll(priceDir, 0755)
+
+	for _, name := range []string{"pricing-litellm.json", "pricing-openrouter.json"} {
+		src := filepath.Join(target, name)
+		if _, err := os.Stat(src); err != nil {
+			continue // not in root, already in price/ or doesn't exist
+		}
+		dst := filepath.Join(priceDir, name)
+		// Only move if not already in price/
+		if _, err := os.Stat(dst); err == nil {
+			os.Remove(src) // duplicate in root, clean up
+			log.Printf("[app] migratePricingToSubdir cleaned up %s", name)
+			continue
+		}
+		data, err := os.ReadFile(src)
+		if err != nil {
+			log.Printf("[app] migratePricingToSubdir skip %s: %v", name, err)
+			continue
+		}
+		if err := os.WriteFile(dst, data, 0644); err != nil {
+			log.Printf("[app] migratePricingToSubdir write %s: %v", name, err)
+			continue
+		}
+		os.Remove(src)
+		log.Printf("[app] migratePricingToSubdir moved %s → price/", name)
+	}
 }

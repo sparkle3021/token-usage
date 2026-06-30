@@ -104,6 +104,14 @@ type CCSwitchImportResult struct {
 	Message  string `json:"message,omitempty"`
 }
 
+// PricingUpdateResult is returned by UpdatePricing.
+type PricingUpdateResult struct {
+	Litellm    int    `json:"litellm"`
+	OpenRouter int    `json:"openrouter"`
+	Message    string `json:"message"`
+	Error      string `json:"error,omitempty"`
+}
+
 // HourUsage holds hourly aggregated token usage from both JSONL and CC-Switch.
 type HourUsage struct {
 	Device                string  `json:"device"`

@@ -202,6 +202,24 @@ export namespace model {
 		    return a;
 		}
 	}
+	export class PricingUpdateResult {
+	    litellm: number;
+	    openrouter: number;
+	    message: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PricingUpdateResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.litellm = source["litellm"];
+	        this.openrouter = source["openrouter"];
+	        this.message = source["message"];
+	        this.error = source["error"];
+	    }
+	}
 	
 	export class TimeUsage {
 	    device: string;

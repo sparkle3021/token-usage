@@ -49,3 +49,7 @@ export function StartCollection() {
 export function StartFullCollection() {
   return window['go']['main']['App']['StartFullCollection']();
 }
+
+export function UpdatePricing() {
+  return window['go']['main']['App']['UpdatePricing']();
+}

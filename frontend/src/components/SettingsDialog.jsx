@@ -63,6 +63,26 @@ export default function SettingsDialog({ onSettingsChange }) {
     }
   }, []);
 
+  const [pricingUpdating, setPricingUpdating] = useState(false);
+  const [pricingMsg, setPricingMsg] = useState(null);
+
+  const updatePricing = useCallback(async () => {
+    setPricingUpdating(true);
+    setPricingMsg(null);
+    try {
+      const result = await window.go.main.App.UpdatePricing();
+      if (result.error) {
+        setPricingMsg({ type: 'error', text: result.error });
+      } else {
+        setPricingMsg({ type: 'success', text: '更新成功：' + result.message });
+      }
+    } catch (err) {
+      setPricingMsg({ type: 'error', text: '更新失败：' + String(err) });
+    } finally {
+      setPricingUpdating(false);
+    }
+  }, []);
+
   return (
     <>
       <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setOpen(true)}>
@@ -120,6 +140,21 @@ export default function SettingsDialog({ onSettingsChange }) {
                     </p>
                   )}
                 </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="text-xs font-medium text-muted-foreground mb-3">价格数据</h4>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={updatePricing} disabled={pricingUpdating}>
+                    {pricingUpdating ? '更新中…' : '更新价格'}
+                  </Button>
+                  {pricingUpdating && <span className="text-xs text-muted-foreground">正在从 LiteLLM 获取…</span>}
+                </div>
+                {pricingMsg && (
+                  <p className={`text-xs mt-2 ${pricingMsg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                    {pricingMsg.text}
+                  </p>
+                )}
               </div>
             </div>
           )}
