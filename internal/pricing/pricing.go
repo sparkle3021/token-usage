@@ -248,72 +248,28 @@ func WithTiered(tiered bool) CalcOption {
 // Pricing lookup
 // ---------------------------------------------------------------------------
 
+// LookupRates returns the rate card for a model, caching results internally.
+// Safe for concurrent use. Returns nil if no pricing data is found.
+func (e *Engine) LookupRates(modelID string) *Rates {
+	return e.lookupPricing(modelID)
+}
+
 func (e *Engine) lookupPricing(modelID string) *Rates {
 	id := strings.TrimSpace(strings.ToLower(modelID))
 	if id == "" {
 		return nil
 	}
 
+	// Fast cache-check path with minimal lock hold time
 	e.mu.Lock()
-	if cached, ok := e.cache[id]; ok {
-		e.mu.Unlock()
+	cached, ok := e.cache[id]
+	e.mu.Unlock()
+	if ok {
 		return cached
 	}
-	e.mu.Unlock()
 
-	// 1. Check hardcoded overrides first (fast path)
-	if r := findOverride(id); r != nil {
-		e.mu.Lock()
-		e.cache[id] = r
-		e.mu.Unlock()
-		log.Printf("[pricing] lookup model=%s via=override hasCost=%v", id, r.Input > 0 || r.Output > 0)
-		return r
-	}
-
-	// 2. Build candidate list for dataset lookup
-	candidates := modelCandidates(id)
-
-	// 3. LiteLLM exact/fuzzy
-	var hit *Rates
-	var via string
-	for _, c := range candidates {
-		if e.litellm != nil {
-			if r := findInDataset(c, e.litellm); r != nil {
-				hit = r
-				via = "litellm"
-				break
-			}
-		}
-	}
-
-	// 4. OpenRouter fallback (only if no cacheRead from LiteLLM)
-	if hit == nil || hit.CacheRead == 0 {
-		for _, c := range candidates {
-			if e.openrouter != nil {
-				if r := findInDataset(c, e.openrouter); r != nil {
-					if hit == nil || r.CacheRead > 0 {
-						hit = r
-						via = "openrouter"
-					}
-					break
-				}
-			}
-		}
-	}
-
-	// 5. Fuzzy fallback
-	if hit == nil && e.litellm != nil {
-		if r := findFuzzy(id, e.litellm); r != nil {
-			hit = r
-			via = "litellm-fuzzy"
-		}
-	}
-	if hit == nil && e.openrouter != nil {
-		if r := findFuzzy(id, e.openrouter); r != nil {
-			hit = r
-			via = "openrouter-fuzzy"
-		}
-	}
+	// Datasets are read-only after init — no lock needed for lookup
+	hit := e.lookupUncached(id)
 
 	e.mu.Lock()
 	e.cache[id] = hit
@@ -322,10 +278,60 @@ func (e *Engine) lookupPricing(modelID string) *Rates {
 	if hit == nil {
 		log.Printf("[pricing] lookup model=%s via=nil (no pricing found)", id)
 	} else {
-		log.Printf("[pricing] lookup model=%s via=%s inputRate=%g outputRate=%g", id, via, hit.Input, hit.Output)
+		log.Printf("[pricing] lookup model=%s inputRate=%g outputRate=%g", id, hit.Input, hit.Output)
 	}
 	return hit
 }
+
+func (e *Engine) lookupUncached(id string) *Rates {
+	if r := findOverride(id); r != nil {
+		return r
+	}
+
+	var hit *Rates
+	var candidates []string
+
+	if e.litellm != nil || e.openrouter != nil {
+		candidates = modelCandidates(id)
+	}
+
+	// LiteLLM exact/fuzzy
+	for _, c := range candidates {
+		if e.litellm != nil {
+			if r := findInDataset(c, e.litellm); r != nil {
+				hit = r
+				break
+			}
+		}
+	}
+
+	// OpenRouter fallback for cache read rates
+	if (hit == nil || hit.CacheRead == 0) && e.openrouter != nil {
+		for _, c := range candidates {
+			if r := findInDataset(c, e.openrouter); r != nil {
+				if hit == nil || r.CacheRead > 0 {
+					hit = r
+				}
+				break
+			}
+		}
+	}
+
+	// Fuzzy fallback
+	if hit == nil && e.litellm != nil {
+		if r := findFuzzy(id, e.litellm); r != nil {
+			hit = r
+		}
+	}
+	if hit == nil && e.openrouter != nil {
+		if r := findFuzzy(id, e.openrouter); r != nil {
+			hit = r
+		}
+	}
+
+	return hit
+}
+
 
 func findOverride(id string) *Rates {
 	if r, ok := cursorOverrides[id]; ok {

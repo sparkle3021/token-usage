@@ -8,6 +8,10 @@ type CollectResult struct {
 	Daily   []DailyRow
 	Session []SessionRow
 	Events  []EventRow
+
+	// Cached is true when all data was served from cache and nothing changed.
+	// When true, Engine should skip SQL writes and preserve existing DB data.
+	Cached bool
 }
 
 type DailyRow struct {

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -15,6 +16,12 @@ import (
 
 type Manager struct {
 	db *sql.DB
+
+	// Prepared statements cache
+	stmtDaily   *sql.Stmt
+	stmtSession *sql.Stmt
+	stmtTime    *sql.Stmt
+	stmtRecordRun *sql.Stmt
 }
 
 func New(dbPath string) (*Manager, error) {
@@ -33,6 +40,10 @@ func New(dbPath string) (*Manager, error) {
 		"PRAGMA busy_timeout = 10000",
 		"PRAGMA journal_mode = WAL",
 		"PRAGMA foreign_keys = ON",
+		"PRAGMA synchronous = NORMAL",
+		"PRAGMA cache_size = -65536",
+		"PRAGMA temp_store = MEMORY",
+		"PRAGMA mmap_size = 268435456",
 	}
 	for _, p := range pragmas {
 		if _, err := db.Exec(p); err != nil {
@@ -46,16 +57,125 @@ func New(dbPath string) (*Manager, error) {
 		db.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
+	if err := m.initPreparedStmts(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("init prepared stmts: %w", err)
+	}
 	log.Printf("[db] New opened path=%s", dbPath)
 	return m, nil
 }
 
 func (m *Manager) Close() error {
+	if m.stmtDaily != nil {
+		m.stmtDaily.Close()
+	}
+	if m.stmtSession != nil {
+		m.stmtSession.Close()
+	}
+	if m.stmtTime != nil {
+		m.stmtTime.Close()
+	}
+	if m.stmtRecordRun != nil {
+		m.stmtRecordRun.Close()
+	}
 	return m.db.Close()
 }
 
 func (m *Manager) DB() *sql.DB {
 	return m.db
+}
+
+func (m *Manager) initPreparedStmts() error {
+	var err error
+
+	m.stmtDaily, err = m.db.Prepare(`
+		INSERT INTO daily_usage (
+			device, source, usage_date, model,
+			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+			reasoning_output_tokens, total_tokens, cost_usd, pricing_locked_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+			CASE WHEN ? < date('now', 'localtime') THEN datetime('now') ELSE NULL END,
+			datetime('now')
+		)
+		ON CONFLICT(device, source, usage_date, model) DO UPDATE SET
+			input_tokens = excluded.input_tokens,
+			output_tokens = excluded.output_tokens,
+			cache_creation_tokens = excluded.cache_creation_tokens,
+			cache_read_tokens = excluded.cache_read_tokens,
+			reasoning_output_tokens = excluded.reasoning_output_tokens,
+			total_tokens = excluded.total_tokens,
+			cost_usd = CASE
+				WHEN daily_usage.usage_date < date('now', 'localtime') THEN daily_usage.cost_usd
+				ELSE excluded.cost_usd
+			END,
+			pricing_locked_at = CASE
+				WHEN daily_usage.usage_date < date('now', 'localtime')
+				THEN COALESCE(daily_usage.pricing_locked_at, datetime('now'))
+				ELSE NULL
+			END,
+			updated_at = datetime('now')
+	`)
+	if err != nil {
+		return fmt.Errorf("prepare upsertDaily: %w", err)
+	}
+
+	m.stmtSession, err = m.db.Prepare(`
+		INSERT INTO session_usage (
+			device, source, session_id, last_activity, project_path,
+			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+			reasoning_output_tokens, total_tokens, cost_usd, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+		ON CONFLICT(device, source, session_id) DO UPDATE SET
+			last_activity = excluded.last_activity,
+			project_path = excluded.project_path,
+			input_tokens = excluded.input_tokens,
+			output_tokens = excluded.output_tokens,
+			cache_creation_tokens = excluded.cache_creation_tokens,
+			cache_read_tokens = excluded.cache_read_tokens,
+			reasoning_output_tokens = excluded.reasoning_output_tokens,
+			total_tokens = excluded.total_tokens,
+			cost_usd = excluded.cost_usd,
+			updated_at = datetime('now')
+	`)
+	if err != nil {
+		return fmt.Errorf("prepare upsertSession: %w", err)
+	}
+
+	m.stmtTime, err = m.db.Prepare(`
+		INSERT INTO time_usage (
+			device, source, event_key, event_time, usage_date, model, project_path, session_id,
+			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+			reasoning_output_tokens, total_tokens, cost_usd, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+		ON CONFLICT(device, source, event_key) DO UPDATE SET
+			event_time = excluded.event_time,
+			usage_date = excluded.usage_date,
+			model = excluded.model,
+			project_path = excluded.project_path,
+			session_id = excluded.session_id,
+			input_tokens = excluded.input_tokens,
+			output_tokens = excluded.output_tokens,
+			cache_creation_tokens = excluded.cache_creation_tokens,
+			cache_read_tokens = excluded.cache_read_tokens,
+			reasoning_output_tokens = excluded.reasoning_output_tokens,
+			total_tokens = excluded.total_tokens,
+			cost_usd = excluded.cost_usd,
+			updated_at = datetime('now')
+	`)
+	if err != nil {
+		return fmt.Errorf("prepare upsertTime: %w", err)
+	}
+
+	m.stmtRecordRun, err = m.db.Prepare(`
+		INSERT INTO collection_runs(device, source, status, message, collected_at, command)
+		VALUES (?, ?, ?, ?, datetime('now'), ?)
+	`)
+	if err != nil {
+		return fmt.Errorf("prepare recordRun: %w", err)
+	}
+
+	log.Printf("[db] initPreparedStmts ok (4 statements)")
+	return nil
 }
 
 func (m *Manager) initSchema() error {
@@ -129,6 +249,17 @@ func (m *Manager) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_session_usage_total ON session_usage(total_tokens DESC);
 	CREATE INDEX IF NOT EXISTS idx_time_usage_time ON time_usage(event_time);
 	CREATE INDEX IF NOT EXISTS idx_time_usage_date_source ON time_usage(usage_date, source);
+	CREATE TABLE IF NOT EXISTS parse_cache (
+		source TEXT NOT NULL,
+		file_path TEXT NOT NULL,
+		fingerprint TEXT NOT NULL,
+		records BLOB,
+		updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (source, file_path)
+	);
+	CREATE INDEX IF NOT EXISTS idx_parse_cache_source ON parse_cache(source);
+	CREATE INDEX IF NOT EXISTS idx_parse_cache_updated ON parse_cache(updated_at);
+
 	`
 	if _, err := m.db.Exec(schema); err != nil {
 		return fmt.Errorf("exec schema: %w", err)
@@ -144,7 +275,124 @@ func (m *Manager) initSchema() error {
 		return fmt.Errorf("lock past pricing: %w", err)
 	}
 
+	// Migration: add last_file_mtime to collection_runs for incremental collection
+	m.db.Exec("ALTER TABLE collection_runs ADD COLUMN last_file_mtime INTEGER")
+
 	m.pruneCollectionRuns(500)
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Bulk upsert (batch INSERT ... ON CONFLICT)
+// ---------------------------------------------------------------------------
+
+const bulkBatchSize = 500
+
+func (m *Manager) BulkUpsertDaily(rows []model.DailyUsage) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	return bulkExec(m.db, rows, bulkBatchSize, func(batch []model.DailyUsage) (string, []interface{}) {
+		var sqlBuf strings.Builder
+		sqlBuf.WriteString(`INSERT INTO daily_usage (device,source,usage_date,model,
+			input_tokens,output_tokens,cache_creation_tokens,cache_read_tokens,
+			reasoning_output_tokens,total_tokens,cost_usd,pricing_locked_at,updated_at) VALUES `)
+		var args []interface{}
+		for i, r := range batch {
+			if i > 0 {
+				sqlBuf.WriteString(", ")
+			}
+			sqlBuf.WriteString("(?,?,?,?,?,?,?,?,?,?,?,")
+			sqlBuf.WriteString("CASE WHEN ?<date('now','localtime') THEN datetime('now') ELSE NULL END,")
+			sqlBuf.WriteString("datetime('now'))")
+			args = append(args, r.Device,r.Source,r.UsageDate,r.Model,
+				r.InputTokens,r.OutputTokens,r.CacheCreationTokens,r.CacheReadTokens,
+				r.ReasoningOutputTokens,r.TotalTokens,r.CostUSD,r.UsageDate)
+		}
+		sqlBuf.WriteString(` ON CONFLICT(device,source,usage_date,model) DO UPDATE SET
+			input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
+			cache_creation_tokens=excluded.cache_creation_tokens, cache_read_tokens=excluded.cache_read_tokens,
+			reasoning_output_tokens=excluded.reasoning_output_tokens, total_tokens=excluded.total_tokens,
+			cost_usd=CASE WHEN daily_usage.usage_date<date('now','localtime') THEN daily_usage.cost_usd ELSE excluded.cost_usd END,
+			pricing_locked_at=CASE WHEN daily_usage.usage_date<date('now','localtime') THEN COALESCE(daily_usage.pricing_locked_at,datetime('now')) ELSE NULL END,
+			updated_at=datetime('now')`)
+		return sqlBuf.String(), args
+	})
+}
+
+func (m *Manager) BulkUpsertSession(rows []model.SessionUsage) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	return bulkExec(m.db, rows, bulkBatchSize, func(batch []model.SessionUsage) (string, []interface{}) {
+		var sqlBuf strings.Builder
+		sqlBuf.WriteString(`INSERT INTO session_usage (device,source,session_id,last_activity,project_path,
+			input_tokens,output_tokens,cache_creation_tokens,cache_read_tokens,
+			reasoning_output_tokens,total_tokens,cost_usd,updated_at) VALUES `)
+		var args []interface{}
+		for i, r := range batch {
+			if i > 0 {
+				sqlBuf.WriteString(", ")
+			}
+			sqlBuf.WriteString("(?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))")
+			args = append(args, r.Device,r.Source,r.SessionID,
+				nullIfEmpty(r.LastActivity),nullIfEmpty(r.ProjectPath),
+				r.InputTokens,r.OutputTokens,r.CacheCreationTokens,r.CacheReadTokens,
+				r.ReasoningOutputTokens,r.TotalTokens,r.CostUSD)
+		}
+		sqlBuf.WriteString(` ON CONFLICT(device,source,session_id) DO UPDATE SET
+			last_activity=excluded.last_activity, project_path=excluded.project_path,
+			input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
+			cache_creation_tokens=excluded.cache_creation_tokens, cache_read_tokens=excluded.cache_read_tokens,
+			reasoning_output_tokens=excluded.reasoning_output_tokens, total_tokens=excluded.total_tokens,
+			cost_usd=excluded.cost_usd, updated_at=datetime('now')`)
+		return sqlBuf.String(), args
+	})
+}
+
+func (m *Manager) BulkUpsertTimeUsage(rows []model.TimeUsage) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	return bulkExec(m.db, rows, bulkBatchSize, func(batch []model.TimeUsage) (string, []interface{}) {
+		var sqlBuf strings.Builder
+		sqlBuf.WriteString(`INSERT INTO time_usage (device,source,event_key,event_time,usage_date,
+			model,project_path,session_id,input_tokens,output_tokens,cache_creation_tokens,
+			cache_read_tokens,reasoning_output_tokens,total_tokens,cost_usd,updated_at) VALUES `)
+		var args []interface{}
+		for i, r := range batch {
+			if i > 0 {
+				sqlBuf.WriteString(", ")
+			}
+			sqlBuf.WriteString("(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))")
+			args = append(args, r.Device,r.Source,r.EventKey,r.EventTime,r.UsageDate,
+				r.Model, nullIfEmpty(r.ProjectPath),nullIfEmpty(r.SessionID),
+				r.InputTokens,r.OutputTokens,r.CacheCreationTokens,r.CacheReadTokens,
+				r.ReasoningOutputTokens,r.TotalTokens,r.CostUSD)
+		}
+		sqlBuf.WriteString(` ON CONFLICT(device,source,event_key) DO UPDATE SET
+			event_time=excluded.event_time, usage_date=excluded.usage_date,
+			model=excluded.model, project_path=excluded.project_path, session_id=excluded.session_id,
+			input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
+			cache_creation_tokens=excluded.cache_creation_tokens, cache_read_tokens=excluded.cache_read_tokens,
+			reasoning_output_tokens=excluded.reasoning_output_tokens, total_tokens=excluded.total_tokens,
+			cost_usd=excluded.cost_usd, updated_at=datetime('now')`)
+		return sqlBuf.String(), args
+	})
+}
+
+// bulkExec splits rows into batches and builds + executes SQL for each batch.
+func bulkExec[T any](db *sql.DB, rows []T, batchSize int, build func([]T) (string, []interface{})) error {
+	for i := 0; i < len(rows); i += batchSize {
+		end := i + batchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		sql, args := build(rows[i:end])
+		if _, err := db.Exec(sql, args...); err != nil {
+			return fmt.Errorf("bulk batch %d: %w", i/batchSize, err)
+		}
+	}
 	return nil
 }
 
@@ -154,33 +402,8 @@ func (m *Manager) initSchema() error {
 
 func (m *Manager) UpsertDaily(row *model.DailyUsage) error {
 	start := time.Now()
-	_, err := m.db.Exec(`
-		INSERT INTO daily_usage (
-			device, source, usage_date, model,
-			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-			reasoning_output_tokens, total_tokens, cost_usd, pricing_locked_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-			CASE WHEN ? < date('now', 'localtime') THEN datetime('now') ELSE NULL END,
-			datetime('now')
-		)
-		ON CONFLICT(device, source, usage_date, model) DO UPDATE SET
-			input_tokens = excluded.input_tokens,
-			output_tokens = excluded.output_tokens,
-			cache_creation_tokens = excluded.cache_creation_tokens,
-			cache_read_tokens = excluded.cache_read_tokens,
-			reasoning_output_tokens = excluded.reasoning_output_tokens,
-			total_tokens = excluded.total_tokens,
-			cost_usd = CASE
-				WHEN daily_usage.usage_date < date('now', 'localtime') THEN daily_usage.cost_usd
-				ELSE excluded.cost_usd
-			END,
-			pricing_locked_at = CASE
-				WHEN daily_usage.usage_date < date('now', 'localtime')
-				THEN COALESCE(daily_usage.pricing_locked_at, datetime('now'))
-				ELSE NULL
-			END,
-			updated_at = datetime('now')
-	`, row.Device, row.Source, row.UsageDate, row.Model,
+	_, err := m.stmtDaily.Exec(
+		row.Device, row.Source, row.UsageDate, row.Model,
 		row.InputTokens, row.OutputTokens, row.CacheCreationTokens, row.CacheReadTokens,
 		row.ReasoningOutputTokens, row.TotalTokens, row.CostUSD,
 		row.UsageDate,
@@ -199,24 +422,8 @@ func (m *Manager) UpsertDaily(row *model.DailyUsage) error {
 
 func (m *Manager) UpsertSession(row *model.SessionUsage) error {
 	start := time.Now()
-	_, err := m.db.Exec(`
-		INSERT INTO session_usage (
-			device, source, session_id, last_activity, project_path,
-			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-			reasoning_output_tokens, total_tokens, cost_usd, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-		ON CONFLICT(device, source, session_id) DO UPDATE SET
-			last_activity = excluded.last_activity,
-			project_path = excluded.project_path,
-			input_tokens = excluded.input_tokens,
-			output_tokens = excluded.output_tokens,
-			cache_creation_tokens = excluded.cache_creation_tokens,
-			cache_read_tokens = excluded.cache_read_tokens,
-			reasoning_output_tokens = excluded.reasoning_output_tokens,
-			total_tokens = excluded.total_tokens,
-			cost_usd = excluded.cost_usd,
-			updated_at = datetime('now')
-	`, row.Device, row.Source, row.SessionID, row.LastActivity, row.ProjectPath,
+	_, err := m.stmtSession.Exec(
+		row.Device, row.Source, row.SessionID, row.LastActivity, row.ProjectPath,
 		row.InputTokens, row.OutputTokens, row.CacheCreationTokens, row.CacheReadTokens,
 		row.ReasoningOutputTokens, row.TotalTokens, row.CostUSD,
 	)
@@ -246,27 +453,8 @@ func (m *Manager) DeleteTimeUsageForSource(device, source string) error {
 
 func (m *Manager) UpsertTimeUsage(row *model.TimeUsage) error {
 	start := time.Now()
-	_, err := m.db.Exec(`
-		INSERT INTO time_usage (
-			device, source, event_key, event_time, usage_date, model, project_path, session_id,
-			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-			reasoning_output_tokens, total_tokens, cost_usd, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-		ON CONFLICT(device, source, event_key) DO UPDATE SET
-			event_time = excluded.event_time,
-			usage_date = excluded.usage_date,
-			model = excluded.model,
-			project_path = excluded.project_path,
-			session_id = excluded.session_id,
-			input_tokens = excluded.input_tokens,
-			output_tokens = excluded.output_tokens,
-			cache_creation_tokens = excluded.cache_creation_tokens,
-			cache_read_tokens = excluded.cache_read_tokens,
-			reasoning_output_tokens = excluded.reasoning_output_tokens,
-			total_tokens = excluded.total_tokens,
-			cost_usd = excluded.cost_usd,
-			updated_at = datetime('now')
-	`, row.Device, row.Source, row.EventKey, row.EventTime, row.UsageDate,
+	_, err := m.stmtTime.Exec(
+		row.Device, row.Source, row.EventKey, row.EventTime, row.UsageDate,
 		row.Model, nullIfEmpty(row.ProjectPath), nullIfEmpty(row.SessionID),
 		row.InputTokens, row.OutputTokens, row.CacheCreationTokens, row.CacheReadTokens,
 		row.ReasoningOutputTokens, row.TotalTokens, row.CostUSD,
@@ -284,16 +472,41 @@ func (m *Manager) UpsertTimeUsage(row *model.TimeUsage) error {
 // ---------------------------------------------------------------------------
 
 func (m *Manager) RecordRun(device, source, status, message, command string) error {
-	_, err := m.db.Exec(`
-		INSERT INTO collection_runs(device, source, status, message, collected_at, command)
-		VALUES (?, ?, ?, ?, datetime('now'), ?)
-	`, device, source, status, nullIfEmpty(message), nullIfEmpty(command))
+	_, err := m.stmtRecordRun.Exec(device, source, status, nullIfEmpty(message), nullIfEmpty(command))
 	if err != nil {
 		log.Printf("[db] RecordRun error source=%s status=%s err=%v", source, status, err)
 	} else {
 		log.Printf("[db] RecordRun ok source=%s status=%s message=%s", source, status, truncateID(message))
 	}
 	return err
+}
+
+// RecordRunWithMtime records a collection run with the associated file mtime.
+func (m *Manager) RecordRunWithMtime(device, source, status, message, command string, lastFileMtime int64) error {
+	_, err := m.db.Exec(`
+		INSERT INTO collection_runs(device, source, status, message, collected_at, command, last_file_mtime)
+		VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
+	`, device, source, status, nullIfEmpty(message), nullIfEmpty(command), lastFileMtime)
+	if err != nil {
+		log.Printf("[db] RecordRunWithMtime error source=%s mtime=%d err=%v", source, lastFileMtime, err)
+	} else {
+		log.Printf("[db] RecordRunWithMtime ok source=%s mtime=%d message=%s", source, lastFileMtime, truncateID(message))
+	}
+	return err
+}
+
+// GetLastMtime returns the maximum last_file_mtime recorded for a (device, source).
+// Returns 0 if no previous runs exist.
+func (m *Manager) GetLastMtime(device, source string) (int64, error) {
+	var mtime int64
+	err := m.db.QueryRow(`
+		SELECT COALESCE(MAX(last_file_mtime), 0) FROM collection_runs
+		WHERE device = ? AND source = ? AND last_file_mtime IS NOT NULL
+	`, device, source).Scan(&mtime)
+	if err != nil {
+		return 0, err
+	}
+	return mtime, nil
 }
 
 func (m *Manager) pruneCollectionRuns(keep int) {
@@ -311,6 +524,61 @@ func (m *Manager) pruneCollectionRuns(keep int) {
 	} else if n, _ := result.RowsAffected(); n > 0 {
 		log.Printf("[db] pruneCollectionRuns pruned=%d keep=%d", n, keep)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Parse cache (persistent file-fingerprint cache)
+// ---------------------------------------------------------------------------
+
+func (m *Manager) UpsertParseCache(source, filePath, fingerprint string, records []byte) error {
+	_, err := m.db.Exec(`
+		INSERT INTO parse_cache(source, file_path, fingerprint, records, updated_at)
+		VALUES (?, ?, ?, ?, datetime('now'))
+		ON CONFLICT(source, file_path) DO UPDATE SET
+			fingerprint = excluded.fingerprint,
+			records = excluded.records,
+			updated_at = datetime('now')
+	`, source, filePath, fingerprint, records)
+	return err
+}
+
+// UpsertParseCacheFingerprint is a light version that only stores the fingerprint.
+func (m *Manager) UpsertParseCacheFingerprint(source, filePath, fingerprint string) error {
+	_, err := m.db.Exec(`
+		INSERT INTO parse_cache(source, file_path, fingerprint, records, updated_at)
+		VALUES (?, ?, ?, NULL, datetime('now'))
+		ON CONFLICT(source, file_path) DO UPDATE SET
+			fingerprint = excluded.fingerprint,
+			updated_at = datetime('now')
+	`, source, filePath, fingerprint)
+	return err
+}
+
+func (m *Manager) GetParseCache(source, filePath string) (fingerprint string, records []byte, ok bool) {
+	err := m.db.QueryRow(`
+		SELECT fingerprint, records FROM parse_cache
+		WHERE source = ? AND file_path = ?
+	`, source, filePath).Scan(&fingerprint, &records)
+	if err != nil {
+		return "", nil, false
+	}
+	return fingerprint, records, true
+}
+
+func (m *Manager) DeleteParseCacheBySource(source string) error {
+	_, err := m.db.Exec(`DELETE FROM parse_cache WHERE source = ?`, source)
+	return err
+}
+
+func (m *Manager) PruneParseCache(maxAgeDays, maxRows int) {
+	if maxAgeDays <= 0 {
+		maxAgeDays = 30
+	}
+	if maxRows <= 0 {
+		maxRows = 1000
+	}
+	m.db.Exec(`DELETE FROM parse_cache WHERE updated_at < datetime('now', ?)`, fmt.Sprintf("-%d days", maxAgeDays))
+	m.db.Exec(`DELETE FROM parse_cache WHERE rowid NOT IN (SELECT rowid FROM parse_cache ORDER BY updated_at DESC LIMIT ?)`, maxRows)
 }
 
 // ---------------------------------------------------------------------------
@@ -337,7 +605,7 @@ func (m *Manager) QueryDaily() ([]model.DailyUsage, error) {
 		if err := rows.Scan(&r.Device, &r.Source, &r.UsageDate, &r.Model,
 			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens,
 			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD,
-		); err != nil {
+	); err != nil {
 			return nil, err
 		}
 		results = append(results, r)
@@ -366,7 +634,7 @@ func (m *Manager) QuerySessions() ([]model.SessionUsage, error) {
 		if err := rows.Scan(&r.Device, &r.Source, &r.SessionID, &r.LastActivity, &r.ProjectPath,
 			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens,
 			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD,
-		); err != nil {
+	); err != nil {
 			return nil, err
 		}
 		results = append(results, r)
@@ -424,7 +692,7 @@ func (m *Manager) QueryTimeUsage() ([]model.TimeUsage, error) {
 			&r.ProjectPath, &r.SessionID,
 			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens,
 			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD,
-		); err != nil {
+	); err != nil {
 			return nil, err
 		}
 		results = append(results, r)

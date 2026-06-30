@@ -15,3 +15,5 @@ export function ImportCSV():Promise<model.CSVImportResult>;
 export function SetAutoSyncInterval(arg1:number):Promise<void>;
 
 export function StartCollection():Promise<boolean>;
+
+export function StartFullCollection():Promise<boolean>;

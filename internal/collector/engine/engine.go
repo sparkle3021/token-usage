@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	"token-dashboard/internal/collector"
 	"token-dashboard/internal/database"
+	"token-dashboard/internal/model"
 	"token-dashboard/internal/pricing"
 )
 
@@ -34,6 +36,9 @@ type Engine struct {
 	status  Status
 	active  bool
 	onEvent EventCallback
+
+	parallelism int
+	forceFull   bool // force full collection on next run
 }
 
 func New(db *database.Manager, pr *pricing.Engine) *Engine {
@@ -50,6 +55,20 @@ func New(db *database.Manager, pr *pricing.Engine) *Engine {
 		collector.NewOpenCodeCollector(),
 		collector.NewOpenClawCollector(),
 	}
+
+	// Read parallelism from env, default to 4
+	if p := os.Getenv("COLLECTOR_PARALLELISM"); p != "" {
+		n, err := strconv.Atoi(p)
+		if err == nil && n > 0 && n <= 16 {
+			e.parallelism = n
+		} else {
+			e.parallelism = 4
+		}
+	} else {
+		e.parallelism = 4
+	}
+	log.Printf("[engine] New parallelism=%d collectors=%d", e.parallelism, len(e.collectors))
+
 	_ = (*pricingEngine)(nil) // compile check
 	return e
 }
@@ -107,30 +126,93 @@ func (e *Engine) StartCollection() bool {
 	return true
 }
 
+// StartFullCollection forces a full collection, ignoring all incremental markers.
+func (e *Engine) StartFullCollection() bool {
+	e.mu.Lock()
+	if e.active {
+		e.mu.Unlock()
+		return false
+	}
+	e.forceFull = true
+	e.mu.Unlock()
+	return e.StartCollection()
+}
+
 func (e *Engine) runCollection() {
 	startedAt := time.Now().UTC().Format(time.RFC3339)
+
+	type collectorResult struct {
+		col    collector.Collector
+		result *collector.CollectResult
+		err    error
+	}
+
+	results := make([]*collectorResult, len(e.collectors))
+
+	// Check forceFull: clear caches to bypass AllCached checks
+	e.mu.Lock()
+	ff := e.forceFull
+	e.forceFull = false
+	e.mu.Unlock()
+	if ff {
+		for _, col := range e.collectors {
+			if s, ok := col.(interface{ ClearCache() }); ok {
+				s.ClearCache()
+			}
+		}
+		log.Printf("[engine] forceFull=true, cache cleared for all collectors")
+	}
+
+	// goroutine pool: parallel collect, sequential write
+	sem := make(chan struct{}, e.parallelism)
+	var wg sync.WaitGroup
+
+	for i, col := range e.collectors {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(idx int, c collector.Collector) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			defer func() {
+				if r := recover(); r != nil {
+					results[idx] = &collectorResult{
+						col: c,
+						err: fmt.Errorf("panic: %v", r),
+					}
+					log.Printf("[engine] collector panic source=%s err=%v", c.Source(), r)
+				}
+			}()
+
+			e.emit("collector:start", map[string]interface{}{
+				"source": c.Source(), "id": c.ID(),
+			})
+
+			result, err := c.Collect(context.Background(), &pricingEngine{e.pricing})
+			results[idx] = &collectorResult{col: c, result: result, err: err}
+		}(i, col)
+	}
+	wg.Wait()
+
+	// Sequential write in original order
 	var hadError bool
-	var stdout, stderr string
-
-	for _, col := range e.collectors {
-		e.emit("collector:start", map[string]interface{}{
-			"source": col.Source(), "id": col.ID(),
-		})
-
-		result, err := col.Collect(context.Background(), &pricingEngine{e.pricing})
-		if err != nil {
+	var stderr string
+	for _, r := range results {
+		if r == nil {
+			continue
+		}
+		if r.err != nil {
 			hadError = true
-			errMsg := fmt.Sprintf("[%s] %v", col.Source(), err)
+			errMsg := fmt.Sprintf("[%s] %v", r.col.Source(), r.err)
 			stderr += errMsg + "\n"
 			log.Printf("[collector] %s", errMsg)
-			e.db.RecordRun(hostname(), col.Source(), "error", err.Error(), "go-collector:"+col.ID())
+			e.db.RecordRun(hostname(), r.col.Source(), "error", r.err.Error(), "go-collector:"+r.col.ID())
 			e.emit("collector:done", map[string]interface{}{
-				"source": col.Source(), "status": "error", "error": err.Error(),
+				"source": r.col.Source(), "status": "error", "error": r.err.Error(),
 			})
 			continue
 		}
 
-		ok := e.processCollector(result, col)
+		ok := e.processCollector(r.result, r.col)
 		if !ok {
 			hadError = true
 		}
@@ -150,7 +232,6 @@ func (e *Engine) runCollection() {
 		Status: status, Message: msg,
 		StartedAt: &startedAt, FinishedAt: &finishedAt,
 		ExitCode: &exitCode,
-		Stdout: truncateStr(stdout, 12000),
 		Stderr: truncateStr(stderr, 12000),
 	}
 	e.active = false
@@ -162,51 +243,35 @@ func (e *Engine) runCollection() {
 }
 
 func (e *Engine) processCollector(result *collector.CollectResult, col collector.Collector) bool {
-	tx, err := e.db.DB().Begin()
-	if err != nil {
-		e.db.RecordRun(result.Device, col.Source(), "error", fmt.Sprintf("tx: %v", err), "go-collector:"+col.ID())
+	// Skip SQL writes when nothing changed
+	if result.Cached {
+		e.db.RecordRun(result.Device, col.Source(), "ok", "cached (no changes)", "go-collector:"+col.ID())
+		e.emit("collector:done", map[string]interface{}{
+			"source": col.Source(), "status": "cached",
+		})
+		log.Printf("[engine] processCollector source=%s cached (skipped)", col.Source())
+		return true
+	}
+
+	// Bulk upsert with per-call atomicity (UPSERT semantics ensure correctness)
+	if err := e.db.BulkUpsertDaily(dailyToModel(result.Device, col.Source(), result.Daily)); err != nil {
+		e.db.RecordRun(result.Device, col.Source(), "error",
+			fmt.Sprintf("[%s] bulk daily: %v", col.Source(), err), "go-collector:"+col.ID())
 		return false
 	}
-	defer tx.Rollback() // harmless if already committed
 
-	for _, row := range result.Daily {
-		daily := rowToDaily(result.Device, col.Source(), row)
-		if _, err := tx.Exec(upsertDailySQL, dailyArgs(daily)...); err != nil {
-			e.db.RecordRun(result.Device, col.Source(), "error",
-				fmt.Sprintf("[%s] upsert daily: %v", col.Source(), err), "go-collector:"+col.ID())
-			return false
-		}
-	}
-
-	for _, row := range result.Session {
-		sess := rowToSession(result.Device, col.Source(), row)
-		if _, err := tx.Exec(upsertSessionSQL, sessionArgs(sess)...); err != nil {
-			e.db.RecordRun(result.Device, col.Source(), "error",
-				fmt.Sprintf("[%s] upsert session: %v", col.Source(), err), "go-collector:"+col.ID())
-			return false
-		}
+	if err := e.db.BulkUpsertSession(sessionToModel(result.Device, col.Source(), result.Session)); err != nil {
+		e.db.RecordRun(result.Device, col.Source(), "error",
+			fmt.Sprintf("[%s] bulk session: %v", col.Source(), err), "go-collector:"+col.ID())
+		return false
 	}
 
 	if len(result.Events) > 0 {
-		if _, err := tx.Exec("DELETE FROM time_usage WHERE device = ? AND source = ?", result.Device, col.Source()); err != nil {
+		if err := e.db.BulkUpsertTimeUsage(eventsToModel(result.Device, col.Source(), result.Events)); err != nil {
 			e.db.RecordRun(result.Device, col.Source(), "error",
-				fmt.Sprintf("[%s] delete time: %v", col.Source(), err), "go-collector:"+col.ID())
+				fmt.Sprintf("[%s] bulk time: %v", col.Source(), err), "go-collector:"+col.ID())
 			return false
 		}
-		for _, row := range result.Events {
-			ev := rowToTimeUsage(result.Device, col.Source(), row)
-			if _, err := tx.Exec(upsertTimeSQL, timeArgs(ev)...); err != nil {
-				e.db.RecordRun(result.Device, col.Source(), "error",
-					fmt.Sprintf("[%s] upsert time: %v", col.Source(), err), "go-collector:"+col.ID())
-				return false
-			}
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		e.db.RecordRun(result.Device, col.Source(), "error",
-			fmt.Sprintf("[%s] commit: %v", col.Source(), err), "go-collector:"+col.ID())
-		return false
 	}
 
 	summary := fmt.Sprintf("daily=%d, time=%d, workspace_model=%d", len(result.Daily), len(result.Events), len(result.Session))
@@ -219,6 +284,54 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 	return true
 }
 
+// dailyToModel converts collector DailyRow to model.DailyUsage slice for bulk upsert.
+func dailyToModel(device, source string, rows []collector.DailyRow) []model.DailyUsage {
+	out := make([]model.DailyUsage, len(rows))
+	for i, r := range rows {
+		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
+		out[i] = model.DailyUsage{
+			Device: device, Source: source, UsageDate: r.UsageDate, Model: r.Model,
+			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
+			CacheCreationTokens: r.CacheWriteTokens, CacheReadTokens: r.CacheReadTokens,
+			ReasoningOutputTokens: r.ReasoningTokens, TotalTokens: total, CostUSD: r.CostUSD,
+		}
+	}
+	return out
+}
+
+// sessionToModel converts collector SessionRow to model.SessionUsage slice.
+func sessionToModel(device, source string, rows []collector.SessionRow) []model.SessionUsage {
+	out := make([]model.SessionUsage, len(rows))
+	for i, r := range rows {
+		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
+		out[i] = model.SessionUsage{
+			Device: device, Source: source, SessionID: r.SessionID,
+			LastActivity: r.LastActivity, ProjectPath: r.ProjectPath,
+			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
+			CacheCreationTokens: r.CacheWriteTokens, CacheReadTokens: r.CacheReadTokens,
+			ReasoningOutputTokens: r.ReasoningTokens, TotalTokens: total, CostUSD: r.CostUSD,
+		}
+	}
+	return out
+}
+
+// eventsToModel converts collector EventRow to model.TimeUsage slice.
+func eventsToModel(device, source string, rows []collector.EventRow) []model.TimeUsage {
+	out := make([]model.TimeUsage, len(rows))
+	for i, r := range rows {
+		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
+		out[i] = model.TimeUsage{
+			Device: device, Source: source, EventKey: r.EventKey,
+			EventTime: r.EventTime, UsageDate: r.UsageDate, Model: r.Model,
+			ProjectPath: r.ProjectPath, SessionID: r.SessionID,
+			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
+			CacheCreationTokens: r.CacheWriteTokens, CacheReadTokens: r.CacheReadTokens,
+			ReasoningOutputTokens: r.ReasoningTokens, TotalTokens: total, CostUSD: r.CostUSD,
+		}
+	}
+	return out
+}
+
 func hostname() string {
 	h, err := os.Hostname()
 	if err != nil {
@@ -228,122 +341,9 @@ func hostname() string {
 }
 
 // ---------------------------------------------------------------------------
-// SQL statements
+// Helpers
 // ---------------------------------------------------------------------------
 
-var upsertDailySQL = `INSERT INTO daily_usage (device, source, usage_date, model,
-input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-reasoning_output_tokens, total_tokens, cost_usd, pricing_locked_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-CASE WHEN ? < date('now', 'localtime') THEN datetime('now') ELSE NULL END,
-datetime('now')
-) ON CONFLICT(device, source, usage_date, model) DO UPDATE SET
-input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
-cache_creation_tokens=excluded.cache_creation_tokens, cache_read_tokens=excluded.cache_read_tokens,
-reasoning_output_tokens=excluded.reasoning_output_tokens, total_tokens=excluded.total_tokens,
-cost_usd=CASE WHEN daily_usage.usage_date < date('now','localtime') THEN daily_usage.cost_usd ELSE excluded.cost_usd END,
-pricing_locked_at=CASE WHEN daily_usage.usage_date < date('now','localtime') THEN COALESCE(daily_usage.pricing_locked_at, datetime('now')) ELSE NULL END,
-updated_at=datetime('now')`
-
-var upsertSessionSQL = `INSERT INTO session_usage (device, source, session_id, last_activity, project_path,
-input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-reasoning_output_tokens, total_tokens, cost_usd, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-ON CONFLICT(device, source, session_id) DO UPDATE SET
-last_activity=excluded.last_activity, project_path=excluded.project_path,
-input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
-cache_creation_tokens=excluded.cache_creation_tokens, cache_read_tokens=excluded.cache_read_tokens,
-reasoning_output_tokens=excluded.reasoning_output_tokens, total_tokens=excluded.total_tokens,
-cost_usd=excluded.cost_usd, updated_at=datetime('now')`
-
-var upsertTimeSQL = `INSERT INTO time_usage (device, source, event_key, event_time, usage_date, model, project_path, session_id,
-input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-reasoning_output_tokens, total_tokens, cost_usd, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-ON CONFLICT(device, source, event_key) DO UPDATE SET
-event_time=excluded.event_time, usage_date=excluded.usage_date,
-model=excluded.model, project_path=excluded.project_path, session_id=excluded.session_id,
-input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
-cache_creation_tokens=excluded.cache_creation_tokens, cache_read_tokens=excluded.cache_read_tokens,
-reasoning_output_tokens=excluded.reasoning_output_tokens, total_tokens=excluded.total_tokens,
-cost_usd=excluded.cost_usd, updated_at=datetime('now')`
-
-// ---------------------------------------------------------------------------
-// Row converters
-// ---------------------------------------------------------------------------
-
-type dailyUpsert struct {
-	Device, Source, UsageDate, Model string
-	Input, Output, CacheCreation, CacheRead, Reasoning, Total int64
-	CostUSD float64
-}
-
-func rowToDaily(device, source string, r collector.DailyRow) dailyUpsert {
-	total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
-	return dailyUpsert{
-		Device: device, Source: source, UsageDate: r.UsageDate, Model: r.Model,
-		Input: r.InputTokens, Output: r.OutputTokens,
-		CacheCreation: r.CacheWriteTokens, CacheRead: r.CacheReadTokens,
-		Reasoning: r.ReasoningTokens, Total: total, CostUSD: r.CostUSD,
-	}
-}
-
-func dailyArgs(d dailyUpsert) []interface{} {
-	return []interface{}{d.Device, d.Source, d.UsageDate, d.Model,
-		d.Input, d.Output, d.CacheCreation, d.CacheRead,
-		d.Reasoning, d.Total, d.CostUSD, d.UsageDate,
-	}
-}
-
-type sessionUpsert struct {
-	Device, Source, SessionID, LastActivity, ProjectPath string
-	Input, Output, CacheCreation, CacheRead, Reasoning, Total int64
-	CostUSD float64
-}
-
-func rowToSession(device, source string, r collector.SessionRow) sessionUpsert {
-	total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
-	return sessionUpsert{
-		Device: device, Source: source, SessionID: r.SessionID,
-		LastActivity: r.LastActivity, ProjectPath: r.ProjectPath,
-		Input: r.InputTokens, Output: r.OutputTokens,
-		CacheCreation: r.CacheWriteTokens, CacheRead: r.CacheReadTokens,
-		Reasoning: r.ReasoningTokens, Total: total, CostUSD: r.CostUSD,
-	}
-}
-
-func sessionArgs(s sessionUpsert) []interface{} {
-	return []interface{}{s.Device, s.Source, s.SessionID, strPtr(s.LastActivity), strPtr(s.ProjectPath),
-		s.Input, s.Output, s.CacheCreation, s.CacheRead,
-		s.Reasoning, s.Total, s.CostUSD,
-	}
-}
-
-type timeUpsert struct {
-	Device, Source, EventKey, EventTime, UsageDate, Model, ProjectPath, SessionID string
-	Input, Output, CacheCreation, CacheRead, Reasoning, Total int64
-	CostUSD float64
-}
-
-func rowToTimeUsage(device, source string, r collector.EventRow) timeUpsert {
-	total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
-	return timeUpsert{
-		Device: device, Source: source,
-		EventKey: r.EventKey, EventTime: r.EventTime, UsageDate: r.UsageDate,
-		Model: r.Model, ProjectPath: r.ProjectPath, SessionID: r.SessionID,
-		Input: r.InputTokens, Output: r.OutputTokens,
-		CacheCreation: r.CacheWriteTokens, CacheRead: r.CacheReadTokens,
-		Reasoning: r.ReasoningTokens, Total: total, CostUSD: r.CostUSD,
-	}
-}
-
-func timeArgs(t timeUpsert) []interface{} {
-	return []interface{}{t.Device, t.Source, t.EventKey, t.EventTime, t.UsageDate,
-		t.Model, strPtr(t.ProjectPath), strPtr(t.SessionID),
-		t.Input, t.Output, t.CacheCreation, t.CacheRead,
-		t.Reasoning, t.Total, t.CostUSD,
-	}
-}
 
 func strPtr(s string) *string {
 	if s == "" {

@@ -22,6 +22,8 @@ func NewGeminiCollector() *GeminiCollector {
 
 func (c *GeminiCollector) ID() string    { return "gemini" }
 func (c *GeminiCollector) Source() string { return "Gemini CLI" }
+func (c *GeminiCollector) SetPersister(p PersistHandler, source string) { c.cache.SetPersister(p, source) }
+func (c *GeminiCollector) ClearCache() { c.cache.Clear() }
 
 func geminiTmpDir() string {
 	home, _ := os.UserHomeDir()
@@ -34,13 +36,11 @@ type geminiEvent struct {
 }
 
 func (c *GeminiCollector) Collect(ctx context.Context, pricing TokenCalc) (*CollectResult, error) {
-	dailyMap := make(map[string]*dailyAgg)
-	sessionMap := make(map[string]*sessionAgg)
-	var events []EventRow
 	tmpDir := geminiTmpDir()
 	log.Printf("[collector] Gemini scanning dir=%s", tmpDir)
 
-	fileCount := 0
+	// Collect all file paths for cache check
+	var allFiles []string
 	entries, _ := os.ReadDir(tmpDir)
 	for _, entry := range entries {
 		fullPath := filepath.Join(tmpDir, entry.Name())
@@ -55,8 +55,7 @@ func (c *GeminiCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 				if ext != ".json" && ext != ".jsonl" {
 					continue
 				}
-				fileCount++
-				c.collectFile(filepath.Join(chatsDir, ce.Name()), dailyMap, sessionMap, &events, pricing)
+				allFiles = append(allFiles, filepath.Join(chatsDir, ce.Name()))
 			}
 		} else {
 			ext := strings.ToLower(filepath.Ext(entry.Name()))
@@ -66,9 +65,25 @@ func (c *GeminiCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 			if !strings.HasPrefix(entry.Name(), "session-") {
 				continue
 			}
-			c.collectFile(fullPath, dailyMap, sessionMap, &events, pricing)
-			fileCount++
+			allFiles = append(allFiles, fullPath)
 		}
+	}
+
+	// Pre-load cache from DB and check if unchanged
+	c.cache.LoadFromDB(c.Source(), allFiles)
+	if c.cache.AllCached(allFiles) {
+		log.Printf("[collector] Gemini all files cached, skipping")
+		return &CollectResult{Device: hostname(), Source: "Gemini CLI", Cached: true}, nil
+	}
+
+	dailyMap := make(map[string]*dailyAgg)
+	sessionMap := make(map[string]*sessionAgg)
+	var events []EventRow
+	fileCount := 0
+
+	for _, fp := range allFiles {
+		fileCount++
+		c.collectFile(fp, dailyMap, sessionMap, &events, pricing)
 	}
 
 	log.Printf("[collector] Gemini done files=%d daily=%d sessions=%d events=%d",

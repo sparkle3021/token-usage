@@ -162,6 +162,8 @@ func NewOpenClawCollector() *OpenClawCollector {
 
 func (c *OpenClawCollector) ID() string    { return "openclaw" }
 func (c *OpenClawCollector) Source() string { return "OpenClaw" }
+func (c *OpenClawCollector) SetPersister(p PersistHandler, source string) { c.cache.SetPersister(p, source) }
+func (c *OpenClawCollector) ClearCache() { c.cache.Clear() }
 
 func openclawRoots() []string {
 	home, _ := os.UserHomeDir()
@@ -174,12 +176,24 @@ func openclawRoots() []string {
 }
 
 func (c *OpenClawCollector) Collect(ctx context.Context, pricing TokenCalc) (*CollectResult, error) {
+	roots := openclawRoots()
+	log.Printf("[collector] OpenClaw roots=%v", roots)
+
+	var allFiles []string
+	for _, root := range roots {
+		allFiles = append(allFiles, CollectJSONLFiles(root)...)
+	}
+
+	// Pre-load cache from DB and check if unchanged
+	c.cache.LoadFromDB(c.Source(), allFiles)
+	if c.cache.AllCached(allFiles) {
+		log.Printf("[collector] OpenClaw all files cached, skipping")
+		return &CollectResult{Device: hostname(), Source: "OpenClaw", Cached: true}, nil
+	}
+
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
 	var events []EventRow
-
-	roots := openclawRoots()
-	log.Printf("[collector] OpenClaw roots=%v", roots)
 	totalFiles := 0
 	totalRecords := 0
 	for _, root := range roots {

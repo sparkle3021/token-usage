@@ -336,11 +336,21 @@ func int64ToStr(n int64) string {
 	return string(buf[i:])
 }
 
+// PersistHandler is the optional persistence backend for ParseCache.
+type PersistHandler interface {
+	LoadParseCache(source, filePath string) (fingerprint string, ok bool)
+	SaveParseCache(source, filePath, fingerprint string) error
+	DeleteParseCacheBySource(source string) error
+}
+
 // ParseCache is a simple file-fingerprint based parse cache.
 type ParseCache struct {
-	mu      sync.Mutex
-	version int
-	store   map[string]*cacheEntry // path -> entry
+	mu        sync.Mutex
+	version   int
+	store     map[string]*cacheEntry // path -> entry
+	persister PersistHandler
+	source    string
+	newPaths  int // new entries since last reset
 }
 
 type cacheEntry struct {
@@ -355,6 +365,80 @@ func NewParseCache(version int) *ParseCache {
 	}
 }
 
+// SetPersister attaches a persistence backend. Must be called before use.
+func (c *ParseCache) SetPersister(p PersistHandler, source string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.persister = p
+	c.source = source
+}
+
+// LoadFromDB pre-populates the cache from the persistence backend.
+// Only fingerprints are stored; Records must be re-parsed on first access.
+func (c *ParseCache) LoadFromDB(source string, paths []string) int {
+	if c.persister == nil {
+		return 0
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	loaded := 0
+	for _, path := range paths {
+		fp, ok := c.persister.LoadParseCache(source, path)
+		if ok {
+			if _, exists := c.store[path]; !exists {
+				c.store[path] = &cacheEntry{Fingerprint: fp}
+				loaded++
+			}
+		}
+	}
+	if loaded > 0 {
+		log.Printf("[cache] LoadFromDB source=%s loaded=%d paths=%d", source, loaded, len(paths))
+	}
+	return loaded
+}
+
+// AllCached returns true when every path in the set has a matching fingerprint cached.
+func (c *ParseCache) AllCached(paths []string) bool {
+	if len(paths) == 0 {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, path := range paths {
+		fp := FileFingerprint(path)
+		if fp == "" {
+			return false
+		}
+		entry, ok := c.store[path]
+		if !ok || entry.Fingerprint != fp {
+			return false
+		}
+	}
+	return true
+}
+
+// NewCount returns the number of newly cached entries since the last reset.
+func (c *ParseCache) NewCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.newPaths
+}
+
+// ResetNew resets the new entry counter.
+func (c *ParseCache) ResetNew() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.newPaths = 0
+}
+
+// Clear empties the entire cache but retains the persister binding.
+func (c *ParseCache) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.store = make(map[string]*cacheEntry)
+	c.newPaths = 0
+}
+
 // Get returns cached records if the file is unchanged.
 func (c *ParseCache) Get(filePath string) (interface{}, bool) {
 	fp := FileFingerprint(filePath)
@@ -367,12 +451,16 @@ func (c *ParseCache) Get(filePath string) (interface{}, bool) {
 
 	entry, ok := c.store[filePath]
 	if ok && entry.Fingerprint == fp {
-		return entry.Records, true
+		if entry.Records != nil {
+			return entry.Records, true
+		}
+		// fingerprint matches but records not in memory — caller must re-parse
+		return nil, false
 	}
 	return nil, false
 }
 
-// Set stores parsed records for a file.
+// Set stores parsed records for a file and persists the fingerprint.
 func (c *ParseCache) Set(filePath string, records interface{}) {
 	fp := FileFingerprint(filePath)
 	if fp == "" {
@@ -380,10 +468,21 @@ func (c *ParseCache) Set(filePath string, records interface{}) {
 	}
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
+	_, existed := c.store[filePath]
 	c.store[filePath] = &cacheEntry{
 		Fingerprint: fp,
 		Records:     records,
+	}
+	if !existed {
+		c.newPaths++
+	}
+	persister, source := c.persister, c.source
+	c.mu.Unlock()
+
+	// Persist fingerprint asynchronously (fire-and-forget, errors are logged)
+	if persister != nil {
+		if err := persister.SaveParseCache(source, filePath, fp); err != nil {
+			log.Printf("[cache] Set persist error source=%s path=%s err=%v", source, filePath, err)
+		}
 	}
 }

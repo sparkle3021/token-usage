@@ -29,3 +29,7 @@ export function SetAutoSyncInterval(arg1) {
 export function StartCollection() {
   return window['go']['main']['App']['StartCollection']();
 }
+
+export function StartFullCollection() {
+  return window['go']['main']['App']['StartFullCollection']();
+}

@@ -21,6 +21,8 @@ func NewCodexCollector() *CodexCollector {
 
 func (c *CodexCollector) ID() string    { return "codex" }
 func (c *CodexCollector) Source() string { return "Codex CLI" }
+func (c *CodexCollector) SetPersister(p PersistHandler, source string) { c.cache.SetPersister(p, source) }
+func (c *CodexCollector) ClearCache() { c.cache.Clear() }
 
 func codexRoots() []string {
 	if env := os.Getenv("CODEX_HOME"); env != "" {
@@ -32,16 +34,30 @@ func codexRoots() []string {
 }
 
 func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*CollectResult, error) {
+	roots := codexRoots()
+	log.Printf("[collector] Codex roots=%v", roots)
+
+	// Collect all file paths for cache check
+	var allFiles []string
+	for _, root := range roots {
+		allFiles = append(allFiles, CollectJSONLFiles(root)...)
+	}
+
+	// Pre-load cache from DB and check if unchanged
+	c.cache.LoadFromDB(c.Source(), allFiles)
+	if c.cache.AllCached(allFiles) {
+		log.Printf("[collector] Codex all files cached, skipping")
+		return &CollectResult{Device: hostname(), Source: "Codex CLI", Cached: true}, nil
+	}
+
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
 	var events []EventRow
-
-	roots := codexRoots()
-	log.Printf("[collector] Codex roots=%v", roots)
 	totalFiles := 0
 	totalRecords := 0
 	for _, root := range roots {
 		files := CollectJSONLFiles(root)
+		totalFiles += len(files)
 		totalFiles += len(files)
 		for _, fp := range files {
 			records := c.parseSessionFile(fp)

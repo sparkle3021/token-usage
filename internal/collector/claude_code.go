@@ -31,6 +31,8 @@ func NewClaudeCodeCollector() *ClaudeCodeCollector {
 
 func (c *ClaudeCodeCollector) ID() string    { return claudeClientKey }
 func (c *ClaudeCodeCollector) Source() string { return claudeSourceLabel }
+func (c *ClaudeCodeCollector) SetPersister(p PersistHandler, source string) { c.cache.SetPersister(p, source) }
+func (c *ClaudeCodeCollector) ClearCache() { c.cache.Clear() }
 
 func getClaudeRoots() []string {
 	if env := os.Getenv("CLAUDE_CONFIG_DIR"); env != "" {
@@ -44,12 +46,33 @@ func getClaudeRoots() []string {
 }
 
 func (c *ClaudeCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*CollectResult, error) {
+	roots := getClaudeRoots()
+	log.Printf("[collector] ClaudeCode roots=%v", roots)
+
+	// Collect all file paths for cache check
+	var allFiles []string
+	for _, root := range roots {
+		projectsDir := filepath.Join(root, "projects")
+		if info, err := os.Stat(projectsDir); err == nil && info.IsDir() {
+			allFiles = append(allFiles, CollectJSONLFiles(projectsDir)...)
+		}
+		transcriptsDir := filepath.Join(root, "transcripts")
+		if info, err := os.Stat(transcriptsDir); err == nil && info.IsDir() {
+			allFiles = append(allFiles, CollectJSONLFiles(transcriptsDir)...)
+		}
+	}
+
+	// Pre-load cache from DB and check if unchanged
+	c.cache.LoadFromDB(c.Source(), allFiles)
+	if c.cache.AllCached(allFiles) {
+		log.Printf("[collector] ClaudeCode all files cached, skipping")
+		return &CollectResult{Device: hostname(), Source: claudeSourceLabel, Cached: true}, nil
+	}
+
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
 	var events []EventRow
 
-	roots := getClaudeRoots()
-	log.Printf("[collector] ClaudeCode roots=%v", roots)
 	for _, root := range roots {
 		projectsDir := filepath.Join(root, "projects")
 		if info, err := os.Stat(projectsDir); err == nil && info.IsDir() {

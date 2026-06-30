@@ -173,6 +173,16 @@ func (a *App) StartCollection() bool {
 	return ok
 }
 
+func (a *App) StartFullCollection() bool {
+	if a.engine == nil {
+		log.Printf("[app] StartFullCollection engine=nil")
+		return false
+	}
+	ok := a.engine.StartFullCollection()
+	log.Printf("[app] StartFullCollection result=%v", ok)
+	return ok
+}
+
 func (a *App) CollectStatus() *model.CollectStatus {
 	if a.engine == nil {
 		log.Printf("[app] CollectStatus engine=nil")
