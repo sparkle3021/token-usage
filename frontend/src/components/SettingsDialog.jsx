@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
 import { SettingsIcon } from 'lucide-react';
 
-const DEFAULTS = { autoSyncMinutes: 5, refreshSeconds: 30, ccSwitchDBPath: '', ccSwitchEnabled: false, ccSwitchAutoSync: false };
+const DEFAULTS = { autoSyncMinutes: 5, ccSwitchDBPath: '', ccSwitchEnabled: false, ccSwitchAutoSync: false };
 
 export default function SettingsDialog({ onSettingsChange }) {
   const [open, setOpen] = useState(false);
@@ -94,21 +94,6 @@ export default function SettingsDialog({ onSettingsChange }) {
                     <SelectItem value="15">每 15 分钟</SelectItem>
                     <SelectItem value="30">每 30 分钟</SelectItem>
                     <SelectItem value="0">不同步</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* 刷新间隔 */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">自动刷新间隔</label>
-                <Select value={String(cfg.refreshSeconds)} onValueChange={v => setCfg(c => ({ ...c, refreshSeconds: Number(v) }))}>
-                  <SelectTrigger className="w-full h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent side="bottom" align="start">
-                    <SelectItem value="30">每 30 秒</SelectItem>
-                    <SelectItem value="60">每 60 秒</SelectItem>
-                    <SelectItem value="0">不刷新</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

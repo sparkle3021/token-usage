@@ -272,12 +272,11 @@ func (a *App) GetAutoSyncInterval() int {
 func (a *App) GetSettings() model.AppConfig {
 	s, err := a.db.GetAllConfigs()
 	if err != nil {
-		return model.AppConfig{AutoSyncMinutes: 5, RefreshSeconds: 30}
+		return model.AppConfig{AutoSyncMinutes: 5}
 	}
 
 	cfg := model.AppConfig{
 		AutoSyncMinutes:  atoiDef(s["auto_sync_minutes"], 5),
-		RefreshSeconds:   atoiDef(s["refresh_seconds"], 30),
 		CCSwitchDBPath:   s["cc_switch_db_path"],
 		CCSwitchEnabled:  s["cc_switch_enabled"] == "true",
 		CCSwitchAutoSync: s["cc_switch_auto_sync"] == "true",
@@ -314,7 +313,6 @@ func (a *App) GetSettings() model.AppConfig {
 func (a *App) SaveSettings(cfg model.AppConfig) error {
 	pairs := map[string]string{
 		"auto_sync_minutes":  strconv.Itoa(cfg.AutoSyncMinutes),
-		"refresh_seconds":    strconv.Itoa(cfg.RefreshSeconds),
 		"cc_switch_db_path":  cfg.CCSwitchDBPath,
 		"cc_switch_enabled":  strconv.FormatBool(cfg.CCSwitchEnabled),
 		"cc_switch_auto_sync": strconv.FormatBool(cfg.CCSwitchAutoSync),
@@ -328,8 +326,8 @@ func (a *App) SaveSettings(cfg model.AppConfig) error {
 	// Apply auto-sync immediately
 	a.SetAutoSyncInterval(cfg.AutoSyncMinutes)
 
-	log.Printf("[app] SaveSettings ok autoSync=%d refresh=%d ccSwitch=%v",
-		cfg.AutoSyncMinutes, cfg.RefreshSeconds, cfg.CCSwitchEnabled)
+	log.Printf("[app] SaveSettings ok autoSync=%d ccSwitch=%v",
+		cfg.AutoSyncMinutes, cfg.CCSwitchEnabled)
 	return nil
 }
 

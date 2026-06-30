@@ -2,7 +2,6 @@ export namespace model {
 	
 	export class AppConfig {
 	    autoSyncMinutes: number;
-	    refreshSeconds: number;
 	    ccSwitchDBPath: string;
 	    ccSwitchEnabled: boolean;
 	    ccSwitchAutoSync: boolean;
@@ -14,7 +13,6 @@ export namespace model {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.autoSyncMinutes = source["autoSyncMinutes"];
-	        this.refreshSeconds = source["refreshSeconds"];
 	        this.ccSwitchDBPath = source["ccSwitchDBPath"];
 	        this.ccSwitchEnabled = source["ccSwitchEnabled"];
 	        this.ccSwitchAutoSync = source["ccSwitchAutoSync"];

@@ -30,7 +30,7 @@ export default function ImportDialog({ onRefresh }) {
     try {
       const r = await window.go.main.App.ImportCCSwitchDB();
       setResult(r);
-      if (!r.error && r.imported > 0 && onRefresh) onRefresh();
+      if (!r.error && onRefresh) onRefresh();
     } catch (err) {
       setResult({ error: String(err) });
     } finally {

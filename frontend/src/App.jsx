@@ -104,21 +104,9 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
   const [trendMode, setTrendMode] = useState('stacked');
   const [drill, setDrill] = useState(null);
   const [autoSync, setAutoSync] = useState(5);
-  const [refreshSec, setRefreshSec] = useState(30);
-  const refreshTimerRef = useRef(null);
-
-  // Auto-refresh timer
-  useEffect(() => {
-    if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
-    if (refreshSec > 0) {
-      refreshTimerRef.current = setInterval(() => onRefresh(), refreshSec * 1000);
-    }
-    return () => { if (refreshTimerRef.current) clearInterval(refreshTimerRef.current); };
-  }, [refreshSec, onRefresh]);
 
   const handleSettingsChange = useCallback((cfg) => {
     setAutoSync(cfg.autoSyncMinutes);
-    setRefreshSec(cfg.refreshSeconds);
   }, []);
 
   const allSources = useMemo(() => [...new Set(M.daily.map(r => r.source))], [M.daily]);
@@ -195,9 +183,6 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
           <span className="text-xs text-muted-foreground whitespace-nowrap">最后同步 <strong>{lastSync}</strong></span>
           <Button size="sm" variant="default" onClick={onCollect} disabled={collecting || refreshing}>
             {collecting ? '同步中' : '同步'}
-          </Button>
-          <Button size="sm" variant="outline" onClick={onRefresh} disabled={refreshing}>
-            {refreshing ? '刷新中…' : '刷新'}
           </Button>
           <ImportDialog onRefresh={onRefresh} />
           <SettingsDialog onSettingsChange={handleSettingsChange} />

@@ -92,11 +92,10 @@ type CSVImportResult struct {
 
 // AppConfig holds persistent application settings.
 type AppConfig struct {
-	AutoSyncMinutes    int    `json:"autoSyncMinutes"`
-	RefreshSeconds     int    `json:"refreshSeconds"`
-	CCSwitchDBPath     string `json:"ccSwitchDBPath"`
-	CCSwitchEnabled    bool   `json:"ccSwitchEnabled"`
-	CCSwitchAutoSync   bool   `json:"ccSwitchAutoSync"`
+	AutoSyncMinutes  int    `json:"autoSyncMinutes"`
+	CCSwitchDBPath   string `json:"ccSwitchDBPath"`
+	CCSwitchEnabled  bool   `json:"ccSwitchEnabled"`
+	CCSwitchAutoSync bool   `json:"ccSwitchAutoSync"`
 }
 
 // CCSwitchImportResult is returned by import operations.
