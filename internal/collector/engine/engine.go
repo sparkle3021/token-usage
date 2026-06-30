@@ -253,8 +253,22 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 		return true
 	}
 
+	// Filter out zero-token records before writing
+	filteredDaily := make([]collector.DailyRow, 0, len(result.Daily))
+	for _, r := range result.Daily {
+		if r.InputTokens != 0 || r.OutputTokens != 0 || r.CacheReadTokens != 0 || r.CacheWriteTokens != 0 || r.ReasoningTokens != 0 {
+			filteredDaily = append(filteredDaily, r)
+		}
+	}
+	filteredEvents := make([]collector.EventRow, 0, len(result.Events))
+	for _, r := range result.Events {
+		if r.InputTokens != 0 || r.OutputTokens != 0 || r.CacheReadTokens != 0 || r.CacheWriteTokens != 0 || r.ReasoningTokens != 0 {
+			filteredEvents = append(filteredEvents, r)
+		}
+	}
+
 	// Bulk upsert with per-call atomicity (UPSERT semantics ensure correctness)
-	if err := e.db.BulkUpsertDaily(dailyToModel(result.Device, col.Source(), result.Daily)); err != nil {
+	if err := e.db.BulkUpsertDaily(dailyToModel(result.Device, col.Source(), filteredDaily)); err != nil {
 		e.db.RecordRun(result.Device, col.Source(), "error",
 			fmt.Sprintf("[%s] bulk daily: %v", col.Source(), err), "go-collector:"+col.ID())
 		return false
@@ -266,8 +280,8 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 		return false
 	}
 
-	if len(result.Events) > 0 {
-		if err := e.db.BulkUpsertTimeUsage(eventsToModel(result.Device, col.Source(), result.Events)); err != nil {
+	if len(filteredEvents) > 0 {
+		if err := e.db.BulkUpsertTimeUsage(eventsToModel(result.Device, col.Source(), filteredEvents)); err != nil {
 			e.db.RecordRun(result.Device, col.Source(), "error",
 				fmt.Sprintf("[%s] bulk time: %v", col.Source(), err), "go-collector:"+col.ID())
 			return false

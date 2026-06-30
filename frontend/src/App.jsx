@@ -25,9 +25,12 @@ function App() {
 
   const loadData = useCallback(() => {
     setRefreshing(true);
-    window.go.main.App.GetDashboardData()
-      .then(data => {
-        setM({ ...data, daily: data.daily || [], today: U.daysAgo(0) });
+    Promise.all([
+      window.go.main.App.GetDashboardData(),
+      window.go.main.App.GetTimeSeriesData()
+    ])
+      .then(([data, tsData]) => {
+        setM({ ...data, daily: data.daily || [], today: U.daysAgo(0), time: tsData.time || [] });
         setLoadError(null);
       })
       .catch(err => setLoadError(String(err)))
@@ -119,7 +122,7 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
   }, []);
 
   const allSources = useMemo(() => [...new Set(M.daily.map(r => r.source))], [M.daily]);
-  const allModels = useMemo(() => [...new Set(M.daily.map(r => r.model))].filter(Boolean), [M.daily]);
+  const allModels = useMemo(() => [...new Set(M.daily.map(r => r.model))].filter(Boolean).sort(), [M.daily]);
 
   const filtered = useMemo(() => {
     return U.filterDaily(M.daily, f);
@@ -234,7 +237,7 @@ function Dashboard({ M, refreshing, collecting, collectStatus, onRefresh, onColl
       {/* Charts Row */}
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="flex-1 min-w-0">
-          <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} />
+          <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={M.time} isHourly={f.rangeId === 'today'} />
         </div>
         <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-[260px] lg:relative">
           <div className="flex flex-col min-h-0 lg:absolute lg:inset-0">

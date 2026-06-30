@@ -7,19 +7,46 @@ import SourceIcon from '../SourceIcon.jsx';
 
 const MODES = [{ id: 'stacked', label: '堆叠' }, { id: 'line', label: '折线' }, { id: 'bar', label: '柱状' }];
 
-export default function TrendChart({ rows, dates, sources, mode, onModeChange, totals }) {
+export default function TrendChart({ rows, dates, sources, mode, onModeChange, totals, timeRows, isHourly }) {
   const byKey = useMemo(() => {
     const m = new Map();
-    for (const r of rows) m.set(`${r.usageDate}::${r.source}`, (m.get(`${r.usageDate}::${r.source}`) || 0) + r.totalTokens);
+    if (isHourly && timeRows?.length) {
+      const todayStr = dates[0];
+      for (const r of timeRows) {
+        if (r.usageDate !== todayStr) continue;
+        // event_time is UTC ISO string, parse to local hour
+        const d = new Date(r.eventTime);
+        if (isNaN(d.getTime())) continue;
+        const hour = String(d.getHours()).padStart(2, '0');
+        const key = `${hour}::${r.source}`;
+        m.set(key, (m.get(key) || 0) + r.totalTokens);
+      }
+    } else {
+      for (const r of rows) {
+        const key = `${r.usageDate}::${r.source}`;
+        m.set(key, (m.get(key) || 0) + r.totalTokens);
+      }
+    }
     return m;
-  }, [rows]);
+  }, [rows, timeRows, isHourly, dates]);
 
-  const chartData = useMemo(() => dates.map(d => {
-    const pt = { date: d.slice(5) };
-    for (const s of sources) pt[s] = byKey.get(`${d}::${s}`) || 0;
-    return pt;
-  }), [dates, sources, byKey]);
+  const chartData = useMemo(() => {
+    if (isHourly && timeRows?.length) {
+      return Array.from({ length: 24 }, (_, h) => {
+        const hourStr = String(h).padStart(2, '0');
+        const pt = { hour: `${hourStr}:00` };
+        for (const s of sources) pt[s] = byKey.get(`${hourStr}::${s}`) || 0;
+        return pt;
+      });
+    }
+    return dates.map(d => {
+      const pt = { date: d.slice(5) };
+      for (const s of sources) pt[s] = byKey.get(`${d}::${s}`) || 0;
+      return pt;
+    });
+  }, [dates, sources, byKey, isHourly, timeRows]);
 
+  const hasHourly = isHourly && !!timeRows?.length;
   const palette = sources.map(s => U.getSourceColor(s));
 
   return (
@@ -27,8 +54,8 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
       <CardHeader>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <CardTitle>每日 Token 使用趋势</CardTitle>
-            <CardDescription>{totals?.totalTokens != null ? `${U.compactCN(totals.totalTokens)} tokens · ${dates.length} 天` : ''}</CardDescription>
+            <CardTitle>Token 使用趋势</CardTitle>
+            <CardDescription>{totals?.totalTokens != null ? `${U.compactCN(totals.totalTokens)} tokens · ${hasHourly ? '24 小时' : dates.length + ' 天'}` : ''}</CardDescription>
           </div>
           <div className="flex gap-0.5 bg-muted rounded-lg p-0.5">
             {MODES.map(m => (
@@ -43,7 +70,7 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
             {mode === 'line' ? (
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.93 0.004 80)" />
-                <XAxis dataKey="date" tick={{ fontSize: 10.5, fill: 'oklch(0.55 0.005 80)' }} />
+                <XAxis dataKey={hasHourly ? 'hour' : 'date'} tick={{ fontSize: 10.5, fill: 'oklch(0.55 0.005 80)' }} />
                 <YAxis tick={{ fontSize: 10.5, fill: 'oklch(0.62 0.004 80)' }} tickFormatter={v => U.compact(v)} />
                 <Tooltip content={<CTooltip />} />
                 {sources.map((s, i) => (<Line key={s} type="monotone" dataKey={s} stroke={palette[i]} strokeWidth={2} dot={false} />))}
@@ -51,7 +78,7 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
             ) : (
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.93 0.004 80)" />
-                <XAxis dataKey="date" tick={{ fontSize: 10.5, fill: 'oklch(0.55 0.005 80)' }} />
+                <XAxis dataKey={hasHourly ? 'hour' : 'date'} tick={{ fontSize: 10.5, fill: 'oklch(0.55 0.005 80)' }} />
                 <YAxis tick={{ fontSize: 10.5, fill: 'oklch(0.62 0.004 80)' }} tickFormatter={v => U.compact(v)} />
                 <Tooltip content={<CTooltip />} />
                 {sources.map((s, i) => (<Bar key={s} dataKey={s} stackId={mode === 'stacked' ? 'total' : undefined} fill={palette[i]} />))}
