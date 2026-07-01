@@ -54,6 +54,12 @@ function App() {
     }
   }, []);
 
+  // Listen for collection completion events (auto-sync or manual)
+  useEffect(() => {
+    const cancel = window.runtime.EventsOn('collection:done', () => loadData());
+    return () => cancel();
+  }, [loadData]);
+
   useEffect(() => {
     const check = () => window.go.main.App.CollectStatus().then(s => {
       if (s.status === 'running') { setCollecting(true); }
@@ -168,10 +174,9 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, page, setP
       {/* Topbar */}
       <div className="flex items-center justify-between gap-4 pb-4 border-b">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg grid place-items-center text-white font-bold text-sm bg-gradient-to-br from-indigo-700 to-indigo-900">TS</div>
           <div>
-            <h1 className="text-base font-semibold">Token Studio</h1>
-            <p className="text-xs text-muted-foreground">个人 AI Token 消耗看板</p>
+            <h1 className="text-base font-semibold">Token Usage</h1>
+            <p className="text-xs text-muted-foreground">Token 消耗看板</p>
           </div>
           <div className="ml-6 flex items-center gap-1 bg-muted rounded-lg p-0.5">
             <button className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${page === 'dashboard' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setPage('dashboard')}>看板</button>
@@ -229,8 +234,8 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, page, setP
             <div className="flex-1 min-w-0">
               <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={M.time} isHourly={f.rangeId === 'today'} />
             </div>
-            <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-[260px] lg:relative">
-              <div className="flex flex-col min-h-0 lg:absolute lg:inset-0">
+            <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-0 lg:relative">
+              <div className="flex flex-col min-h-0 max-lg:h-auto lg:absolute lg:inset-0">
                 <TopModels rows={filtered} onDrillModel={r => setDrill({ kind: 'model', row: r })} />
               </div>
             </div>

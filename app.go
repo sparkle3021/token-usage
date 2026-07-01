@@ -81,6 +81,7 @@ func (a *App) startup(ctx context.Context) {
 	if a.engine != nil {
 		a.engine.SetEventCallback(func(event string, data interface{}) {
 			fmt.Printf("[event] %s: %v\n", event, data)
+			wailsRuntime.EventsEmit(a.ctx, event, data)
 		})
 	}
 
