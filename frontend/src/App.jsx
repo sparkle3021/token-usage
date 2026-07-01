@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs.jsx';
 import TrendChart from './components/charts/TrendChart.jsx';
 import TopModels from './components/charts/TopModels.jsx';
 import Heatmap from './components/charts/Heatmap/Heatmap.jsx';
+import HeatmapDrillDialog from './components/charts/Heatmap/HeatmapDrillDialog.jsx';
 import DrillDrawer from './components/tables/DrillDrawer.jsx';
 import SourceBadge from './components/SourceBadge.jsx';
 import TablePage from './pages/TablePage.jsx';
@@ -107,6 +108,7 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, page, setP
   const [f, setF] = useState(defaults);
   const [trendMode, setTrendMode] = useState('stacked');
   const [drill, setDrill] = useState(null);
+  const [heatmapDate, setHeatmapDate] = useState(null);
   const [autoSync, setAutoSync] = useState(5);
 
   const handleSettingsChange = useCallback((cfg) => {
@@ -242,7 +244,8 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, page, setP
           </div>
 
           {/* Heatmap */}
-          <Heatmap data={heatmapData} />
+          <Heatmap data={heatmapData} onSelect={setHeatmapDate} />
+          {heatmapDate && <HeatmapDrillDialog date={heatmapDate} daily={M.daily} timeRows={M.time} onClose={() => setHeatmapDate(null)} />}
 
           <DrillDrawer drill={drill} daily={M.daily} timeRows={M.time} onClose={() => setDrill(null)} />
         </>
