@@ -5,7 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from '../ui/tabs.jsx';
 import * as U from '../../lib/utils.js';
 import SourceBadge from '../SourceBadge.jsx';
 
-export default function TablePanel({ daily = [], sessions = [], runs = [], onDrill }) {
+export default function TablePanel({ daily = [], sessions = [], runs = [], onDrill, fullHeight = false }) {
   const [tab, setTab] = useState('sources');
   const [search, setSearch] = useState('');
 
@@ -43,7 +43,7 @@ export default function TablePanel({ daily = [], sessions = [], runs = [], onDri
   ];
 
   return (
-    <Card>
+    <Card className={fullHeight ? 'flex flex-col flex-1 min-h-0' : ''}>
       <CardHeader>
         <div className="flex items-center gap-3">
           <Tabs value={tab} onValueChange={v => { setTab(v); setSearch(''); }}>
@@ -53,11 +53,11 @@ export default function TablePanel({ daily = [], sessions = [], runs = [], onDri
           <input className="h-7 px-2.5 text-xs rounded-lg border bg-background w-36 outline-none focus:border-ring" placeholder="搜索..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </CardHeader>
-      <CardContent className="px-0">
-        {tab === 'sources' && <SourceTable rows={bySource} search={search} onDrill={onDrill} />}
-        {tab === 'models' && <ModelTable rows={byModel} search={search} onDrill={onDrill} />}
-        {tab === 'sessions' && <SessionTable rows={sessions || []} search={search} onDrill={onDrill} />}
-        {tab === 'runs' && <RunTable rows={runs || []} search={search} onDrill={onDrill} />}
+      <CardContent className={`px-0 ${fullHeight ? 'flex-1 min-h-0' : ''}`}>
+        {tab === 'sources' && <SourceTable rows={bySource} search={search} onDrill={onDrill} fullHeight={fullHeight} />}
+        {tab === 'models' && <ModelTable rows={byModel} search={search} onDrill={onDrill} fullHeight={fullHeight} />}
+        {tab === 'sessions' && <SessionTable rows={sessions || []} search={search} onDrill={onDrill} fullHeight={fullHeight} />}
+        {tab === 'runs' && <RunTable rows={runs || []} search={search} onDrill={onDrill} fullHeight={fullHeight} />}
       </CardContent>
     </Card>
   );
@@ -65,7 +65,7 @@ export default function TablePanel({ daily = [], sessions = [], runs = [], onDri
 
 // ── Data table wrapper ────────────────────────────────────────
 
-function DTable({ rows, columns, sortField = 'total', search }) {
+function DTable({ rows, columns, sortField = 'total', search, fullHeight, onDrill }) {
   const [sortBy, setSortBy] = useState({ field: sortField, dir: 'desc' });
   const filtered = useMemo(() => {
     if (!search) return rows;
@@ -81,7 +81,7 @@ function DTable({ rows, columns, sortField = 'total', search }) {
   }), [filtered, sortBy, columns]);
 
   return (
-    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+    <div className={`overflow-x-auto overflow-y-auto ${fullHeight ? 'flex-1 min-h-0' : 'max-h-[400px]'}`}>
       <Table>
         <TableHeader>
           <TableRow>{columns.map(c => (
@@ -109,7 +109,7 @@ function DTable({ rows, columns, sortField = 'total', search }) {
 
 // ── Source Table ───────────────────────────────────────────────
 
-function SourceTable({ rows, search, onDrill }) {
+function SourceTable({ rows, search, onDrill, fullHeight }) {
   const cols = [
     { field: 'source', label: '来源', render: r => <SourceBadgeLabel s={r.source} /> },
     { field: 'device', label: '设备', render: r => <span className="text-muted-foreground text-[11px]">{r.device}</span> },
@@ -120,10 +120,10 @@ function SourceTable({ rows, search, onDrill }) {
     { field: 'cache', label: 'Cache', right: true, render: r => U.compact(r.cache) },
     { field: 'cost', label: '费用', right: true, render: r => (r.cost || 0) > 0 ? <span className="text-amber-600">${(r.cost || 0).toFixed(2)}</span> : '—' },
   ];
-  return <DTable rows={rows} columns={cols} search={search} sortField="total" onDrill={r => onDrill?.({ kind: 'source', row: r })} />;
+  return <DTable rows={rows} columns={cols} search={search} sortField="total" fullHeight={fullHeight} onDrill={r => onDrill?.({ kind: 'source', row: r })} />;
 }
 
-function ModelTable({ rows, search, onDrill }) {
+function ModelTable({ rows, search, onDrill, fullHeight }) {
   const cols = [
     { field: 'source', label: '来源', render: r => <SourceBadgeLabel s={r.source} /> },
     { field: 'model', label: '模型', render: r => <span className="font-mono text-[11px]">{r.model}</span> },
@@ -133,10 +133,33 @@ function ModelTable({ rows, search, onDrill }) {
     { field: 'output', label: 'Output', right: true, render: r => U.compact(r.output) },
     { field: 'cost', label: '费用', right: true, render: r => (r.cost || 0) > 0 ? <span className="text-amber-600">${(r.cost || 0).toFixed(2)}</span> : '—' },
   ];
-  return <DTable rows={rows} columns={cols} search={search} sortField="total" onDrill={r => onDrill?.({ kind: 'model', row: r })} />;
+  return <DTable rows={rows} columns={cols} search={search} sortField="total" fullHeight={fullHeight} onDrill={r => onDrill?.({ kind: 'model', row: r })} />;
 }
 
-function SessionTable({ rows, search, onDrill }) {
+function SessionTable({ rows, search, onDrill, fullHeight }) {
+  const aggregated = useMemo(() => {
+    const m = new Map();
+    for (const r of (rows || [])) {
+      const key = r.sessionId;
+      if (!key) continue;
+      if (!m.has(key)) m.set(key, { ...r, modelList: new Set() });
+      const agg = m.get(key);
+      // Merge token counts
+      agg.inputTokens += r.inputTokens || 0;
+      agg.outputTokens += r.outputTokens || 0;
+      agg.cacheCreationTokens += r.cacheCreationTokens || 0;
+      agg.cacheReadTokens += r.cacheReadTokens || 0;
+      agg.reasoningOutputTokens += r.reasoningOutputTokens || 0;
+      agg.totalTokens += r.totalTokens || 0;
+      agg.costUSD += r.costUSD || 0;
+      // Track unique models
+      if (r.model) agg.modelList.add(r.model);
+      // Keep latest lastActivity
+      if (r.lastActivity > agg.lastActivity) agg.lastActivity = r.lastActivity;
+    }
+    return [...m.values()].map(r => ({ ...r, modelCount: r.modelList.size, modelList: undefined }));
+  }, [rows]);
+
   const cols = [
     { field: 'source', label: '来源', width: 100, render: r => <SourceBadgeLabel s={r?.source} /> },
     { field: 'projectPath', label: '项目', render: r => <span className="font-mono text-[11px]" title={r?.sessionId}>{r?.projectPath || (r?.sessionId ? String(r.sessionId).split('/').slice(-1)[0] : '—')}</span> },
@@ -146,12 +169,12 @@ function SessionTable({ rows, search, onDrill }) {
     { field: 'totalTokens', label: 'Total', right: true, render: r => <span className="font-semibold">{U.fmt.format(r?.totalTokens || 0)}</span> },
     { field: 'costUSD', label: '费用', right: true, render: r => (r?.costUSD || 0) > 0 ? <span className="text-amber-600">${(r.costUSD || 0).toFixed(2)}</span> : '—' },
   ];
-  return <DTable rows={rows} columns={cols} search={search} sortField="totalTokens" onDrill={r => onDrill?.({ kind: 'session', row: r })} />;
+  return <DTable rows={aggregated} columns={cols} search={search} sortField="totalTokens" fullHeight={fullHeight} onDrill={r => onDrill?.({ kind: 'session', row: r })} />;
 }
 
-function RunTable({ rows, onDrill }) {
+function RunTable({ rows, fullHeight }) {
   return (
-    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+    <div className={`overflow-x-auto overflow-y-auto ${fullHeight ? 'flex-1 min-h-0' : 'max-h-[400px]'}`}>
       <Table>
         <TableHeader>
           <TableRow>

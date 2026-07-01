@@ -33,6 +33,7 @@ type SessionUsage struct {
 	SessionID             string  `json:"sessionId"`
 	LastActivity          string  `json:"lastActivity"`
 	ProjectPath           string  `json:"projectPath"`
+	Model                 string  `json:"model"`
 	InputTokens           int64   `json:"inputTokens"`
 	OutputTokens          int64   `json:"outputTokens"`
 	CacheCreationTokens   int64   `json:"cacheCreationTokens"`

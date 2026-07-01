@@ -4,7 +4,7 @@ import * as U from '../../lib/utils.js';
 import SourceIcon from '../SourceIcon.jsx';
 import SourceBadge from '../SourceBadge.jsx';
 
-export default function DrillDrawer({ drill, daily, onClose }) {
+export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
   const detail = useMemo(() => {
     if (!drill) return null;
     const { kind, row } = drill;
@@ -51,8 +51,28 @@ export default function DrillDrawer({ drill, daily, onClose }) {
     const projectSet = new Set();
     for (const r of matching) if (r.projectPath) projectSet.add(r.projectPath);
 
-    return { kind, row, title, sub, totals, dates, values, count: matching.length, sourceBreakdown, projectCount: projectSet.size };
-  }, [drill, daily]);
+    let modelBreakdown = null;
+    if (kind === 'session' && timeRows) {
+      const modelMap = new Map();
+      const sid = row.sessionId;
+      for (const t of timeRows) {
+        if (t.sessionId !== sid) continue;
+        const key = t.model || '未知';
+        if (!modelMap.has(key)) modelMap.set(key, { model: key, total: 0, input: 0, output: 0, cache: 0, cost: 0 });
+        const m = modelMap.get(key);
+        m.total += t.totalTokens || 0;
+        m.input += t.inputTokens || 0;
+        m.output += t.outputTokens || 0;
+        m.cache += (t.cacheCreationTokens || 0) + (t.cacheReadTokens || 0);
+        m.cost += t.costUSD || 0;
+      }
+      if (modelMap.size > 0) {
+        modelBreakdown = [...modelMap.values()].sort((a, b) => b.total - a.total);
+      }
+    }
+
+    return { kind, row, title, sub, totals, dates, values, count: matching.length, sourceBreakdown, projectCount: projectSet.size, modelBreakdown };
+  }, [drill, daily, timeRows]);
 
   const open = !!drill;
 
@@ -96,6 +116,28 @@ export default function DrillDrawer({ drill, daily, onClose }) {
                   <div className="text-lg font-semibold tabular-nums">{detail.projectCount || <span className="text-muted-foreground font-normal">—</span>}</div>
                 </div>
               </div>
+
+              {detail.kind === 'session' && detail.modelBreakdown && (
+                <div className="mb-4">
+                  <h4 className="text-[10px] font-semibold uppercase text-muted-foreground mb-2">模型用量</h4>
+                  <div className="space-y-2">
+                    {detail.modelBreakdown.map(m => (
+                      <div key={m.model} className="p-2.5 bg-muted rounded-lg">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-mono font-medium">{m.model}</span>
+                          <span className="text-xs tabular-nums font-semibold">{U.compactCN(m.total)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                          <span>Input {U.compact(m.input)}</span>
+                          <span>Output {U.compact(m.output)}</span>
+                          <span>Cache {U.compact(m.cache)}</span>
+                          {m.cost > 0 && <span className="text-amber-600">${m.cost.toFixed(2)}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {detail.kind === 'model' && detail.sourceBreakdown.length > 1 && (
                 <div className="mb-4">

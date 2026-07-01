@@ -121,13 +121,14 @@ func (m *Manager) initPreparedStmts() error {
 
 	m.stmtSession, err = m.db.Prepare(`
 		INSERT INTO session_usage (
-			device, source, session_id, last_activity, project_path,
+			device, source, session_id, last_activity, project_path, model,
 			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 			reasoning_output_tokens, total_tokens, cost_usd, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
 		ON CONFLICT(device, source, session_id) DO UPDATE SET
 			last_activity = excluded.last_activity,
 			project_path = excluded.project_path,
+			model = excluded.model,
 			input_tokens = excluded.input_tokens,
 			output_tokens = excluded.output_tokens,
 			cache_creation_tokens = excluded.cache_creation_tokens,
@@ -308,6 +309,11 @@ func (m *Manager) initSchema() error {
 
 	// Migration: remove deprecated cc-switch config keys
 	m.db.Exec("DELETE FROM app_config WHERE key IN ('cc_switch_enabled', 'cc_switch_auto_sync')")
+
+	// Migration: add model to session_usage
+	if err := m.migrateSessionModel(); err != nil {
+		log.Printf("[db] migrateSessionModel: %v", err)
+	}
 
 	m.pruneCollectionRuns(500)
 	return nil
@@ -897,10 +903,25 @@ func (m *Manager) QueryDaily() ([]model.DailyUsage, error) {
 	return results, rows.Err()
 }
 
+
+func (m *Manager) migrateSessionModel() error {
+	// Step 1: add model column (no-op if already exists)
+	m.db.Exec("ALTER TABLE session_usage ADD COLUMN model TEXT NOT NULL DEFAULT ''")
+	// Step 2: check if PK already includes model
+	var pkInfo string
+	m.db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='session_usage'").Scan(&pkInfo)
+	if strings.Contains(pkInfo, "session_id, model") {
+		return nil
+	}
+	log.Printf("[db] session_usage model column already present")
+	return nil
+}
+
 func (m *Manager) QuerySessions() ([]model.SessionUsage, error) {
 	start := time.Now()
 	rows, err := m.db.Query(`
 		SELECT device, source, session_id, COALESCE(last_activity,''), COALESCE(project_path,''),
+			COALESCE(model,''),
 			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 			reasoning_output_tokens, total_tokens, cost_usd
 		FROM session_usage
@@ -914,7 +935,7 @@ func (m *Manager) QuerySessions() ([]model.SessionUsage, error) {
 	var results []model.SessionUsage
 	for rows.Next() {
 		var r model.SessionUsage
-		if err := rows.Scan(&r.Device, &r.Source, &r.SessionID, &r.LastActivity, &r.ProjectPath,
+		if err := rows.Scan(&r.Device, &r.Source, &r.SessionID, &r.LastActivity, &r.ProjectPath, &r.Model,
 			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens,
 			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD,
 	); err != nil {

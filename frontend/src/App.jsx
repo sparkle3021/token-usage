@@ -8,9 +8,10 @@ import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs.jsx';
 import TrendChart from './components/charts/TrendChart.jsx';
 import TopModels from './components/charts/TopModels.jsx';
 import Heatmap from './components/charts/Heatmap/Heatmap.jsx';
-import TablePanel from './components/tables/TablePanel.jsx';
 import DrillDrawer from './components/tables/DrillDrawer.jsx';
 import SourceBadge from './components/SourceBadge.jsx';
+import TablePage from './pages/TablePage.jsx';
+import MultiSelect from './components/MultiSelect.jsx';
 import SettingsDialog from './components/SettingsDialog.jsx';
 import ImportDialog from './components/ImportDialog.jsx';
 
@@ -20,6 +21,7 @@ function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const pollingRef = useRef(null);
+  const [page, setPage] = useState('dashboard');
 
   const loadData = useCallback(() => {
     setRefreshing(true);
@@ -91,10 +93,10 @@ function App() {
     </div>
   );
 
-  return <Dashboard M={M} refreshing={refreshing} collecting={collecting} onRefresh={loadData} onCollect={runCollect} />;
+  return <Dashboard M={M} refreshing={refreshing} collecting={collecting} onRefresh={loadData} onCollect={runCollect} page={page} setPage={setPage} />;
 }
 
-function Dashboard({ M, refreshing, collecting, onRefresh, onCollect }) {
+function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, page, setPage }) {
   const defaults = { rangeId: 'today', startDate: U.daysAgo(0), endDate: U.daysAgo(0), sources: new Set(), devices: new Set(), models: new Set(), compare: true };
   const [f, setF] = useState(defaults);
   const [trendMode, setTrendMode] = useState('stacked');
@@ -171,6 +173,10 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect }) {
             <h1 className="text-base font-semibold">Token Studio</h1>
             <p className="text-xs text-muted-foreground">个人 AI Token 消耗看板</p>
           </div>
+          <div className="ml-6 flex items-center gap-1 bg-muted rounded-lg p-0.5">
+            <button className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${page === 'dashboard' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setPage('dashboard')}>看板</button>
+            <button className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${page === 'table' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setPage('table')}>数据明细</button>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground whitespace-nowrap">最后同步 <strong>{lastSync}</strong></span>
@@ -182,58 +188,62 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect }) {
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <Card className="p-3 overflow-visible">
-        <div className="flex flex-wrap items-center gap-2 mb-2">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">时间</span>
-          <Tabs value={f.rangeId} onValueChange={setRange}>
-            <TabsList>{ranges.map(r => <TabsTrigger key={r.id} value={r.id} className="text-xs px-2.5">{r.label}</TabsTrigger>)}</TabsList>
-          </Tabs>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-1">来源</span>
-          {allSources.map(s => (
-            <SourceBadge key={s} source={s} selected={f.sources.has(s)} onClick={() => { const n = new Set(f.sources); n.has(s) ? n.delete(s) : n.add(s); setF({ ...f, sources: n }); }} />
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t">
-          <MultiSelect items={allModels} selected={f.models} onChange={v => setF({ ...f, models: v })} placeholder="全部模型" />
-          <div className="flex-1" />
-          <Button size="sm" variant={f.compare ? 'default' : 'outline'} onClick={() => setF({ ...f, compare: !f.compare })}>
-            对比
-          </Button>
-        </div>
-      </Card>
+      {/* Page content */}
+      {page === 'dashboard' ? (
+        <>
+          {/* Filter Bar */}
+          <Card className="p-3 overflow-visible">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">时间</span>
+              <Tabs value={f.rangeId} onValueChange={setRange}>
+                <TabsList>{ranges.map(r => <TabsTrigger key={r.id} value={r.id} className="text-xs px-2.5">{r.label}</TabsTrigger>)}</TabsList>
+              </Tabs>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-1">来源</span>
+              {allSources.map(s => (
+                <SourceBadge key={s} source={s} selected={f.sources.has(s)} onClick={() => { const n = new Set(f.sources); n.has(s) ? n.delete(s) : n.add(s); setF({ ...f, sources: n }); }} />
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t">
+              <MultiSelect items={allModels} selected={f.models} onChange={v => setF({ ...f, models: v })} placeholder="全部模型" />
+              <div className="flex-1" />
+              <Button size="sm" variant={f.compare ? 'default' : 'outline'} onClick={() => setF({ ...f, compare: !f.compare })}>
+                对比
+              </Button>
+            </div>
+          </Card>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KPI label="总 Token" value={U.compactCN(totals.totalTokens)} delta={U.deltaPct(totals.totalTokens, compareData.totals?.totalTokens)} spark={sparkValues} color="oklch(0.55 0.16 265)" />
-        <KPI label="Input" value={U.compactCN(totals.inputTokens)} delta={U.deltaPct(totals.inputTokens, compareData.totals?.inputTokens)} spark={sparkBy('inputTokens')} color="oklch(0.62 0.13 240)" />
-        <KPI label="Output" value={U.compactCN(totals.outputTokens)} delta={U.deltaPct(totals.outputTokens, compareData.totals?.outputTokens)} spark={sparkBy('outputTokens')} color="oklch(0.60 0.15 295)" />
-        <KPI label="Cache" value={U.compactCN(totals.cacheReadTokens)} sub={`${totals.cacheHitRate.toFixed(2)}% 命中`} delta={U.deltaPct(totals.cacheReadTokens, compareData.totals?.cacheReadTokens)} spark={sparkBy('cacheReadTokens')} color="oklch(0.65 0.11 200)" />
-        <KPI label="Reasoning" value={U.compactCN(totals.reasoningTokens)} delta={U.deltaPct(totals.reasoningTokens, compareData.totals?.reasoningTokens)} spark={sparkBy('reasoningOutputTokens')} color="oklch(0.65 0.12 150)" />
-        <KPI label="费用" value={`$${(totals.costUSD || 0).toFixed(2)}`} delta={U.deltaPct(totals.costUSD, compareData.totals?.costUSD)} spark={sparkBy('costUSD')} color="oklch(0.72 0.14 75)" />
-      </div>
-
-      {/* Charts Row */}
-      <div className="flex flex-col lg:flex-row gap-4">
-        <div className="flex-1 min-w-0">
-          <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={M.time} isHourly={f.rangeId === 'today'} />
-        </div>
-        <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-[260px] lg:relative">
-          <div className="flex flex-col min-h-0 lg:absolute lg:inset-0">
-            <TopModels rows={filtered} onDrillModel={r => setDrill({ kind: 'model', row: r })} />
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <KPI label="总 Token" value={U.compactCN(totals.totalTokens)} delta={U.deltaPct(totals.totalTokens, compareData.totals?.totalTokens)} spark={sparkValues} color="oklch(0.55 0.16 265)" />
+            <KPI label="Input" value={U.compactCN(totals.inputTokens)} delta={U.deltaPct(totals.inputTokens, compareData.totals?.inputTokens)} spark={sparkBy('inputTokens')} color="oklch(0.62 0.13 240)" />
+            <KPI label="Output" value={U.compactCN(totals.outputTokens)} delta={U.deltaPct(totals.outputTokens, compareData.totals?.outputTokens)} spark={sparkBy('outputTokens')} color="oklch(0.60 0.15 295)" />
+            <KPI label="Cache" value={U.compactCN(totals.cacheReadTokens)} sub={`${totals.cacheHitRate.toFixed(2)}% 命中`} delta={U.deltaPct(totals.cacheReadTokens, compareData.totals?.cacheReadTokens)} spark={sparkBy('cacheReadTokens')} color="oklch(0.65 0.11 200)" />
+            <KPI label="Reasoning" value={U.compactCN(totals.reasoningTokens)} delta={U.deltaPct(totals.reasoningTokens, compareData.totals?.reasoningTokens)} spark={sparkBy('reasoningOutputTokens')} color="oklch(0.65 0.12 150)" />
+            <KPI label="费用" value={`$${(totals.costUSD || 0).toFixed(2)}`} delta={U.deltaPct(totals.costUSD, compareData.totals?.costUSD)} spark={sparkBy('costUSD')} color="oklch(0.72 0.14 75)" />
           </div>
-        </div>
-      </div>
 
-      {/* Heatmap */}
-      <Heatmap data={heatmapData} />
+          {/* Charts Row */}
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex-1 min-w-0">
+              <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={M.time} isHourly={f.rangeId === 'today'} />
+            </div>
+            <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-[260px] lg:relative">
+              <div className="flex flex-col min-h-0 lg:absolute lg:inset-0">
+                <TopModels rows={filtered} onDrillModel={r => setDrill({ kind: 'model', row: r })} />
+              </div>
+            </div>
+          </div>
 
-      {/* Table */}
-      <TablePanel daily={filtered} sessions={M.sessions} runs={M.runs} onDrill={setDrill} />
+          {/* Heatmap */}
+          <Heatmap data={heatmapData} />
 
-      <DrillDrawer drill={drill} daily={M.daily} onClose={() => setDrill(null)} />
+          <DrillDrawer drill={drill} daily={M.daily} timeRows={M.time} onClose={() => setDrill(null)} />
+        </>
+      ) : (
+        <TablePage M={M} />
+      )}
     </div>
   );
 }
@@ -270,38 +280,6 @@ function SparkLine({ values, color }) {
       <path d={d + ` L${w},${h} L0,${h} Z`} fill={color} opacity="0.12" />
       <path d={d} fill="none" stroke={color} strokeWidth="1.5" />
     </svg>
-  );
-}
-
-// ── MultiSelect ───────────────────────────────────────────────
-
-function MultiSelect({ items, selected, onChange, placeholder }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    const f = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', f);
-    return () => document.removeEventListener('mousedown', f);
-  }, []);
-
-  return (
-    <div ref={ref} className="relative inline-block">
-      <Button size="sm" variant="outline" onClick={() => setOpen(o => !o)} className="text-xs">
-        {selected.size === 0 ? placeholder : selected.size === 1 ? [...selected][0] : `${selected.size} 项`}
-      </Button>
-      {open && (
-        <div className="absolute top-full left-0 mt-1 z-30 min-w-[180px] bg-popover border rounded-lg shadow-lg p-1.5 max-h-64 overflow-y-auto">
-          {selected.size > 0 && <Button size="xs" variant="ghost" className="w-full justify-start text-indigo-500 mb-0.5" onClick={() => onChange(new Set())}>清除</Button>}
-          {(items || []).map(o => (
-            <button key={o} className={`w-full text-left px-2 py-1 text-xs rounded flex items-center gap-2 hover:bg-muted ${selected.has(o) ? 'font-medium' : ''}`}
-              onClick={() => { const n = new Set(selected); n.has(o) ? n.delete(o) : n.add(o); onChange(n); }}>
-              <input type="checkbox" className="accent-indigo-500" checked={selected.has(o)} readOnly />
-              {o}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

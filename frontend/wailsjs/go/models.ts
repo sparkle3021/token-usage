@@ -140,6 +140,7 @@ export namespace model {
 	    sessionId: string;
 	    lastActivity: string;
 	    projectPath: string;
+	    model: string;
 	    inputTokens: number;
 	    outputTokens: number;
 	    cacheCreationTokens: number;
@@ -159,6 +160,7 @@ export namespace model {
 	        this.sessionId = source["sessionId"];
 	        this.lastActivity = source["lastActivity"];
 	        this.projectPath = source["projectPath"];
+	        this.model = source["model"];
 	        this.inputTokens = source["inputTokens"];
 	        this.outputTokens = source["outputTokens"];
 	        this.cacheCreationTokens = source["cacheCreationTokens"];

@@ -337,7 +337,7 @@ func sessionToModel(device, source string, rows []collector.SessionRow) []model.
 		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
 		out[i] = model.SessionUsage{
 			Device: device, Source: source, SessionID: r.SessionID,
-			LastActivity: r.LastActivity, ProjectPath: r.ProjectPath,
+			LastActivity: r.LastActivity, ProjectPath: r.ProjectPath, Model: r.Model,
 			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
 			CacheCreationTokens: r.CacheWriteTokens, CacheReadTokens: r.CacheReadTokens,
 			ReasoningOutputTokens: r.ReasoningTokens, TotalTokens: total, CostUSD: r.CostUSD,

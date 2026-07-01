@@ -62,7 +62,7 @@ export default function Heatmap({
     <Card className={className}>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>贡献热力图</CardTitle>
+          <CardTitle>Token 消耗热力图</CardTitle>
           <HeatmapLegend theme={theme} cellSize={cellSize} />
         </div>
       </CardHeader>
