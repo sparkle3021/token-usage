@@ -18,11 +18,12 @@ const HeatmapCell = React.memo(function HeatmapCell({ day, size, getColor, onSel
     <Tooltip>
       <TooltipTrigger>
         <div
-          className="rounded-sm cursor-pointer transition-none"
+          className="cursor-pointer transition-none"
           style={{
             width: size,
             height: size,
             backgroundColor: color,
+            borderRadius: Math.max(1, size * 0.12) + 'px',
             ...(today ? { border: '1px solid rgba(255,255,255,0.4)', outline: '1px solid rgba(255,255,255,0.2)' } : {}),
           }}
           onClick={() => onSelect?.(date)}

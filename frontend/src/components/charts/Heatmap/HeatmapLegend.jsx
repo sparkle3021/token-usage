@@ -15,8 +15,8 @@ const HeatmapLegend = React.memo(function HeatmapLegend({ theme = DEFAULT_THEME,
       {levels.map((color, i) => (
         <span
           key={i}
-          className="inline-block rounded-sm"
-          style={{ width: cellSize, height: cellSize, backgroundColor: color }}
+          className="inline-block"
+          style={{ width: cellSize, height: cellSize, backgroundColor: color, borderRadius: Math.max(1, cellSize * 0.12) + 'px' }}
         />
       ))}
       多
