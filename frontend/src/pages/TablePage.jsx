@@ -54,8 +54,8 @@ export default function TablePage({ M, onRefresh }) {
         </div>
       </Card>
 
-      {/* Table — fills remaining height */}
-      <div className="flex-1 min-h-0">
+      {/* Table */}
+      <div className="flex flex-col h-[calc(100vh-340px)]">
         <TablePanel daily={filtered} sessions={M.sessions} runs={M.runs} onDrill={setDrill} fullHeight />
       </div>
 

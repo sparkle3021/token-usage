@@ -56,7 +56,7 @@ export default function TablePanel({ daily = [], sessions = [], runs = [], onDri
           <input className="h-7 px-2.5 text-xs rounded-lg border bg-background w-36 outline-none focus:border-ring" placeholder="搜索..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </CardHeader>
-      <CardContent className={`px-0 ${fullHeight ? 'flex-1 min-h-0' : ''}`}>
+      <CardContent className={`px-0 ${fullHeight ? 'flex flex-col flex-1 min-h-0' : ''}`}>
         {tab === 'sources' && <SourceTable rows={bySource} search={search} onDrill={onDrill} fullHeight={fullHeight} />}
         {tab === 'models' && <ModelTable rows={byModel} search={search} onDrill={onDrill} fullHeight={fullHeight} />}
         {tab === 'sessions' && <SessionTable rows={sessions || []} search={search} onDrill={onDrill} fullHeight={fullHeight} />}
