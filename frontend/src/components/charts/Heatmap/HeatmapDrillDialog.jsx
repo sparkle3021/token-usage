@@ -5,7 +5,7 @@ import { Card, CardContent } from '../../ui/card.jsx';
 import SourceBadge from '../../SourceBadge.jsx';
 import * as U from '../../../lib/utils.js';
 
-export default function HeatmapDrillDialog({ date, daily, timeRows, onClose }) {
+export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, onClose }) {
   const dayDaily = useMemo(() => {
     if (!daily || !date) return [];
     return daily.filter(r => r.usageDate === date);
@@ -17,25 +17,44 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, onClose }) {
 
   const dayTotals = useMemo(() => U.aggregateTotals(dayDaily), [dayDaily]);
 
-  // Hourly data from timeRows
+  // Hourly data from timeRows + hourRows + daily fallback
   const hourlyData = useMemo(() => {
-    if (!timeRows || !date) return [];
+    if (!date) return [];
     const byHour = new Map();
-    for (const r of timeRows) {
+
+    // 1) event-level time usage
+    for (const r of timeRows || []) {
       if (r.usageDate !== date) continue;
       const d = new Date(r.eventTime);
       if (isNaN(d.getTime())) continue;
       const hour = String(d.getHours()).padStart(2, '0');
+      byHour.set(`${hour}::${r.source}`, (byHour.get(`${hour}::${r.source}`) || 0) + r.totalTokens);
+    }
+
+    // 2) hour-level usage — fill hours not covered by timeRows
+    for (const r of hourRows || []) {
+      if (r.usageDate !== date) continue;
+      const hour = String(r.hour).padStart(2, '0');
       const key = `${hour}::${r.source}`;
+      if (byHour.has(key)) continue;
       byHour.set(key, (byHour.get(key) || 0) + r.totalTokens);
     }
+
+    // 3) daily-only sources — put into current hour
+    const currentHour = String(new Date().getHours()).padStart(2, '0');
+    for (const r of dayDaily) {
+      const key = `${currentHour}::${r.source}`;
+      if (byHour.has(key)) continue;
+      byHour.set(key, (byHour.get(key) || 0) + r.totalTokens);
+    }
+
     return Array.from({ length: 24 }, (_, h) => {
       const hourStr = String(h).padStart(2, '0');
       const pt = { hour: `${hourStr}:00` };
       for (const s of daySources) pt[s] = byHour.get(`${hourStr}::${s}`) || 0;
       return pt;
     });
-  }, [timeRows, date, daySources]);
+  }, [timeRows, hourRows, date, daySources, dayDaily]);
 
   // Top models for the day
   const topModels = useMemo(() => {

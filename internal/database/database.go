@@ -106,6 +106,7 @@ func (m *Manager) initPreparedStmts() error {
 			total_tokens = excluded.total_tokens,
 			cost_usd = CASE
 				WHEN daily_usage.usage_date < date('now', 'localtime') THEN daily_usage.cost_usd
+				WHEN excluded.cost_usd = 0 THEN daily_usage.cost_usd
 				ELSE excluded.cost_usd
 			END,
 			pricing_locked_at = CASE
@@ -315,6 +316,9 @@ func (m *Manager) initSchema() error {
 		log.Printf("[db] migrateSessionModel: %v", err)
 	}
 
+	// Migration: fix total_tokens double-counting reasoning
+	m.migrateTotalTokens()
+
 	m.pruneCollectionRuns(500)
 	return nil
 }
@@ -375,7 +379,7 @@ func (m *Manager) bulkUpsertDailyExec(ex execer, rows []model.DailyUsage) error 
 			input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
 			cache_creation_tokens=excluded.cache_creation_tokens, cache_read_tokens=excluded.cache_read_tokens,
 			reasoning_output_tokens=excluded.reasoning_output_tokens, total_tokens=excluded.total_tokens,
-			cost_usd=CASE WHEN daily_usage.usage_date<date('now','localtime') THEN daily_usage.cost_usd ELSE excluded.cost_usd END,
+			cost_usd=CASE WHEN daily_usage.usage_date<date('now','localtime') THEN daily_usage.cost_usd WHEN excluded.cost_usd=0 THEN daily_usage.cost_usd ELSE excluded.cost_usd END,
 			pricing_locked_at=CASE WHEN daily_usage.usage_date<date('now','localtime') THEN COALESCE(daily_usage.pricing_locked_at,datetime('now','localtime')) ELSE NULL END,
 			updated_at=datetime('now','localtime')`)
 		return sqlBuf.String(), args
@@ -661,6 +665,7 @@ func (m *Manager) BuildDailyFromHourUsage() error {
 			total_tokens=MAX(excluded.total_tokens, daily_usage.total_tokens),
 			cost_usd=CASE
 				WHEN daily_usage.usage_date < date('now','localtime') THEN daily_usage.cost_usd
+				WHEN excluded.cost_usd = 0 THEN daily_usage.cost_usd
 				ELSE excluded.cost_usd
 			END,
 			pricing_locked_at=CASE
@@ -965,6 +970,24 @@ func (m *Manager) QueryDaily() ([]model.DailyUsage, error) {
 }
 
 
+func (m *Manager) migrateTotalTokens() {
+	// Recalculate total_tokens to remove reasoning tokens that were double-counted
+	// Old formula: total = input + output + cacheRead + cacheWrite + reasoning
+	// Correct:     total = input + output + cacheRead + cacheWrite
+	for _, table := range []string{"daily_usage", "time_usage", "session_usage", "hour_usage"} {
+		result, err := m.db.Exec(fmt.Sprintf(
+			`UPDATE %s SET total_tokens = input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens
+			 WHERE reasoning_output_tokens > 0 AND total_tokens != input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens`,
+			table,
+		))
+		if err != nil {
+			log.Printf("[db] migrateTotalTokens %s error: %v", table, err)
+		} else if n, _ := result.RowsAffected(); n > 0 {
+			log.Printf("[db] migrateTotalTokens %s fixed %d rows", table, n)
+		}
+	}
+}
+
 func (m *Manager) migrateSessionModel() error {
 	// Step 1: add model column (no-op if already exists)
 	m.db.Exec("ALTER TABLE session_usage ADD COLUMN model TEXT NOT NULL DEFAULT ''")
@@ -1063,6 +1086,35 @@ func (m *Manager) QueryTimeUsage() ([]model.TimeUsage, error) {
 		results = append(results, r)
 	}
 	log.Printf("[db] QueryTimeUsage rows=%d elapsed=%v", len(results), time.Since(start))
+	return results, rows.Err()
+}
+
+func (m *Manager) QueryHourUsage() ([]model.HourUsage, error) {
+	start := time.Now()
+	rows, err := m.db.Query(`
+		SELECT device, source, usage_date, hour, model,
+			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+			reasoning_output_tokens, total_tokens, cost_usd
+		FROM hour_usage
+		ORDER BY usage_date DESC, hour ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.HourUsage
+	for rows.Next() {
+		var r model.HourUsage
+		if err := rows.Scan(&r.Device, &r.Source, &r.UsageDate, &r.Hour, &r.Model,
+			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens,
+			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	log.Printf("[db] QueryHourUsage rows=%d elapsed=%v", len(results), time.Since(start))
 	return results, rows.Err()
 }
 

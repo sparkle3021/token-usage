@@ -170,8 +170,9 @@ func (a *App) GetTimeSeriesData() *model.TimeSeriesData {
 		return &model.TimeSeriesData{}
 	}
 	timeRows, _ := a.db.QueryTimeUsage()
-	log.Printf("[app] GetTimeSeriesData rows=%d elapsed=%v", len(timeRows), time.Since(start))
-	return &model.TimeSeriesData{Time: timeRows}
+	hourRows, _ := a.db.QueryHourUsage()
+	log.Printf("[app] GetTimeSeriesData timeRows=%d hourRows=%d elapsed=%v", len(timeRows), len(hourRows), time.Since(start))
+	return &model.TimeSeriesData{Time: timeRows, Hour: hourRows}
 }
 
 // ---------------------------------------------------------------------------

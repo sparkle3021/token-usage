@@ -71,6 +71,7 @@ type DashboardData struct {
 
 type TimeSeriesData struct {
 	Time []TimeUsage `json:"time"`
+	Hour []HourUsage `json:"hour"`
 }
 
 type CollectStatus struct {

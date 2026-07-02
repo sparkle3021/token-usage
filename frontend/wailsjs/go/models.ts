@@ -204,6 +204,40 @@ export namespace model {
 		    return a;
 		}
 	}
+	export class HourUsage {
+	    device: string;
+	    source: string;
+	    usageDate: string;
+	    hour: number;
+	    model: string;
+	    inputTokens: number;
+	    outputTokens: number;
+	    cacheCreationTokens: number;
+	    cacheReadTokens: number;
+	    reasoningOutputTokens: number;
+	    totalTokens: number;
+	    costUSD: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new HourUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.device = source["device"];
+	        this.source = source["source"];
+	        this.usageDate = source["usageDate"];
+	        this.hour = source["hour"];
+	        this.model = source["model"];
+	        this.inputTokens = source["inputTokens"];
+	        this.outputTokens = source["outputTokens"];
+	        this.cacheCreationTokens = source["cacheCreationTokens"];
+	        this.cacheReadTokens = source["cacheReadTokens"];
+	        this.reasoningOutputTokens = source["reasoningOutputTokens"];
+	        this.totalTokens = source["totalTokens"];
+	        this.costUSD = source["costUSD"];
+	    }
+	}
 	export class PricingUpdateResult {
 	    litellm: number;
 	    openrouter: number;
@@ -263,6 +297,7 @@ export namespace model {
 	}
 	export class TimeSeriesData {
 	    time: TimeUsage[];
+	    hour: HourUsage[];
 	
 	    static createFrom(source: any = {}) {
 	        return new TimeSeriesData(source);
@@ -271,6 +306,7 @@ export namespace model {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.time = this.convertValues(source["time"], TimeUsage);
+	        this.hour = this.convertValues(source["hour"], HourUsage);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

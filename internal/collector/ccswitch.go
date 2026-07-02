@@ -112,6 +112,16 @@ func (c *CCSwitchCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	log.Printf("[collector] CCSwitch done proxy_rows=%d proxy_keys=%d rollup_rows=%d recon_checked=%d recon_supplement=%d recon_skipped=%d elapsed=%v",
 		ext.ProxyRows, ext.ProxyKeys, ext.RollupRows, ext.ReconChecked, ext.ReconSupplement, ext.ReconSkipped, time.Since(start))
 
+	// Save checkpoints after successful data collection
+	if ext.proxyLastCreated > 0 {
+		_ = c.store.SetCheckpoint(ckCursorProxyLogs, strconv.FormatInt(ext.proxyLastCreated, 10))
+	} else if ext.proxyBatch == nil && ext.proxyMaxCreated > 0 {
+		_ = c.store.SetCheckpoint(ckCursorProxyLogs, strconv.FormatInt(ext.proxyMaxCreated, 10))
+	}
+	if ext.rollupMaxDate != "" {
+		_ = c.store.SetCheckpoint(ckRollupMaxDate, ext.rollupMaxDate)
+	}
+
 	c.lastResult = CCSwitchStats{
 		ProxyRows:       ext.ProxyRows,
 		ProxyKeys:       ext.ProxyKeys,
@@ -121,7 +131,12 @@ func (c *CCSwitchCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 		ReconSkipped:    ext.ReconSkipped,
 	}
 
-	return &CollectResult{Device: c.device, Source: c.Source()}, nil
+	return &CollectResult{
+		Device:   c.device,
+		Source:   c.Source(),
+		HourRows: ext.proxyBatch,
+		Daily:    ext.rollupRows,
+	}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -131,12 +146,17 @@ func (c *CCSwitchCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 type hourAccKey struct{ date, source, model string; hour int }
 
 type collectResultExt struct {
-	ProxyRows       int
-	ProxyKeys       int
-	RollupRows      int
-	ReconChecked    int
-	ReconSupplement int
-	ReconSkipped    int
+	ProxyRows        int
+	ProxyKeys        int
+	RollupRows       int
+	ReconChecked     int
+	ReconSupplement  int
+	ReconSkipped     int
+	proxyBatch       []model.HourUsage
+	rollupRows       []DailyRow
+	proxyLastCreated int64
+	proxyMaxCreated  int64
+	rollupMaxDate    string
 }
 
 func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt) error {
@@ -160,9 +180,9 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 		app_type, model, input_tokens, output_tokens,
 		cache_read_tokens, cache_creation_tokens, total_cost_usd
 		FROM proxy_request_logs
-		WHERE app_type = 'claude'
-		  AND data_source = 'proxy'
-		  AND status_code >= 200 AND status_code < 300`
+		WHERE data_source = 'proxy'
+		  AND status_code >= 200 AND status_code < 300
+		  AND app_type NOT IN ('claude', 'codex', 'opencode')`
 	args := []interface{}{}
 	if cursorVal > 0 {
 		query += ` AND created_at > ?`
@@ -231,20 +251,9 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 		batch = append(batch, *row)
 	}
 	ext.ProxyKeys = len(batch)
-	if len(batch) > 0 {
-		if err := c.store.BulkUpsertHourUsage(batch); err != nil {
-			return fmt.Errorf("bulk upsert hour_usage: %w", err)
-		}
-	}
-
-	if lastCreated > 0 {
-		if err := c.store.SetCheckpoint(ckCursorProxyLogs, strconv.FormatInt(lastCreated, 10)); err != nil {
-			return fmt.Errorf("save proxy checkpoint: %w", err)
-		}
-		log.Printf("[collector] CCSwitch proxy checkpoint updated to %d", lastCreated)
-	} else if cursorVal == 0 && maxCreated > 0 {
-		_ = c.store.SetCheckpoint(ckCursorProxyLogs, strconv.FormatInt(maxCreated, 10))
-	}
+	ext.proxyBatch = batch
+	ext.proxyLastCreated = lastCreated
+	ext.proxyMaxCreated = maxCreated
 
 	return nil
 }
@@ -264,10 +273,11 @@ func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) 
 
 	query := `SELECT date, app_type, model, input_tokens, output_tokens,
 		cache_read_tokens, cache_creation_tokens, total_cost_usd
-		FROM usage_daily_rollups`
+		FROM usage_daily_rollups
+		WHERE app_type NOT IN ('claude', 'codex', 'opencode')`
 	args := []interface{}{}
 	if rollupDate != "" {
-		query += ` WHERE date > ?`
+		query += ` AND date > ?`
 		args = append(args, rollupDate)
 	}
 	query += ` ORDER BY date`
@@ -327,26 +337,30 @@ func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) 
 		return fmt.Errorf("rows iteration: %w", err)
 	}
 
+	var dailyRows []DailyRow
 	for _, row := range rollupAcc {
 		row.TotalTokens = row.InputTokens + row.OutputTokens + row.CacheCreationTokens + row.CacheReadTokens
 		if row.TotalTokens == 0 && row.CostUSD == 0 {
 			continue
 		}
 		ext.ReconChecked++
-		if err := c.store.UpsertDaily(row); err != nil {
-			log.Printf("[collector] CCSwitch rollup upsert error source=%s date=%s model=%s err=%v",
-				row.Source, row.UsageDate, row.Model, err)
-			continue
-		}
+		dailyRows = append(dailyRows, DailyRow{
+			UsageDate:      row.UsageDate,
+			Model:          row.Model,
+			InputTokens:    row.InputTokens,
+			OutputTokens:   row.OutputTokens,
+			CacheReadTokens: row.CacheReadTokens,
+			CacheWriteTokens: row.CacheCreationTokens,
+			ReasoningTokens: row.ReasoningOutputTokens,
+			CostUSD:        row.CostUSD,
+		})
 		ext.ReconSupplement++
 	}
 	ext.ReconSkipped = ext.ReconChecked - ext.ReconSupplement
+	ext.rollupRows = dailyRows
 
 	if maxDate > rollupDate {
-		if err := c.store.SetCheckpoint(ckRollupMaxDate, maxDate); err != nil {
-			return fmt.Errorf("save rollup checkpoint: %w", err)
-		}
-		log.Printf("[collector] CCSwitch rollup checkpoint updated to %s", maxDate)
+		ext.rollupMaxDate = maxDate
 	}
 
 	return nil

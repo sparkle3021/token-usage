@@ -80,7 +80,8 @@ export function compactCN(v) {
 }
 
 export function deltaPct(curr, prev) {
-  if (prev == null || prev === 0) return null;
+  if (prev == null) return null;
+  if (prev === 0) return curr > 0 ? Infinity : 0;
   return ((curr - prev) / prev) * 100;
 }
 

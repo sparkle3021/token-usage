@@ -240,14 +240,12 @@ func (c *OpenClawCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 				}
 				cost := pricing.CalculateCost(model, t)
 
-				if keepTimeEvent(rec.timestamp) {
-					events = append(events, EventRow{
-						EventKey:   fmt.Sprintf("%s:%s:%d", fp, rec.timestamp, rec.input+rec.output),
-						EventTime:  rec.timestamp, UsageDate: date, Model: model,
-						InputTokens: rec.input, OutputTokens: rec.output,
-						CacheReadTokens: rec.cacheRead, ReasoningTokens: rec.reasoning, CostUSD: cost,
-					})
-				}
+			events = append(events, EventRow{
+				EventKey:   fmt.Sprintf("%s:%s:%d", fp, rec.timestamp, rec.input+rec.output),
+				EventTime:  rec.timestamp, UsageDate: date, Model: model,
+				InputTokens: rec.input, OutputTokens: rec.output,
+				CacheReadTokens: rec.cacheRead, ReasoningTokens: rec.reasoning, CostUSD: cost,
+			})
 
 				dk := date + "::" + model
 				if _, ok := dailyMap[dk]; !ok {

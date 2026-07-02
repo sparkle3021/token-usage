@@ -1,5 +1,7 @@
 package collector
 
+import "token-dashboard/internal/model"
+
 // CachePersistence is an optional interface collectors can implement to
 // control when file fingerprints are persisted. The Engine calls
 // PersistCache after successfully writing data, and DiscardCache on failure.
@@ -15,6 +17,7 @@ type CollectResult struct {
 	Daily   []DailyRow
 	Session []SessionRow
 	Events  []EventRow
+	HourRows []model.HourUsage
 
 	// Cached is true when all data was served from cache and nothing changed.
 	// When true, Engine should skip SQL writes and preserve existing DB data.

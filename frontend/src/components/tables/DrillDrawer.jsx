@@ -37,7 +37,7 @@ export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
       filterFn = () => false;
     }
 
-    let totals, dates, values, sourceBreakdown, projectSet, modelBreakdown;
+    let totals, dates, values, sourceBreakdown, projectSet, modelBreakdown, matchingCount;
 
     if (kind === 'session' && timeRows) {
       // Use timeRows for project-level data (daily_usage has no project_path)
@@ -65,6 +65,7 @@ export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
         m.cost += t.costUSD || 0;
       }
       modelBreakdown = [...modelMap.values()].sort((a, b) => b.total - a.total);
+      matchingCount = dates.length || 0;
     } else {
       const matching = daily.filter(filterFn);
       totals = U.aggregateTotals(matching);
@@ -78,9 +79,10 @@ export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
       projectSet = new Set();
       for (const r of matching) if (r.projectPath) projectSet.add(r.projectPath);
       modelBreakdown = null;
+      matchingCount = matching.length;
     }
 
-    const count = kind === 'session' ? (dates.length || 0) : matching.length;
+    const count = matchingCount;
     return { kind, row, title, sub, totals, dates, values, count, sourceBreakdown, projectCount: projectSet.size, modelBreakdown };
   }, [drill, daily, timeRows]);
 

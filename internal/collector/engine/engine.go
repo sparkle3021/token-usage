@@ -166,8 +166,19 @@ func (e *Engine) SyncCCSwitch() (collector.CCSwitchStats, error) {
 	// Reset checkpoints to force full sync, then run synchronously
 	e.db.ResetCCSwitchCheckpoints()
 	e.ccSwitchCol.SetStore(e.db)
-	_, err := e.ccSwitchCol.Collect(context.Background(), &pricingEngine{e.pricing})
-	return e.ccSwitchCol.Stats(), err
+	result, err := e.ccSwitchCol.Collect(context.Background(), &pricingEngine{e.pricing})
+	if err != nil {
+		return e.ccSwitchCol.Stats(), err
+	}
+	// Write data through processCollector which uses a transaction
+	if !e.processCollector(result, e.ccSwitchCol) {
+		return e.ccSwitchCol.Stats(), fmt.Errorf("sync cc-switch: process failed")
+	}
+	// Rebuild daily from the hour data
+	if err := e.db.BuildDailyFromHourUsage(); err != nil {
+		return e.ccSwitchCol.Stats(), fmt.Errorf("rebuild daily: %w", err)
+	}
+	return e.ccSwitchCol.Stats(), nil
 }
 
 func (e *Engine) runCollection() {
@@ -337,6 +348,8 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 		return false
 	}
 
+	// Event-producing collectors: write time_usage → hour_usage.
+	// daily_usage is then rebuilt from hour_usage in BuildDailyFromHourUsage.
 	if len(filteredEvents) > 0 {
 		if err := e.db.BulkUpsertTimeUsageTx(tx, eventsToModel(result.Device, col.Source(), filteredEvents)); err != nil {
 			e.discardCollectorCache(col)
@@ -344,12 +357,19 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 				fmt.Sprintf("[%s] bulk time: %v", col.Source(), err), "go-collector:"+col.ID())
 			return false
 		}
-	}
-
-	// Bulk upsert daily rows directly for collectors that produce daily data without events.
-	// For collectors with events, the daily_usage is built from hour_usage at the end; this
-	// direct write handles collectors (e.g. OpenCode, Hermes) that only return daily aggregates.
-	if len(filteredDaily) > 0 {
+		// Build hour_usage from time_usage for affected dates
+		dateSeen := make(map[string]bool)
+		for _, r := range result.Daily {
+			if !dateSeen[r.UsageDate] {
+				dateSeen[r.UsageDate] = true
+				if err := e.db.BuildHourUsageFromTimeUsageTx(tx, result.Device, col.Source(), r.UsageDate); err != nil {
+					log.Printf("[engine] BuildHourUsageFromTimeUsage error source=%s date=%s err=%v",
+						col.Source(), r.UsageDate, err)
+				}
+			}
+		}
+	} else if len(filteredDaily) > 0 {
+		// Non-event collectors (e.g. Hermes, OpenCode): write daily directly
 		if err := e.db.BulkUpsertDailyTx(tx, dailyToModel(result.Device, col.Source(), filteredDaily)); err != nil {
 			e.discardCollectorCache(col)
 			e.db.RecordRun(result.Device, col.Source(), "error",
@@ -358,15 +378,13 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 		}
 	}
 
-	// Build hour_usage from time_usage for all dates in this collection run
-	dateSeen := make(map[string]bool)
-	for _, r := range result.Daily {
-		if !dateSeen[r.UsageDate] {
-			dateSeen[r.UsageDate] = true
-			if err := e.db.BuildHourUsageFromTimeUsageTx(tx, result.Device, col.Source(), r.UsageDate); err != nil {
-				log.Printf("[engine] BuildHourUsageFromTimeUsage error source=%s date=%s err=%v",
-					col.Source(), r.UsageDate, err)
-			}
+	// CC-Switch hour-level data: write directly to hour_usage within the transaction
+	if len(result.HourRows) > 0 {
+		if err := e.db.BulkUpsertHourUsageTx(tx, result.HourRows); err != nil {
+			e.discardCollectorCache(col)
+			e.db.RecordRun(result.Device, col.Source(), "error",
+				fmt.Sprintf("[%s] bulk hour: %v", col.Source(), err), "go-collector:"+col.ID())
+			return false
 		}
 	}
 
@@ -413,7 +431,7 @@ func (e *Engine) discardCollectorCache(col collector.Collector) {
 func sessionToModel(device, source string, rows []collector.SessionRow) []model.SessionUsage {
 	out := make([]model.SessionUsage, len(rows))
 	for i, r := range rows {
-		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
+		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens
 		out[i] = model.SessionUsage{
 			Device: device, Source: source, SessionID: r.SessionID,
 			LastActivity: r.LastActivity, ProjectPath: r.ProjectPath, Model: r.Model,
@@ -429,7 +447,7 @@ func sessionToModel(device, source string, rows []collector.SessionRow) []model.
 func dailyToModel(device, source string, rows []collector.DailyRow) []model.DailyUsage {
 	out := make([]model.DailyUsage, len(rows))
 	for i, r := range rows {
-		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
+		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens
 		out[i] = model.DailyUsage{
 			Device: device, Source: source, UsageDate: r.UsageDate, Model: r.Model,
 			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
@@ -444,7 +462,7 @@ func dailyToModel(device, source string, rows []collector.DailyRow) []model.Dail
 func eventsToModel(device, source string, rows []collector.EventRow) []model.TimeUsage {
 	out := make([]model.TimeUsage, len(rows))
 	for i, r := range rows {
-		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
+		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens
 		out[i] = model.TimeUsage{
 			Device: device, Source: source, EventKey: r.EventKey,
 			EventTime: r.EventTime, UsageDate: r.UsageDate, Model: r.Model,

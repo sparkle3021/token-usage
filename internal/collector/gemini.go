@@ -133,15 +133,13 @@ func (c *GeminiCollector) accumulate(ev geminiEvent,
 	}
 	cost := pricing.CalculateCost(model, t)
 
-	if keepTimeEvent(ev.timestamp) {
-		*events = append(*events, EventRow{
-			EventKey: fmt.Sprintf("%s:%s:%d", ev.sessionID, ev.timestamp, ev.input+ev.output),
-			EventTime: ev.timestamp, UsageDate: date, Model: model,
-			SessionID: ev.sessionID, ProjectPath: ev.sessionID,
-			InputTokens: ev.input, OutputTokens: ev.output,
-			CacheReadTokens: ev.cacheRead, ReasoningTokens: ev.reasoning, CostUSD: cost,
-		})
-	}
+	*events = append(*events, EventRow{
+		EventKey: fmt.Sprintf("%s:%s:%d", ev.sessionID, ev.timestamp, ev.input+ev.output),
+		EventTime: ev.timestamp, UsageDate: date, Model: model,
+		SessionID: ev.sessionID, ProjectPath: ev.sessionID,
+		InputTokens: ev.input, OutputTokens: ev.output,
+		CacheReadTokens: ev.cacheRead, ReasoningTokens: ev.reasoning, CostUSD: cost,
+	})
 
 	dk := date + "::" + model
 	if _, ok := dailyMap[dk]; !ok {

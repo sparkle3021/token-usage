@@ -26,7 +26,7 @@ function App() {
   const [page, setPage] = useState('dashboard');
 
   const setData = useCallback((data, tsData) => {
-    setM({ ...data, daily: data.daily || [], today: U.daysAgo(0), time: tsData.time || [] });
+    setM({ ...data, daily: data.daily || [], today: U.daysAgo(0), time: tsData.time || [], hour: tsData.hour || [] });
     setLoadError(null);
   }, []);
 
@@ -235,7 +235,7 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, onClearDat
             <KPI label="总 Token" value={U.compactCN(totals.totalTokens)} delta={U.deltaPct(totals.totalTokens, compareData.totals?.totalTokens)} spark={sparkValues} color="oklch(0.55 0.16 265)" />
             <KPI label="Input" value={U.compactCN(totals.inputTokens)} delta={U.deltaPct(totals.inputTokens, compareData.totals?.inputTokens)} spark={sparkBy('inputTokens')} color="oklch(0.62 0.13 240)" />
             <KPI label="Output" value={U.compactCN(totals.outputTokens)} delta={U.deltaPct(totals.outputTokens, compareData.totals?.outputTokens)} spark={sparkBy('outputTokens')} color="oklch(0.60 0.15 295)" />
-            <KPI label="Cache" value={U.compactCN(totals.cacheReadTokens)} sub={`${totals.cacheHitRate.toFixed(2)}% 命中`} delta={U.deltaPct(totals.cacheReadTokens, compareData.totals?.cacheReadTokens)} spark={sparkBy('cacheReadTokens')} color="oklch(0.65 0.11 200)" />
+            <KPI label="Cache" value={U.compactCN(totals.cacheReadTokens)} sub={`${totals.cacheHitRate.toFixed(2)}% 命中`} delta={U.deltaPct(totals.cacheReadTokens, compareData.totals?.cacheReadTokens)} subDelta={U.deltaPct(totals.cacheHitRate, compareData.totals?.cacheHitRate)} spark={sparkBy('cacheReadTokens')} color="oklch(0.65 0.11 200)" />
             <KPI label="Reasoning" value={U.compactCN(totals.reasoningTokens)} delta={U.deltaPct(totals.reasoningTokens, compareData.totals?.reasoningTokens)} spark={sparkBy('reasoningOutputTokens')} color="oklch(0.65 0.12 150)" />
             <KPI label="费用" value={`$${(totals.costUSD || 0).toFixed(2)}`} delta={U.deltaPct(totals.costUSD, compareData.totals?.costUSD)} spark={sparkBy('costUSD')} color="oklch(0.72 0.14 75)" />
           </div>
@@ -243,7 +243,7 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, onClearDat
           {/* Charts Row */}
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1 min-w-0">
-              <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={M.time} isHourly={f.rangeId === 'today'} />
+              <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={M.time} hourRows={M.hour} isHourly={f.rangeId === 'today'} />
             </div>
             <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-0 lg:relative">
               <div className="flex flex-col min-h-0 max-lg:h-auto lg:absolute lg:inset-0">
@@ -254,7 +254,7 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, onClearDat
 
           {/* Heatmap */}
           <Heatmap data={heatmapData} onSelect={setHeatmapDate} />
-          {heatmapDate && <HeatmapDrillDialog date={heatmapDate} daily={M.daily} timeRows={M.time} onClose={() => setHeatmapDate(null)} />}
+          {heatmapDate && <HeatmapDrillDialog date={heatmapDate} daily={M.daily} timeRows={M.time} hourRows={M.hour} onClose={() => setHeatmapDate(null)} />}
 
           <DrillDrawer drill={drill} daily={M.daily} timeRows={M.time} onClose={() => setDrill(null)} />
         </>
@@ -267,20 +267,38 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, onClearDat
 
 // ── KPI Card ──────────────────────────────────────────────────
 
-function KPI({ label, value, sub, delta, spark, color }) {
+function DeltaBadge({ value }) {
+  return (
+    <span className={`inline-flex items-center gap-0.5 font-semibold text-[11px] px-1 rounded ${value > 0.05 ? 'text-green-600 bg-green-50' : value < -0.05 ? 'text-red-500 bg-red-50' : 'text-muted-foreground bg-muted'}`}>
+      {value === Infinity ? '新增' : `${value > 0.05 ? '↑' : value < -0.05 ? '↓' : '·'} ${Math.abs(value).toFixed(1)}%`}
+    </span>
+  );
+}
+
+function KPI({ label, value, sub, delta, subDelta, spark, color }) {
   return (
     <Card className="relative overflow-hidden">
       <CardContent className="pt-4 px-4 pb-4">
         <div className="text-[11px] text-muted-foreground font-medium mb-1.5">{label}</div>
-        <div className="text-xl font-semibold tabular-nums leading-tight">{value}</div>
-        <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
-          {delta != null && (
-            <span className={`inline-flex items-center gap-0.5 font-semibold text-[11px] px-1 rounded ${delta > 0.05 ? 'text-green-600 bg-green-50' : delta < -0.05 ? 'text-red-500 bg-red-50' : 'text-muted-foreground bg-muted'}`}>
-              {delta > 0.05 ? '↑' : delta < -0.05 ? '↓' : '·'} {Math.abs(delta).toFixed(1)}%
-            </span>
-          )}
-          <span className="truncate">{sub || ''}</span>
-        </div>
+        {sub ? (
+          <>
+            <div className="flex items-baseline gap-3">
+              <div className="text-xl font-semibold tabular-nums leading-tight">{value}</div>
+              {delta != null && <DeltaBadge value={delta} />}
+            </div>
+            <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+              <span className="truncate">{sub}</span>
+              {subDelta != null && <DeltaBadge value={subDelta} />}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-xl font-semibold tabular-nums leading-tight">{value}</div>
+            <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+              {delta != null && <DeltaBadge value={delta} />}
+            </div>
+          </>
+        )}
         {spark && spark.length > 1 && <SparkLine values={spark} color={color} />}
       </CardContent>
     </Card>

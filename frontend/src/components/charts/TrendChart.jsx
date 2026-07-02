@@ -7,18 +7,37 @@ import SourceIcon from '../SourceIcon.jsx';
 
 const MODES = [{ id: 'stacked', label: '堆叠' }, { id: 'line', label: '折线' }, { id: 'bar', label: '柱状' }];
 
-export default function TrendChart({ rows, dates, sources, mode, onModeChange, totals, timeRows, isHourly }) {
+export default function TrendChart({ rows, dates, sources, mode, onModeChange, totals, timeRows, hourRows, isHourly }) {
   const byKey = useMemo(() => {
     const m = new Map();
-    if (isHourly && timeRows?.length) {
+    if (isHourly && (timeRows?.length || hourRows?.length)) {
       const todayStr = dates[0];
-      for (const r of timeRows) {
+
+      // 1) event-level time usage (Claude Code, Codex, Gemini)
+      for (const r of timeRows || []) {
         if (r.usageDate !== todayStr) continue;
-        // event_time is UTC ISO string, parse to local hour
         const d = new Date(r.eventTime);
         if (isNaN(d.getTime())) continue;
         const hour = String(d.getHours()).padStart(2, '0');
         const key = `${hour}::${r.source}`;
+        m.set(key, (m.get(key) || 0) + r.totalTokens);
+      }
+
+      // 2) hour-level usage — fill hours not already covered by timeRows
+      for (const r of hourRows || []) {
+        if (r.usageDate !== todayStr) continue;
+        const hour = String(r.hour).padStart(2, '0');
+        const key = `${hour}::${r.source}`;
+        if (m.has(key)) continue;
+        m.set(key, (m.get(key) || 0) + r.totalTokens);
+      }
+
+      // 3) daily-only sources — put into current hour
+      const currentHour = String(new Date().getHours()).padStart(2, '0');
+      for (const r of rows) {
+        if (r.usageDate !== todayStr) continue;
+        const key = `${currentHour}::${r.source}`;
+        if (m.has(key)) continue;
         m.set(key, (m.get(key) || 0) + r.totalTokens);
       }
     } else {
@@ -28,10 +47,12 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
       }
     }
     return m;
-  }, [rows, timeRows, isHourly, dates]);
+  }, [rows, timeRows, hourRows, isHourly, dates]);
+
+  const hasHourly = isHourly && (!!timeRows?.length || !!hourRows?.length);
 
   const chartData = useMemo(() => {
-    if (isHourly && timeRows?.length) {
+    if (hasHourly) {
       return Array.from({ length: 24 }, (_, h) => {
         const hourStr = String(h).padStart(2, '0');
         const pt = { hour: `${hourStr}:00` };
@@ -44,9 +65,7 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
       for (const s of sources) pt[s] = byKey.get(`${d}::${s}`) || 0;
       return pt;
     });
-  }, [dates, sources, byKey, isHourly, timeRows]);
-
-  const hasHourly = isHourly && !!timeRows?.length;
+  }, [dates, sources, byKey, hasHourly]);
   const palette = sources.map(s => U.getSourceColor(s));
 
   return (

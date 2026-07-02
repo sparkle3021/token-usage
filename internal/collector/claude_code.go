@@ -19,8 +19,6 @@ const (
 	claudeCacheVersion = 1
 )
 
-var claudeEventCutoff = time.Now().AddDate(0, 0, -90).UnixMilli()
-
 type ClaudeCodeCollector struct {
 	cache *ParseCache
 }
@@ -136,16 +134,14 @@ func (c *ClaudeCodeCollector) scanAndParse(dir string,
 			workspaceKey := workspaceKeyFromPath(dir, filePath)
 			workspaceLabel := decodeWorkspaceLabel(workspaceKey)
 
-			if keepTimeEvent(rec.timestamp) {
-				*events = append(*events, EventRow{
-					EventKey:   fmt.Sprintf("%s:%s:%s:%d", filePath, rec.timestamp, model, rec.input+rec.output),
-					EventTime: rec.timestamp, UsageDate: date, Model: model,
-					SessionID: strings.TrimSuffix(filepath.Base(filePath), ".jsonl"), ProjectPath: workspaceLabel,
-					InputTokens: rec.input, OutputTokens: rec.output,
-					CacheReadTokens: rec.cacheRead, CacheWriteTokens: rec.cacheWrite,
-					ReasoningTokens: rec.reasoning, CostUSD: cost,
-				})
-			}
+			*events = append(*events, EventRow{
+				EventKey:   fmt.Sprintf("%s:%s:%s:%d", filePath, rec.timestamp, model, rec.input+rec.output),
+				EventTime: rec.timestamp, UsageDate: date, Model: model,
+				SessionID: strings.TrimSuffix(filepath.Base(filePath), ".jsonl"), ProjectPath: workspaceLabel,
+				InputTokens: rec.input, OutputTokens: rec.output,
+				CacheReadTokens: rec.cacheRead, CacheWriteTokens: rec.cacheWrite,
+				ReasoningTokens: rec.reasoning, CostUSD: cost,
+			})
 
 			dk := date + "::" + model
 			if _, ok := dailyMap[dk]; !ok {
@@ -315,14 +311,6 @@ func unhex(c byte) int {
 		return int(c - 'A' + 10)
 	}
 	return -1
-}
-
-func keepTimeEvent(timestamp string) bool {
-	t, err := time.Parse(time.RFC3339, timestamp)
-	if err != nil {
-		return false
-	}
-	return t.UnixMilli() >= claudeEventCutoff
 }
 
 // ---------------------------------------------------------------------------
