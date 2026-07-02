@@ -97,10 +97,10 @@ func (c *OpenCodeCollector) Source() string { return "OpenCode" }
 
 func opencodeDBPath() string {
 	if env := os.Getenv("OPENCODE_DATA_DIR"); env != "" {
-		return filepath.Join(env, "state.db")
+		return filepath.Join(env, "opencode.db")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".local", "share", "opencode", "state.db")
+	return filepath.Join(home, ".local", "share", "opencode", "opencode.db")
 }
 
 func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*CollectResult, error) {
@@ -120,32 +120,60 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
 
-	rows, err := db.Query(`SELECT date, model, input_tokens, output_tokens, cached_tokens FROM usage`)
+	rows, err := db.Query(`SELECT time_created, model, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, cost FROM session WHERE model IS NOT NULL AND model != ''`)
 	if err != nil {
-		rows, err = db.Query(`SELECT date, model, input, output, cache_read FROM token_usage`)
-	}
-	if err == nil {
+		log.Printf("[collector] OpenCode session query error: %v", err)
+	} else {
 		defer rows.Close()
 		for rows.Next() {
-			var date, model string
-			var input, output, cached int64
-			rows.Scan(&date, &model, &input, &output, &cached)
-			model = NormalizeModelForGrouping(model)
+			var timeCreated int64
+			var modelJSON string
+			var inp, out, reas, cr, cw int64
+			var cost float64
+			if err := rows.Scan(&timeCreated, &modelJSON, &inp, &out, &reas, &cr, &cw, &cost); err != nil {
+				continue
+			}
+
+			modelID := parseModelID(modelJSON)
+			if modelID == "" {
+				continue
+			}
+			modelID = NormalizeModelForGrouping(modelID)
+			if modelID == "" {
+				modelID = "unknown"
+			}
+
+			date := time.UnixMilli(timeCreated).Format("2006-01-02")
+
 			t := struct{ Input, Output, CacheRead, CacheWrite, Reasoning int64 }{
-				input, output, cached, 0, 0,
+				inp, out, cr, cw, reas,
 			}
-			cost := pricing.CalculateCost(model, t)
-			dk := date + "::" + model
+			calcCost := pricing.CalculateCost(modelID, t)
+			if calcCost == 0 && cost > 0 {
+				calcCost = cost
+			}
+
+			dk := date + "::" + modelID
 			if _, ok := dailyMap[dk]; !ok {
-				dailyMap[dk] = &dailyAgg{date: date, model: model}
+				dailyMap[dk] = &dailyAgg{date: date, model: modelID}
 			}
-			dailyMap[dk].add(t.Input, t.Output, t.CacheRead, 0, 0, cost)
+			dailyMap[dk].add(t.Input, t.Output, t.CacheRead, t.CacheWrite, t.Reasoning, calcCost)
 		}
 	}
 
 	log.Printf("[collector] OpenCode done daily=%d", len(dailyMap))
 
 	return buildResult("opencode", "OpenCode", dailyMap, sessionMap, nil), nil
+}
+
+func parseModelID(jsonStr string) string {
+	var obj struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
+		return ""
+	}
+	return obj.ID
 }
 
 // ---------------------------------------------------------------------------

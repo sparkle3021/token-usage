@@ -102,6 +102,17 @@ func (e *Engine) Collectors() []collector.Collector {
 	return e.collectors
 }
 
+// ClearCollectorCaches clears in-memory file fingerprint caches so the next
+// Collect() call re-parses all source files instead of returning Cached=true.
+func (e *Engine) ClearCollectorCaches() {
+	for _, col := range e.collectors {
+		if s, ok := col.(interface{ ClearCache() }); ok {
+			s.ClearCache()
+		}
+	}
+	log.Printf("[engine] ClearCollectorCaches ok")
+}
+
 func (e *Engine) emit(event string, data interface{}) {
 	if e.onEvent != nil {
 		e.onEvent(event, data)
@@ -335,6 +346,18 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 		}
 	}
 
+	// Bulk upsert daily rows directly for collectors that produce daily data without events.
+	// For collectors with events, the daily_usage is built from hour_usage at the end; this
+	// direct write handles collectors (e.g. OpenCode, Hermes) that only return daily aggregates.
+	if len(filteredDaily) > 0 {
+		if err := e.db.BulkUpsertDailyTx(tx, dailyToModel(result.Device, col.Source(), filteredDaily)); err != nil {
+			e.discardCollectorCache(col)
+			e.db.RecordRun(result.Device, col.Source(), "error",
+				fmt.Sprintf("[%s] bulk daily: %v", col.Source(), err), "go-collector:"+col.ID())
+			return false
+		}
+	}
+
 	// Build hour_usage from time_usage for all dates in this collection run
 	dateSeen := make(map[string]bool)
 	for _, r := range result.Daily {
@@ -394,6 +417,21 @@ func sessionToModel(device, source string, rows []collector.SessionRow) []model.
 		out[i] = model.SessionUsage{
 			Device: device, Source: source, SessionID: r.SessionID,
 			LastActivity: r.LastActivity, ProjectPath: r.ProjectPath, Model: r.Model,
+			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
+			CacheCreationTokens: r.CacheWriteTokens, CacheReadTokens: r.CacheReadTokens,
+			ReasoningOutputTokens: r.ReasoningTokens, TotalTokens: total, CostUSD: r.CostUSD,
+		}
+	}
+	return out
+}
+
+// dailyToModel converts collector DailyRow to model.DailyUsage slice.
+func dailyToModel(device, source string, rows []collector.DailyRow) []model.DailyUsage {
+	out := make([]model.DailyUsage, len(rows))
+	for i, r := range rows {
+		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens + r.ReasoningTokens
+		out[i] = model.DailyUsage{
+			Device: device, Source: source, UsageDate: r.UsageDate, Model: r.Model,
 			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
 			CacheCreationTokens: r.CacheWriteTokens, CacheReadTokens: r.CacheReadTokens,
 			ReasoningOutputTokens: r.ReasoningTokens, TotalTokens: total, CostUSD: r.CostUSD,

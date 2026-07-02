@@ -342,10 +342,19 @@ type batchExecer interface {
 }
 
 func (m *Manager) BulkUpsertDaily(rows []model.DailyUsage) error {
+	return m.bulkUpsertDailyExec(m.db, rows)
+}
+
+// BulkUpsertDailyTx is like BulkUpsertDaily but uses the given transaction.
+func (m *Manager) BulkUpsertDailyTx(tx *sql.Tx, rows []model.DailyUsage) error {
+	return m.bulkUpsertDailyExec(tx, rows)
+}
+
+func (m *Manager) bulkUpsertDailyExec(ex execer, rows []model.DailyUsage) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	return bulkExec(m.db, rows, bulkBatchSize, func(batch []model.DailyUsage) (string, []interface{}) {
+	return bulkExec(ex, rows, bulkBatchSize, func(batch []model.DailyUsage) (string, []interface{}) {
 		var sqlBuf strings.Builder
 		sqlBuf.WriteString(`INSERT INTO daily_usage (device,source,usage_date,model,
 			input_tokens,output_tokens,cache_creation_tokens,cache_read_tokens,
@@ -644,12 +653,12 @@ func (m *Manager) BuildDailyFromHourUsage() error {
 		FROM hour_usage
 		GROUP BY device, source, usage_date, model
 		ON CONFLICT(device, source, usage_date, model) DO UPDATE SET
-			input_tokens=excluded.input_tokens,
-			output_tokens=excluded.output_tokens,
-			cache_creation_tokens=excluded.cache_creation_tokens,
-			cache_read_tokens=excluded.cache_read_tokens,
-			reasoning_output_tokens=excluded.reasoning_output_tokens,
-			total_tokens=excluded.total_tokens,
+			input_tokens=MAX(excluded.input_tokens, daily_usage.input_tokens),
+			output_tokens=MAX(excluded.output_tokens, daily_usage.output_tokens),
+			cache_creation_tokens=MAX(excluded.cache_creation_tokens, daily_usage.cache_creation_tokens),
+			cache_read_tokens=MAX(excluded.cache_read_tokens, daily_usage.cache_read_tokens),
+			reasoning_output_tokens=MAX(excluded.reasoning_output_tokens, daily_usage.reasoning_output_tokens),
+			total_tokens=MAX(excluded.total_tokens, daily_usage.total_tokens),
 			cost_usd=CASE
 				WHEN daily_usage.usage_date < date('now','localtime') THEN daily_usage.cost_usd
 				ELSE excluded.cost_usd
@@ -1067,6 +1076,35 @@ func (m *Manager) Exec(query string, args ...any) (sql.Result, error) {
 		log.Printf("[db] Exec ok rows=%d elapsed=%v", n, time.Since(start))
 	}
 	return result, err
+}
+
+// ClearAllUsageData deletes all user usage data and collection history,
+// while preserving app_config settings. Returns a summary of deleted rows.
+func (m *Manager) ClearAllUsageData() error {
+	start := time.Now()
+	tx, err := m.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	tables := []string{"daily_usage", "hour_usage", "time_usage", "session_usage", "collection_runs", "parse_cache"}
+	var total int64
+	for _, table := range tables {
+		result, err := tx.Exec(`DELETE FROM ` + table)
+		if err != nil {
+			return fmt.Errorf("delete %s: %w", table, err)
+		}
+		n, _ := result.RowsAffected()
+		total += n
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	log.Printf("[db] ClearAllUsageData ok deleted_total=%d elapsed=%v", total, time.Since(start))
+	return nil
 }
 
 // ---------------------------------------------------------------------------

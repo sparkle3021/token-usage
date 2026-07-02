@@ -4,11 +4,11 @@ import {
 } from '@/components/ui/dialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
-import { SettingsIcon } from 'lucide-react';
+import { SettingsIcon, TriangleAlertIcon } from 'lucide-react';
 
 const DEFAULTS = { autoSyncMinutes: 5, ccSwitchDBPath: '', ccSwitchEnabled: false, ccSwitchAutoSync: false };
 
-export default function SettingsDialog({ onSettingsChange }) {
+export default function SettingsDialog({ onSettingsChange, onClear }) {
   const [open, setOpen] = useState(false);
   const [cfg, setCfg] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -65,6 +65,24 @@ export default function SettingsDialog({ onSettingsChange }) {
 
   const [pricingUpdating, setPricingUpdating] = useState(false);
   const [pricingMsg, setPricingMsg] = useState(null);
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearMsg, setClearMsg] = useState(null);
+
+  const clearAll = useCallback(async () => {
+    setClearing(true);
+    setClearMsg(null);
+    try {
+      await window.go.main.App.ClearAllData();
+      setClearMsg({ type: 'success', text: '已清除所有历史数据' });
+      setClearConfirm(false);
+      if (onClear) onClear();
+    } catch (err) {
+      setClearMsg({ type: 'error', text: '清除失败：' + String(err) });
+    } finally {
+      setClearing(false);
+    }
+  }, [onClear]);
 
   const updatePricing = useCallback(async () => {
     setPricingUpdating(true);
@@ -153,6 +171,31 @@ export default function SettingsDialog({ onSettingsChange }) {
                 {pricingMsg && (
                   <p className={`text-xs mt-2 ${pricingMsg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
                     {pricingMsg.text}
+                  </p>
+                )}
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="text-xs font-medium text-muted-foreground mb-3 text-red-500">危险操作</h4>
+                {!clearConfirm ? (
+                  <Button size="sm" variant="outline" className="h-8 text-xs border-red-300 text-red-500 hover:bg-red-50" onClick={() => { setClearConfirm(true); setClearMsg(null); }}>
+                    <TriangleAlertIcon className="size-3 mr-1" />
+                    清除所有历史数据
+                  </Button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-red-500 font-medium">确认清除所有用量数据、采集记录和缓存？此操作不可撤销。</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setClearConfirm(false)} disabled={clearing}>取消</Button>
+                      <Button size="sm" className="h-8 text-xs bg-red-500 hover:bg-red-600 text-white" onClick={clearAll} disabled={clearing}>
+                        {clearing ? '清除中…' : '确认清除'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {clearMsg && (
+                  <p className={`text-xs mt-2 ${clearMsg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                    {clearMsg.text}
                   </p>
                 )}
               </div>

@@ -262,6 +262,23 @@ func (a *App) GetAutoSyncInterval() int {
 	return a.autoSyncMinutes
 }
 
+// ClearAllData deletes all usage data and collection history.
+func (a *App) ClearAllData() error {
+	if a.db == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+	if err := a.db.ClearAllUsageData(); err != nil {
+		log.Printf("[app] ClearAllData error: %v", err)
+		return fmt.Errorf("清除失败: %v", err)
+	}
+	// Clear in-memory caches so collectors re-parse files on next sync
+	if a.engine != nil {
+		a.engine.ClearCollectorCaches()
+	}
+	log.Printf("[app] ClearAllData ok")
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // Settings API
 // ---------------------------------------------------------------------------

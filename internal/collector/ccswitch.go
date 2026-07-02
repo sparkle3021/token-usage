@@ -109,12 +109,6 @@ func (c *CCSwitchCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 		return nil, fmt.Errorf("rollup import: %w", err)
 	}
 
-	if ext.ProxyKeys > 0 {
-		if err := c.store.BuildDailyFromHourUsage(); err != nil {
-			return nil, fmt.Errorf("build daily from hour_usage: %w", err)
-		}
-	}
-
 	log.Printf("[collector] CCSwitch done proxy_rows=%d proxy_keys=%d rollup_rows=%d recon_checked=%d recon_supplement=%d recon_skipped=%d elapsed=%v",
 		ext.ProxyRows, ext.ProxyKeys, ext.RollupRows, ext.ReconChecked, ext.ReconSupplement, ext.ReconSkipped, time.Since(start))
 

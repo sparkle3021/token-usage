@@ -25,19 +25,23 @@ function App() {
   const pollingRef = useRef(null);
   const [page, setPage] = useState('dashboard');
 
-  const loadData = useCallback(() => {
-    setRefreshing(true);
-    Promise.all([
+  const setData = useCallback((data, tsData) => {
+    setM({ ...data, daily: data.daily || [], today: U.daysAgo(0), time: tsData.time || [] });
+    setLoadError(null);
+  }, []);
+
+  const fetchData = useCallback((silent) => {
+    if (!silent) setRefreshing(true);
+    return Promise.all([
       window.go.main.App.GetDashboardData(),
       window.go.main.App.GetTimeSeriesData()
     ])
-      .then(([data, tsData]) => {
-        setM({ ...data, daily: data.daily || [], today: U.daysAgo(0), time: tsData.time || [] });
-        setLoadError(null);
-      })
+      .then(([data, tsData]) => setData(data, tsData))
       .catch(err => setLoadError(String(err)))
-      .finally(() => setRefreshing(false));
-  }, []);
+      .finally(() => { if (!silent) setRefreshing(false); });
+  }, [setData]);
+
+  const loadData = useCallback(() => fetchData(false), [fetchData]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -101,10 +105,10 @@ function App() {
     </div>
   );
 
-  return <Dashboard M={M} refreshing={refreshing} collecting={collecting} onRefresh={loadData} onCollect={runCollect} page={page} setPage={setPage} />;
+  return <Dashboard M={M} refreshing={refreshing} collecting={collecting} onRefresh={loadData} onCollect={runCollect} onClearData={() => fetchData(true)} page={page} setPage={setPage} />;
 }
 
-function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, page, setPage }) {
+function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, onClearData, page, setPage }) {
   const defaults = { rangeId: 'today', startDate: U.daysAgo(0), endDate: U.daysAgo(0), sources: new Set(), devices: new Set(), models: new Set(), compare: true };
   const [f, setF] = useState(defaults);
   const [trendMode, setTrendMode] = useState('stacked');
@@ -195,7 +199,7 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, page, setP
             {collecting ? '同步中' : '同步'}
           </Button>
           <ImportDialog onRefresh={onRefresh} />
-          <SettingsDialog onSettingsChange={handleSettingsChange} />
+          <SettingsDialog onSettingsChange={handleSettingsChange} onClear={onClearData} />
         </div>
       </div>
 
