@@ -144,7 +144,63 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, onClearDat
     return m;
   }, [filtered]);
 
-  const sparkValues = useMemo(() => dates.map(d => dailyMap.get(d) || 0), [dates, dailyMap]);
+  const isHourly = f.rangeId === 'today';
+
+  const hourlySpark = useMemo(() => {
+    if (!isHourly) return null;
+    const todayStr = dates[0];
+    const hd = Array.from({ length: 24 }, () => ({ total: 0, input: 0, output: 0, cacheRd: 0, reason: 0, cost: 0 }));
+
+    for (const r of M.time || []) {
+      if (r.usageDate !== todayStr) continue;
+      const d = new Date(r.eventTime);
+      if (isNaN(d.getTime())) continue;
+      const h = d.getHours();
+      hd[h].total += r.totalTokens || 0; hd[h].input += r.inputTokens || 0;
+      hd[h].output += r.outputTokens || 0; hd[h].cacheRd += r.cacheReadTokens || 0;
+      hd[h].reason += r.reasoningOutputTokens || 0; hd[h].cost += r.costUSD || 0;
+    }
+
+    const covered = new Set((M.time || []).filter(r => r.usageDate === todayStr).map(r => r.source));
+    for (const r of M.hour || []) {
+      if (r.usageDate !== todayStr || covered.has(r.source)) continue;
+      const h = r.hour;
+      hd[h].total += r.totalTokens || 0; hd[h].input += r.inputTokens || 0;
+      hd[h].output += r.outputTokens || 0; hd[h].cacheRd += r.cacheReadTokens || 0;
+      hd[h].reason += r.reasoningOutputTokens || 0; hd[h].cost += r.costUSD || 0;
+      covered.add(r.source);
+    }
+
+    const curHour = new Date().getHours();
+    for (const r of filtered) {
+      if (r.usageDate !== todayStr || covered.has(r.source)) continue;
+      hd[curHour].total += r.totalTokens || 0; hd[curHour].input += r.inputTokens || 0;
+      hd[curHour].output += r.outputTokens || 0; hd[curHour].cacheRd += r.cacheReadTokens || 0;
+      hd[curHour].reason += r.reasoningOutputTokens || 0; hd[curHour].cost += r.costUSD || 0;
+      covered.add(r.source);
+    }
+
+    return {
+      total: hd.map(h => h.total), input: hd.map(h => h.input),
+      output: hd.map(h => h.output), cacheRead: hd.map(h => h.cacheRd),
+      reasoning: hd.map(h => h.reason), cost: hd.map(h => h.cost),
+    };
+  }, [isHourly, dates, M.time, M.hour, filtered]);
+
+  const sparkValues = useMemo(
+    () => hourlySpark ? hourlySpark.total : dates.map(d => dailyMap.get(d) || 0),
+    [hourlySpark, dates, dailyMap],
+  );
+
+  const sparkBy = useMemo(() => (key) => {
+    if (hourlySpark) {
+      const m = { totalTokens: 'total', inputTokens: 'input', outputTokens: 'output', cacheReadTokens: 'cacheRead', reasoningOutputTokens: 'reasoning', costUSD: 'cost' };
+      return hourlySpark[m[key]] || hourlySpark.total;
+    }
+    const m = new Map();
+    for (const r of filtered) m.set(r.usageDate, (m.get(r.usageDate) || 0) + (r[key] || 0));
+    return dates.map(d => m.get(d) || 0);
+  }, [hourlySpark, filtered, dates]);
 
   const heatmapData = useMemo(() => {
     const m = new Map();
@@ -154,12 +210,6 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, onClearDat
     }
     return [...m.entries()].map(([date, count]) => ({ date, count }));
   }, [M.daily]);
-
-  const sparkBy = useMemo(() => (key) => {
-    const m = new Map();
-    for (const r of filtered) m.set(r.usageDate, (m.get(r.usageDate) || 0) + (r[key] || 0));
-    return dates.map(d => m.get(d) || 0);
-  }, [filtered, dates]);
 
   const presentSources = useMemo(() => Array.from(f.sources.size ? f.sources : new Set(allSources)), [f.sources, allSources]);
 
@@ -259,7 +309,7 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, onClearDat
           <DrillDrawer drill={drill} daily={M.daily} timeRows={M.time} onClose={() => setDrill(null)} />
         </>
       ) : (
-        <TablePage M={M} onRefresh={loadData} />
+        <TablePage M={M} onRefresh={onRefresh} />
       )}
     </div>
   );
@@ -270,7 +320,7 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, onClearDat
 function DeltaBadge({ value }) {
   return (
     <span className={`inline-flex items-center gap-0.5 font-semibold text-[11px] px-1 rounded ${value > 0.05 ? 'text-green-600 bg-green-50' : value < -0.05 ? 'text-red-500 bg-red-50' : 'text-muted-foreground bg-muted'}`}>
-      {value === Infinity ? '新增' : `${value > 0.05 ? '↑' : value < -0.05 ? '↓' : '·'} ${Math.abs(value).toFixed(1)}%`}
+      {`${value > 0.05 ? '↑' : value < -0.05 ? '↓' : '·'} ${Math.abs(value).toFixed(1)}%`}
     </span>
   );
 }
@@ -313,7 +363,7 @@ function SparkLine({ values, color }) {
   return (
     <svg className="absolute right-0 bottom-0 w-full pointer-events-none opacity-20" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ height: 28 }}>
       <path d={d + ` L${w},${h} L0,${h} Z`} fill={color} opacity="0.12" />
-      <path d={d} fill="none" stroke={color} strokeWidth="1.5" />
+      <path d={d} fill="none" stroke={color} strokeWidth="1" />
     </svg>
   );
 }

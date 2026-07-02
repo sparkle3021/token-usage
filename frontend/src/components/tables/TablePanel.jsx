@@ -25,14 +25,17 @@ export default function TablePanel({ daily = [], sessions = [], runs = [], onDri
   const byModel = useMemo(() => {
     const m = new Map();
     for (const r of (daily || [])) {
-      if (!r.source || !r.model) continue;
-      const k = `${r.source}::${r.model}`;
-      if (!m.has(k)) m.set(k, { source: r.source, model: r.model, total: 0, input: 0, output: 0, cache: 0, cost: 0, days: new Set() });
-      const x = m.get(k);
+      if (!r.model) continue;
+      if (!m.has(r.model)) m.set(r.model, { model: r.model, total: 0, input: 0, output: 0, cache: 0, cost: 0, days: new Set(), sources: new Map() });
+      const x = m.get(r.model);
       x.total += r.totalTokens || 0; x.input += r.inputTokens || 0; x.output += r.outputTokens || 0; x.cache += r.cacheReadTokens || 0; x.cost += r.costUSD || 0;
       if (r.usageDate) x.days.add(r.usageDate);
+      if (r.source) x.sources.set(r.source, (x.sources.get(r.source) || 0) + (r.totalTokens || 0));
     }
-    return [...m.values()].map(x => ({ ...x, dayCount: x.days.size }));
+    return [...m.values()].map(x => {
+      const srcArr = [...x.sources.entries()].map(([source, total]) => ({ source, total })).sort((a, b) => b.total - a.total);
+      return { ...x, sources: srcArr, source: srcArr[0]?.source || '', dayCount: x.days.size };
+    });
   }, [daily]);
 
   const tabs = [
@@ -125,8 +128,7 @@ function SourceTable({ rows, search, onDrill, fullHeight }) {
 
 function ModelTable({ rows, search, onDrill, fullHeight }) {
   const cols = [
-    { field: 'source', label: '来源', render: r => <SourceBadgeLabel s={r.source} /> },
-    { field: 'model', label: '模型', render: r => <span className="font-mono text-[11px]">{r.model}</span> },
+    { field: 'model', label: '模型', render: r => <span className="inline-flex items-center gap-1.5 font-mono text-[11px]">{U.getModelIconUrl(r.model) && <img src={U.getModelIconUrl(r.model)} className="w-3.5 h-3.5 shrink-0" alt="" />}{r.model}</span> },
     { field: 'dayCount', label: '活跃天', right: true },
     { field: 'total', label: 'Total', right: true, render: r => <span className="font-semibold">{U.fmt.format(r.total || 0)}</span> },
     { field: 'input', label: 'Input', right: true, render: r => U.compact(r.input) },

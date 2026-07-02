@@ -27,6 +27,46 @@ export function getSourceIconUrl(name) {
   return SOURCE_ICONS[name] || null;
 }
 
+// ── Model Icons ───────────────────────────────────────────────
+
+import modelClaude from '../assets/models/claude.svg';
+import modelDeepseek from '../assets/models/deepseek.svg';
+import modelDoubao from '../assets/models/doubao.svg';
+import modelGemini from '../assets/models/gemini.svg';
+import modelGrok from '../assets/models/grok.svg';
+import modelHunyuan from '../assets/models/hunyuan.svg';
+import modelKimi from '../assets/models/kimi.svg';
+import modelMinimax from '../assets/models/minimax.svg';
+import modelOllama from '../assets/models/ollama.svg';
+import modelOpenai from '../assets/models/gpt.svg';
+import modelQwen from '../assets/models/qwen.svg';
+import modelXiaomi from '../assets/models/xiaomimimo.svg';
+import modelZhipu from '../assets/models/zhipu.svg';
+
+const MODEL_ICON_RULES = [
+  { test: n => /^claude\b/i.test(n), icon: modelClaude },
+  { test: n => /^deepseek\b/i.test(n), icon: modelDeepseek },
+  { test: n => /^doubao\b/i.test(n), icon: modelDoubao },
+  { test: n => /^gemini\b/i.test(n), icon: modelGemini },
+  { test: n => /^grok\b/i.test(n), icon: modelGrok },
+  { test: n => /^hunyuan\b|混元/i.test(n), icon: modelHunyuan },
+  { test: n => /^kimi\b/i.test(n), icon: modelKimi },
+  { test: n => /^minimax\b/i.test(n), icon: modelMinimax },
+  { test: n => /^ollama\b/i.test(n), icon: modelOllama },
+  { test: n => /^(gpt|o1|o3|chatgpt)\b/i.test(n), icon: modelOpenai },
+  { test: n => /^qwen\b|通义/i.test(n), icon: modelQwen },
+  { test: n => /^mimo\b|^xiaomi\b|小米/i.test(n), icon: modelXiaomi },
+  { test: n => /^glm\b|^zhipu\b|智谱/i.test(n), icon: modelZhipu },
+];
+
+export function getModelIconUrl(name) {
+  if (!name) return null;
+  for (const { test, icon } of MODEL_ICON_RULES) {
+    if (test(name)) return icon;
+  }
+  return null;
+}
+
 // ── Color palette ──────────────────────────────────────────────
 
 const PALETTE = {
@@ -80,8 +120,7 @@ export function compactCN(v) {
 }
 
 export function deltaPct(curr, prev) {
-  if (prev == null) return null;
-  if (prev === 0) return curr > 0 ? Infinity : 0;
+  if (prev == null || prev === 0) return null;
   return ((curr - prev) / prev) * 100;
 }
 

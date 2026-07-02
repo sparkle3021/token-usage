@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../ui/dialog.jsx';
 import { Card, CardContent } from '../../ui/card.jsx';
-import SourceBadge from '../../SourceBadge.jsx';
 import * as U from '../../../lib/utils.js';
 
 export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, onClose }) {
@@ -125,7 +124,7 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
                   <div key={m.model} className="flex items-center justify-between gap-3 px-2 py-1.5 rounded-md bg-muted/30">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <span className="text-xs text-muted-foreground w-4 shrink-0 text-right">#{i + 1}</span>
-                      <SourceBadge source={m.source} />
+                      {U.getModelIconUrl(m.model) && <img src={U.getModelIconUrl(m.model)} className="w-4 h-4 shrink-0" alt="" />}
                       <span className="text-xs font-medium truncate">{m.model}</span>
                     </div>
                     <div className="text-right shrink-0">

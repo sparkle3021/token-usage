@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card.jsx';
 import * as U from '../../lib/utils.js';
-import SourceBadge from '../SourceBadge.jsx';
 
 export default function TopModels({ rows, onDrillModel }) {
   const list = useMemo(() => {
@@ -37,13 +36,9 @@ export default function TopModels({ rows, onDrillModel }) {
           {list.map(m => (
             <div key={m.model} className="grid grid-cols-[1fr_auto] items-center gap-3 px-1.5 py-1.5 rounded-md cursor-pointer hover:bg-muted/50" onClick={() => onDrillModel?.(m)}>
               <div className="min-w-0">
-                <div className="text-xs font-medium truncate">{m.model}</div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <div className="flex items-center gap-1 min-w-0">
-                    <SourceBadge source={m.sources[0]?.source || m.source} />
-                    {m.sources.length > 1 && <span className="text-[10px] text-muted-foreground shrink-0">+{m.sources.length - 1}</span>}
-                  </div>
-                  <span className="text-[10px] text-muted-foreground shrink-0">{m.count} 条</span>
+                <div className="flex items-center gap-1.5">
+                  {U.getModelIconUrl(m.model) && <img src={U.getModelIconUrl(m.model)} className="w-4 h-4 shrink-0" alt="" />}
+                  <span className="text-xs font-medium truncate">{m.model}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden" style={{ width: `${(m.total / max) * 100}%` }}>
                   <div className="h-full flex">
