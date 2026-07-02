@@ -7,7 +7,7 @@ import SourceBadge from '../components/SourceBadge.jsx';
 import MultiSelect from '../components/MultiSelect.jsx';
 import * as U from '../lib/utils.js';
 
-export default function TablePage({ M }) {
+export default function TablePage({ M, onRefresh }) {
   const defaults = { rangeId: '30d', startDate: U.daysAgo(29), endDate: U.daysAgo(0), sources: new Set(), devices: new Set(), models: new Set() };
   const [f, setF] = useState(defaults);
   const [drill, setDrill] = useState(null);
@@ -25,6 +25,7 @@ export default function TablePage({ M }) {
       const days = { today: 1, '7d': 7, '14d': 14, '30d': 30, '90d': 90 }[rangeId] || 30;
       setF({ ...f, rangeId, startDate: U.daysAgo(days - 1), endDate: U.daysAgo(0) });
     }
+    if (onRefresh) onRefresh();
   };
 
   const ranges = [

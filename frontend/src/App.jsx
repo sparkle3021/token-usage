@@ -171,6 +171,7 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, onClearDat
       const days = { today: 1, '7d': 7, '14d': 14, '30d': 30, '90d': 90 }[rangeId] || 30;
       setF({ ...f, rangeId, startDate: U.daysAgo(days - 1), endDate: U.daysAgo(0) });
     }
+    onRefresh();
   };
 
   const lastSync = M.runs?.[0]?.collectedAt ? U.formatTs(M.runs[0].collectedAt) : '—';
@@ -258,7 +259,7 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, onClearDat
           <DrillDrawer drill={drill} daily={M.daily} timeRows={M.time} onClose={() => setDrill(null)} />
         </>
       ) : (
-        <TablePage M={M} />
+        <TablePage M={M} onRefresh={loadData} />
       )}
     </div>
   );
