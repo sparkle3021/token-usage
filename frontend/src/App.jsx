@@ -15,6 +15,7 @@ import TablePage from './pages/TablePage.jsx';
 import MultiSelect from './components/MultiSelect.jsx';
 import SettingsDialog from './components/SettingsDialog.jsx';
 import ImportDialog from './components/ImportDialog.jsx';
+import { EventsOn } from '../wailsjs/runtime/runtime.js';
 
 function App() {
   const [M, setM] = useState(null);
@@ -57,7 +58,7 @@ function App() {
 
   // Listen for collection completion events (auto-sync or manual)
   useEffect(() => {
-    const cancel = window.runtime.EventsOn('collection:done', () => loadData());
+    const cancel = EventsOn('collection:done', () => loadData());
     return () => cancel();
   }, [loadData]);
 
@@ -143,7 +144,10 @@ function Dashboard({ M, refreshing, collecting, onRefresh, onCollect, page, setP
 
   const heatmapData = useMemo(() => {
     const m = new Map();
-    for (const r of M.daily) m.set(r.usageDate, (m.get(r.usageDate) || 0) + (r.totalTokens || 0));
+    for (const r of M.daily) {
+      if (!r.totalTokens) continue;
+      m.set(r.usageDate, (m.get(r.usageDate) || 0) + (r.totalTokens || 0));
+    }
     return [...m.entries()].map(([date, count]) => ({ date, count }));
   }, [M.daily]);
 

@@ -231,6 +231,9 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 	var batch []model.HourUsage
 	for _, row := range acc {
 		row.TotalTokens = row.InputTokens + row.OutputTokens + row.CacheCreationTokens + row.CacheReadTokens
+		if row.TotalTokens == 0 && row.CostUSD == 0 {
+			continue
+		}
 		batch = append(batch, *row)
 	}
 	ext.ProxyKeys = len(batch)
@@ -332,6 +335,9 @@ func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) 
 
 	for _, row := range rollupAcc {
 		row.TotalTokens = row.InputTokens + row.OutputTokens + row.CacheCreationTokens + row.CacheReadTokens
+		if row.TotalTokens == 0 && row.CostUSD == 0 {
+			continue
+		}
 		ext.ReconChecked++
 		if err := c.store.UpsertDaily(row); err != nil {
 			log.Printf("[collector] CCSwitch rollup upsert error source=%s date=%s model=%s err=%v",

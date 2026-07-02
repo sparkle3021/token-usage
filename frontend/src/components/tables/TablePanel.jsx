@@ -140,10 +140,11 @@ function SessionTable({ rows, search, onDrill, fullHeight }) {
   const aggregated = useMemo(() => {
     const m = new Map();
     for (const r of (rows || [])) {
-      const key = r.sessionId;
+      const key = r.projectPath || r.sessionId;
       if (!key) continue;
-      if (!m.has(key)) m.set(key, { ...r, modelList: new Set() });
+      if (!m.has(key)) m.set(key, { ...r, modelList: new Set(), sessionCount: 0 });
       const agg = m.get(key);
+      agg.sessionCount++;
       // Merge token counts
       agg.inputTokens += r.inputTokens || 0;
       agg.outputTokens += r.outputTokens || 0;
@@ -163,6 +164,7 @@ function SessionTable({ rows, search, onDrill, fullHeight }) {
   const cols = [
     { field: 'source', label: '来源', width: 100, render: r => <SourceBadgeLabel s={r?.source} /> },
     { field: 'projectPath', label: '项目', render: r => <span className="font-mono text-[11px]" title={r?.sessionId}>{r?.projectPath || (r?.sessionId ? String(r.sessionId).split('/').slice(-1)[0] : '—')}</span> },
+    { field: 'sessionCount', label: '会话', right: true, render: r => <span className="text-muted-foreground text-[11px]">{r?.sessionCount || 1}</span> },
     { field: 'lastActivity', label: '活动', render: r => <span className="text-muted-foreground text-[11px]">{r?.lastActivity || '—'}</span> },
     { field: 'inputTokens', label: 'Input', right: true, render: r => U.compact(r?.inputTokens) },
     { field: 'outputTokens', label: 'Output', right: true, render: r => U.compact(r?.outputTokens) },

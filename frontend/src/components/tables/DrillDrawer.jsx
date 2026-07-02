@@ -30,33 +30,31 @@ export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
     } else if (kind === 'session') {
       title = row.projectPath || row.sessionId;
       sub = <div className="flex items-center gap-1"><SourceIcon name={row.source} className="w-3 h-3" />{row.source} · {row.device}</div>;
-      filterFn = r => r.source === row.source;
+      filterFn = null;
     } else {
       title = <div className="flex items-center gap-1.5"><SourceIcon name={row.source} className="w-4 h-4" />采集: {row.source}</div>;
       sub = U.formatTs(row.collectedAt);
       filterFn = () => false;
     }
 
-    const matching = daily.filter(filterFn);
-    const totals = U.aggregateTotals(matching);
-    const byDate = new Map();
-    for (const r of matching) byDate.set(r.usageDate, (byDate.get(r.usageDate) || 0) + (r.totalTokens || 0));
-    const dates = [...byDate.keys()].sort();
-    const values = dates.map(d => byDate.get(d));
+    let totals, dates, values, sourceBreakdown, projectSet, modelBreakdown;
 
-    const srcMap = new Map();
-    for (const r of matching) srcMap.set(r.source, (srcMap.get(r.source) || 0) + (r.totalTokens || 0));
-    const sourceBreakdown = [...srcMap.entries()].map(([source, total]) => ({ source, total })).sort((a, b) => b.total - a.total);
-
-    const projectSet = new Set();
-    for (const r of matching) if (r.projectPath) projectSet.add(r.projectPath);
-
-    let modelBreakdown = null;
     if (kind === 'session' && timeRows) {
+      // Use timeRows for project-level data (daily_usage has no project_path)
+      const proj = row.projectPath;
+      const projRows = timeRows.filter(t => t.projectPath === proj);
+      totals = U.aggregateTotals(projRows);
+      const byDate = new Map();
+      for (const r of projRows) byDate.set(r.usageDate, (byDate.get(r.usageDate) || 0) + (r.totalTokens || 0));
+      dates = [...byDate.keys()].sort();
+      values = dates.map(d => byDate.get(d));
+      const srcMap = new Map();
+      for (const r of projRows) srcMap.set(r.source, (srcMap.get(r.source) || 0) + (r.totalTokens || 0));
+      sourceBreakdown = [...srcMap.entries()].map(([source, total]) => ({ source, total })).sort((a, b) => b.total - a.total);
+      projectSet = new Set([proj]);
+      // Model breakdown from same timeRows
       const modelMap = new Map();
-      const sid = row.sessionId;
-      for (const t of timeRows) {
-        if (t.sessionId !== sid) continue;
+      for (const t of projRows) {
         const key = t.model || '未知';
         if (!modelMap.has(key)) modelMap.set(key, { model: key, total: 0, input: 0, output: 0, cache: 0, cost: 0 });
         const m = modelMap.get(key);
@@ -66,12 +64,24 @@ export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
         m.cache += (t.cacheCreationTokens || 0) + (t.cacheReadTokens || 0);
         m.cost += t.costUSD || 0;
       }
-      if (modelMap.size > 0) {
-        modelBreakdown = [...modelMap.values()].sort((a, b) => b.total - a.total);
-      }
+      modelBreakdown = [...modelMap.values()].sort((a, b) => b.total - a.total);
+    } else {
+      const matching = daily.filter(filterFn);
+      totals = U.aggregateTotals(matching);
+      const byDate = new Map();
+      for (const r of matching) byDate.set(r.usageDate, (byDate.get(r.usageDate) || 0) + (r.totalTokens || 0));
+      dates = [...byDate.keys()].sort();
+      values = dates.map(d => byDate.get(d));
+      const srcMap = new Map();
+      for (const r of matching) srcMap.set(r.source, (srcMap.get(r.source) || 0) + (r.totalTokens || 0));
+      sourceBreakdown = [...srcMap.entries()].map(([source, total]) => ({ source, total })).sort((a, b) => b.total - a.total);
+      projectSet = new Set();
+      for (const r of matching) if (r.projectPath) projectSet.add(r.projectPath);
+      modelBreakdown = null;
     }
 
-    return { kind, row, title, sub, totals, dates, values, count: matching.length, sourceBreakdown, projectCount: projectSet.size, modelBreakdown };
+    const count = kind === 'session' ? (dates.length || 0) : matching.length;
+    return { kind, row, title, sub, totals, dates, values, count, sourceBreakdown, projectCount: projectSet.size, modelBreakdown };
   }, [drill, daily, timeRows]);
 
   const open = !!drill;

@@ -131,7 +131,8 @@ export function filterDaily(rows, f) {
     r.usageDate >= f.startDate && r.usageDate <= f.endDate &&
     (f.sources.size === 0 || f.sources.has(r.source)) &&
     (f.devices.size === 0 || f.devices.has(r.device)) &&
-    (f.models.size === 0 || f.models.has(r.model))
+    (f.models.size === 0 || f.models.has(r.model)) &&
+    (r.totalTokens > 0)
   );
 }
 
