@@ -344,13 +344,18 @@ type PersistHandler interface {
 }
 
 // ParseCache is a simple file-fingerprint based parse cache.
+// Fingerprints are stored in memory immediately but only persisted
+// to the backend on explicit PersistPending() call. This ensures
+// the cache never marks files as "done" before the corresponding
+// data has been committed to the database.
 type ParseCache struct {
 	mu        sync.Mutex
 	version   int
 	store     map[string]*cacheEntry // path -> entry
 	persister PersistHandler
 	source    string
-	newPaths  int // new entries since last reset
+	newPaths  int    // new entries since last reset
+	pending   []string // paths whose fingerprints await persistence
 }
 
 type cacheEntry struct {
@@ -460,7 +465,10 @@ func (c *ParseCache) Get(filePath string) (interface{}, bool) {
 	return nil, false
 }
 
-// Set stores parsed records for a file and persists the fingerprint.
+// Set stores parsed records for a file. The fingerprint is held in memory
+// but NOT persisted yet — call PersistPending() to write all pending
+// fingerprints to the backend. This prevents the cache from skipping
+// re-parses after a crash during the engine's write phase.
 func (c *ParseCache) Set(filePath string, records interface{}) {
 	fp := FileFingerprint(filePath)
 	if fp == "" {
@@ -476,13 +484,44 @@ func (c *ParseCache) Set(filePath string, records interface{}) {
 	if !existed {
 		c.newPaths++
 	}
+	c.pending = append(c.pending, filePath)
+	c.mu.Unlock()
+}
+
+// PersistPending persists all pending fingerprints to the backend.
+// Should be called after data has been successfully written to the database.
+func (c *ParseCache) PersistPending() error {
+	c.mu.Lock()
+	pending := c.pending
+	c.pending = nil
 	persister, source := c.persister, c.source
 	c.mu.Unlock()
 
-	// Persist fingerprint asynchronously (fire-and-forget, errors are logged)
-	if persister != nil {
-		if err := persister.SaveParseCache(source, filePath, fp); err != nil {
-			log.Printf("[cache] Set persist error source=%s path=%s err=%v", source, filePath, err)
+	if persister == nil || len(pending) == 0 {
+		return nil
+	}
+
+	var lastErr error
+	for _, path := range pending {
+		fp := FileFingerprint(path)
+		if fp == "" {
+			continue
+		}
+		if err := persister.SaveParseCache(source, path, fp); err != nil {
+			log.Printf("[cache] PersistPending error source=%s path=%s err=%v", source, path, err)
+			lastErr = err
 		}
 	}
+	if lastErr == nil {
+		log.Printf("[cache] PersistPending ok source=%s count=%d", source, len(pending))
+	}
+	return lastErr
+}
+
+// DiscardPending clears all pending fingerprints without persisting them.
+// Use after a failed write to ensure files will be re-parsed on next run.
+func (c *ParseCache) DiscardPending() {
+	c.mu.Lock()
+	c.pending = nil
+	c.mu.Unlock()
 }

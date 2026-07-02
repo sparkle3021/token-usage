@@ -24,6 +24,8 @@ func (c *GeminiCollector) ID() string    { return "gemini" }
 func (c *GeminiCollector) Source() string { return "Gemini CLI" }
 func (c *GeminiCollector) SetPersister(p PersistHandler, source string) { c.cache.SetPersister(p, source) }
 func (c *GeminiCollector) ClearCache() { c.cache.Clear() }
+func (c *GeminiCollector) PersistCache() error { return c.cache.PersistPending() }
+func (c *GeminiCollector) DiscardCache() { c.cache.DiscardPending() }
 
 func geminiTmpDir() string {
 	home, _ := os.UserHomeDir()

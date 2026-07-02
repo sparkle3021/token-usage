@@ -23,6 +23,8 @@ func (c *CodexCollector) ID() string    { return "codex" }
 func (c *CodexCollector) Source() string { return "Codex CLI" }
 func (c *CodexCollector) SetPersister(p PersistHandler, source string) { c.cache.SetPersister(p, source) }
 func (c *CodexCollector) ClearCache() { c.cache.Clear() }
+func (c *CodexCollector) PersistCache() error { return c.cache.PersistPending() }
+func (c *CodexCollector) DiscardCache() { c.cache.DiscardPending() }
 
 func codexRoots() []string {
 	if env := os.Getenv("CODEX_HOME"); env != "" {

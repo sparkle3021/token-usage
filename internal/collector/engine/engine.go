@@ -184,6 +184,16 @@ func (e *Engine) runCollection() {
 		log.Printf("[engine] forceFull=true, cache cleared for all collectors")
 	}
 
+	// Wire up cache persister for collectors that support it
+	persister := newCachePersister(e.db)
+	for _, col := range e.collectors {
+		if s, ok := col.(interface {
+			SetPersister(collector.PersistHandler, string)
+		}); ok {
+			s.SetPersister(persister, col.Source())
+		}
+	}
+
 	// goroutine pool: parallel collect, sequential write
 	sem := make(chan struct{}, e.parallelism)
 	var wg sync.WaitGroup
@@ -292,32 +302,64 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 		}
 	}
 
+	// Write all data in a single transaction for atomicity.
+	// If any step fails, the entire batch is rolled back and no cache
+	// fingerprints are persisted, ensuring a subsequent run will retry.
+	tx, txErr := e.db.DB().Begin()
+	if txErr != nil {
+		e.discardCollectorCache(col)
+		log.Printf("[engine] begin tx error source=%s err=%v", col.Source(), txErr)
+		return false
+	}
+	rollback := true
+	defer func() {
+		if rollback {
+			tx.Rollback()
+		}
+	}()
+
 	// Bulk upsert session (session data not in hour_usage, write directly)
-	if err := e.db.BulkUpsertSession(sessionToModel(result.Device, col.Source(), result.Session)); err != nil {
+	if err := e.db.BulkUpsertSessionTx(tx, sessionToModel(result.Device, col.Source(), result.Session)); err != nil {
+		e.discardCollectorCache(col)
 		e.db.RecordRun(result.Device, col.Source(), "error",
 			fmt.Sprintf("[%s] bulk session: %v", col.Source(), err), "go-collector:"+col.ID())
 		return false
 	}
 
 	if len(filteredEvents) > 0 {
-		if err := e.db.BulkUpsertTimeUsage(eventsToModel(result.Device, col.Source(), filteredEvents)); err != nil {
+		if err := e.db.BulkUpsertTimeUsageTx(tx, eventsToModel(result.Device, col.Source(), filteredEvents)); err != nil {
+			e.discardCollectorCache(col)
 			e.db.RecordRun(result.Device, col.Source(), "error",
 				fmt.Sprintf("[%s] bulk time: %v", col.Source(), err), "go-collector:"+col.ID())
 			return false
 		}
 	}
 
-		// Build hour_usage from time_usage for all dates in this collection run
-		dateSeen := make(map[string]bool)
-		for _, r := range result.Daily {
-			if !dateSeen[r.UsageDate] {
-				dateSeen[r.UsageDate] = true
-				if err := e.db.BuildHourUsageFromTimeUsage(result.Device, col.Source(), r.UsageDate); err != nil {
-					log.Printf("[engine] BuildHourUsageFromTimeUsage error source=%s date=%s err=%v",
-						col.Source(), r.UsageDate, err)
-				}
+	// Build hour_usage from time_usage for all dates in this collection run
+	dateSeen := make(map[string]bool)
+	for _, r := range result.Daily {
+		if !dateSeen[r.UsageDate] {
+			dateSeen[r.UsageDate] = true
+			if err := e.db.BuildHourUsageFromTimeUsageTx(tx, result.Device, col.Source(), r.UsageDate); err != nil {
+				log.Printf("[engine] BuildHourUsageFromTimeUsage error source=%s date=%s err=%v",
+					col.Source(), r.UsageDate, err)
 			}
 		}
+	}
+
+	// Commit the transaction — if this fails, the rollback happens automatically
+	if err := tx.Commit(); err != nil {
+		e.discardCollectorCache(col)
+		e.db.RecordRun(result.Device, col.Source(), "error",
+			fmt.Sprintf("[%s] commit tx: %v", col.Source(), err), "go-collector:"+col.ID())
+		return false
+	}
+	rollback = false
+
+	// Persist cache fingerprints after data is safely committed
+	if err := e.persistCollectorCache(col); err != nil {
+		log.Printf("[engine] PersistCache error source=%s err=%v", col.Source(), err)
+	}
 
 	summary := fmt.Sprintf("daily=%d, time=%d, workspace_model=%d", len(result.Daily), len(result.Events), len(result.Session))
 	e.db.RecordRun(result.Device, col.Source(), "ok", summary, "go-collector:"+col.ID())
@@ -329,6 +371,20 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 	return true
 }
 
+// persistCollectorCache persists cache fingerprints after successful write.
+func (e *Engine) persistCollectorCache(col collector.Collector) error {
+	if cp, ok := col.(collector.CachePersistence); ok {
+		return cp.PersistCache()
+	}
+	return nil
+}
+
+// discardCollectorCache discards pending fingerprints after a failed write.
+func (e *Engine) discardCollectorCache(col collector.Collector) {
+	if cp, ok := col.(collector.CachePersistence); ok {
+		cp.DiscardCache()
+	}
+}
 
 // sessionToModel converts collector SessionRow to model.SessionUsage slice.
 func sessionToModel(device, source string, rows []collector.SessionRow) []model.SessionUsage {

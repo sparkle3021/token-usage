@@ -325,6 +325,22 @@ func (m *Manager) initSchema() error {
 
 const bulkBatchSize = 500
 
+// execer is satisfied by both *sql.DB and *sql.Tx.
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+// querier is satisfied by both *sql.DB and *sql.Tx.
+type querier interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+}
+
+// batchExecer combines Exec and Query for operations that need both.
+type batchExecer interface {
+	execer
+	querier
+}
+
 func (m *Manager) BulkUpsertDaily(rows []model.DailyUsage) error {
 	if len(rows) == 0 {
 		return nil
@@ -358,10 +374,19 @@ func (m *Manager) BulkUpsertDaily(rows []model.DailyUsage) error {
 }
 
 func (m *Manager) BulkUpsertSession(rows []model.SessionUsage) error {
+	return m.bulkUpsertSessionExec(m.db, rows)
+}
+
+// BulkUpsertSessionTx is like BulkUpsertSession but uses the given transaction.
+func (m *Manager) BulkUpsertSessionTx(tx *sql.Tx, rows []model.SessionUsage) error {
+	return m.bulkUpsertSessionExec(tx, rows)
+}
+
+func (m *Manager) bulkUpsertSessionExec(ex execer, rows []model.SessionUsage) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	return bulkExec(m.db, rows, bulkBatchSize, func(batch []model.SessionUsage) (string, []interface{}) {
+	return bulkExec(ex, rows, bulkBatchSize, func(batch []model.SessionUsage) (string, []interface{}) {
 		var sqlBuf strings.Builder
 		sqlBuf.WriteString(`INSERT INTO session_usage (device,source,session_id,last_activity,project_path,
 			input_tokens,output_tokens,cache_creation_tokens,cache_read_tokens,
@@ -388,10 +413,19 @@ func (m *Manager) BulkUpsertSession(rows []model.SessionUsage) error {
 }
 
 func (m *Manager) BulkUpsertTimeUsage(rows []model.TimeUsage) error {
+	return m.bulkUpsertTimeUsageExec(m.db, rows)
+}
+
+// BulkUpsertTimeUsageTx is like BulkUpsertTimeUsage but uses the given transaction.
+func (m *Manager) BulkUpsertTimeUsageTx(tx *sql.Tx, rows []model.TimeUsage) error {
+	return m.bulkUpsertTimeUsageExec(tx, rows)
+}
+
+func (m *Manager) bulkUpsertTimeUsageExec(ex execer, rows []model.TimeUsage) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	return bulkExec(m.db, rows, bulkBatchSize, func(batch []model.TimeUsage) (string, []interface{}) {
+	return bulkExec(ex, rows, bulkBatchSize, func(batch []model.TimeUsage) (string, []interface{}) {
 		var sqlBuf strings.Builder
 		sqlBuf.WriteString(`INSERT INTO time_usage (device,source,event_key,event_time,usage_date,
 			model,project_path,session_id,input_tokens,output_tokens,cache_creation_tokens,
@@ -419,14 +453,14 @@ func (m *Manager) BulkUpsertTimeUsage(rows []model.TimeUsage) error {
 }
 
 // bulkExec splits rows into batches and builds + executes SQL for each batch.
-func bulkExec[T any](db *sql.DB, rows []T, batchSize int, build func([]T) (string, []interface{})) error {
+func bulkExec[T any](ex execer, rows []T, batchSize int, build func([]T) (string, []interface{})) error {
 	for i := 0; i < len(rows); i += batchSize {
 		end := i + batchSize
 		if end > len(rows) {
 			end = len(rows)
 		}
 		sql, args := build(rows[i:end])
-		if _, err := db.Exec(sql, args...); err != nil {
+		if _, err := ex.Exec(sql, args...); err != nil {
 			return fmt.Errorf("bulk batch %d: %w", i/batchSize, err)
 		}
 	}
@@ -442,10 +476,19 @@ func bulkExec[T any](db *sql.DB, rows []T, batchSize int, build func([]T) (strin
 // existing and incoming value. This allows JSONL and CC-Switch data to coexist:
 // whichever source observed more tokens for a given hour wins per field.
 func (m *Manager) BulkUpsertHourUsage(rows []model.HourUsage) error {
+	return m.bulkUpsertHourUsageExec(m.db, rows)
+}
+
+// BulkUpsertHourUsageTx is like BulkUpsertHourUsage but uses the given transaction.
+func (m *Manager) BulkUpsertHourUsageTx(tx *sql.Tx, rows []model.HourUsage) error {
+	return m.bulkUpsertHourUsageExec(tx, rows)
+}
+
+func (m *Manager) bulkUpsertHourUsageExec(ex execer, rows []model.HourUsage) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	return bulkExec(m.db, rows, bulkBatchSize, func(batch []model.HourUsage) (string, []interface{}) {
+	return bulkExec(ex, rows, bulkBatchSize, func(batch []model.HourUsage) (string, []interface{}) {
 		var sqlBuf strings.Builder
 		sqlBuf.WriteString(`INSERT INTO hour_usage (device,source,usage_date,hour,model,
 			input_tokens,output_tokens,cache_creation_tokens,cache_read_tokens,
@@ -477,7 +520,16 @@ func (m *Manager) BulkUpsertHourUsage(rows []model.HourUsage) error {
 // Parses event_time in Go (ISO 8601 -> local time) to extract hour correctly,
 // then aggregates into hour_usage with MAX semantics.
 func (m *Manager) BuildHourUsageFromTimeUsage(device, source, date string) error {
-	rows, err := m.db.Query(`SELECT device, source, usage_date, model,
+	return m.buildHourUsageFromTimeUsageExec(m.db, device, source, date)
+}
+
+// BuildHourUsageFromTimeUsageTx is like BuildHourUsageFromTimeUsage but uses the given transaction.
+func (m *Manager) BuildHourUsageFromTimeUsageTx(tx *sql.Tx, device, source, date string) error {
+	return m.buildHourUsageFromTimeUsageExec(tx, device, source, date)
+}
+
+func (m *Manager) buildHourUsageFromTimeUsageExec(ex batchExecer, device, source, date string) error {
+	rows, err := ex.Query(`SELECT device, source, usage_date, model,
 		input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 		reasoning_output_tokens, total_tokens, cost_usd, event_time
 		FROM time_usage
@@ -533,7 +585,7 @@ func (m *Manager) BuildHourUsageFromTimeUsage(device, source, date string) error
 		batch = append(batch, *row)
 	}
 	if len(batch) > 0 {
-		if err := m.BulkUpsertHourUsage(batch); err != nil {
+		if err := m.bulkUpsertHourUsageExec(ex, batch); err != nil {
 			return fmt.Errorf("upsert hour_usage: %w", err)
 		}
 	}

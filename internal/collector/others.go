@@ -164,6 +164,8 @@ func (c *OpenClawCollector) ID() string    { return "openclaw" }
 func (c *OpenClawCollector) Source() string { return "OpenClaw" }
 func (c *OpenClawCollector) SetPersister(p PersistHandler, source string) { c.cache.SetPersister(p, source) }
 func (c *OpenClawCollector) ClearCache() { c.cache.Clear() }
+func (c *OpenClawCollector) PersistCache() error { return c.cache.PersistPending() }
+func (c *OpenClawCollector) DiscardCache() { c.cache.DiscardPending() }
 
 func openclawRoots() []string {
 	home, _ := os.UserHomeDir()

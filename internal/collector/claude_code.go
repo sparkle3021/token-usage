@@ -33,6 +33,8 @@ func (c *ClaudeCodeCollector) ID() string    { return claudeClientKey }
 func (c *ClaudeCodeCollector) Source() string { return claudeSourceLabel }
 func (c *ClaudeCodeCollector) SetPersister(p PersistHandler, source string) { c.cache.SetPersister(p, source) }
 func (c *ClaudeCodeCollector) ClearCache() { c.cache.Clear() }
+func (c *ClaudeCodeCollector) PersistCache() error { return c.cache.PersistPending() }
+func (c *ClaudeCodeCollector) DiscardCache() { c.cache.DiscardPending() }
 
 func getClaudeRoots() []string {
 	if env := os.Getenv("CLAUDE_CONFIG_DIR"); env != "" {

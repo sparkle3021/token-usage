@@ -1,6 +1,13 @@
 package collector
 
-// CollectResult holds the normalized output from a collector run.
+// CachePersistence is an optional interface collectors can implement to
+// control when file fingerprints are persisted. The Engine calls
+// PersistCache after successfully writing data, and DiscardCache on failure.
+type CachePersistence interface {
+	PersistCache() error
+	DiscardCache()
+}
+
 type CollectResult struct {
 	Device string
 	Source string
