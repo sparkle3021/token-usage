@@ -284,8 +284,7 @@ func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) 
 
 	query := `SELECT date, app_type, model, input_tokens, output_tokens,
 		cache_read_tokens, cache_creation_tokens, total_cost_usd
-		FROM usage_daily_rollups
-		WHERE app_type NOT IN ('claude', 'codex', 'opencode')`
+		FROM usage_daily_rollups`
 	args := []interface{}{}
 	if rollupDate != "" {
 		query += ` AND date > ?`
@@ -348,23 +347,24 @@ func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) 
 		return fmt.Errorf("rows iteration: %w", err)
 	}
 
-	var dailyRows []DailyRow
-	for _, row := range rollupAcc {
-		row.TotalTokens = row.InputTokens + row.OutputTokens + row.CacheCreationTokens + row.CacheReadTokens
-		if row.TotalTokens == 0 && row.CostUSD == 0 {
-			continue
-		}
-		ext.ReconChecked++
-		dailyRows = append(dailyRows, DailyRow{
-			UsageDate:      row.UsageDate,
-			Model:          row.Model,
-			InputTokens:    row.InputTokens,
-			OutputTokens:   row.OutputTokens,
-			CacheReadTokens: row.CacheReadTokens,
-			CacheWriteTokens: row.CacheCreationTokens,
-			ReasoningTokens: row.ReasoningOutputTokens,
-			CostUSD:        row.CostUSD,
-		})
+		var dailyRows []DailyRow
+		for _, row := range rollupAcc {
+			row.TotalTokens = row.InputTokens + row.OutputTokens + row.CacheCreationTokens + row.CacheReadTokens
+			if row.TotalTokens == 0 && row.CostUSD == 0 {
+				continue
+			}
+			ext.ReconChecked++
+			dailyRows = append(dailyRows, DailyRow{
+				Source:          row.Source,
+				UsageDate:       row.UsageDate,
+				Model:           row.Model,
+				InputTokens:     row.InputTokens,
+				OutputTokens:    row.OutputTokens,
+				CacheReadTokens: row.CacheReadTokens,
+				CacheWriteTokens: row.CacheCreationTokens,
+				ReasoningTokens: row.ReasoningOutputTokens,
+				CostUSD:         row.CostUSD,
+			})
 		ext.ReconSupplement++
 	}
 	ext.ReconSkipped = ext.ReconChecked - ext.ReconSupplement

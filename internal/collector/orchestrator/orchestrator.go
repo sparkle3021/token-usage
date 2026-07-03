@@ -459,8 +459,12 @@ func dailyToModel(device, source string, rows []collector.DailyRow) []model.Dail
 	out := make([]model.DailyUsage, len(rows))
 	for i, r := range rows {
 		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens
+		src := r.Source
+		if src == "" {
+			src = source
+		}
 		out[i] = model.DailyUsage{
-			Device: device, Source: source, UsageDate: r.UsageDate, Model: r.Model,
+			Device: device, Source: src, UsageDate: r.UsageDate, Model: r.Model,
 			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
 			CacheCreationTokens: r.CacheWriteTokens, CacheReadTokens: r.CacheReadTokens,
 			ReasoningOutputTokens: r.ReasoningTokens, TotalTokens: total, CostUSD: r.CostUSD,

@@ -25,6 +25,7 @@ type CollectResult struct {
 }
 
 type DailyRow struct {
+	Source    string // 可选，为空时使用 collector.Source()
 	UsageDate string
 	Model     string
 	InputTokens int64
