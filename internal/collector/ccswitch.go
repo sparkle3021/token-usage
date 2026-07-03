@@ -192,7 +192,8 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 		cache_read_tokens, cache_creation_tokens, total_cost_usd
 		FROM proxy_request_logs
 		WHERE data_source = 'proxy'
-		  AND status_code >= 200 AND status_code < 300`
+		  AND status_code >= 200 AND status_code < 300
+		  AND app_type NOT IN ('claude', 'codex', 'opencode')`
 	args := []interface{}{}
 	if cursorVal > 0 {
 		query += ` AND created_at > ?`
