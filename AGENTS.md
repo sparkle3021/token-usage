@@ -21,24 +21,19 @@ go build ./...
 
 **No tests exist** — do not look for test commands.
 
+**No CI workflows** — no `.github/` directory.
+
 ## Architecture
 
 - **Desktop shell**: Wails v2 (Go → WebView2). Entry: `main.go` binds `App` struct methods as `window.go.main.App.*`
-- **Go backend**: `app.go` (thin forwarding layer, ~150 lines), `internal/service/` (business logic), `internal/orchestrator/` (collection orchestration), `internal/database/` (SQLite DAO split by table), `internal/config/` (env vars)
-- **Frontend**: React 19 JSX (not TSX), Vite 8, Tailwind CSS v4, shadcn/ui (base-nova style), Recharts
+- **Go backend**: `app.go` (thin forwarding layer, ~190 lines), `internal/service/` (business logic), `internal/orchestrator/` (collection orchestration), `internal/database/` (SQLite DAO split by table), `internal/config/` (env vars)
+- **Frontend**: React 19 JSX (not TSX), Vite 8, Tailwind CSS v4, shadcn/ui (base-nova style, `@/` alias), Recharts
 - **Database**: `~/.token-dashboard/td.db` (SQLite, WAL mode, `modernc.org/sqlite` no CGO). Override via `DATA_DIR` env.
-- **Pricing engine**: model resolution chain = exact → prefix → fuzzy → hardcoded override
+- **Pricing engine**: model resolution chain = exact → prefix → fuzzy → hardcoded override. Seed data bundled via `internal/config/seed/`.
 
-### Backend Layer Stack
+### App Container Height Constraint
 
-```
-app.go (thin forwarding ~150 lines)
-  └→ service/ (dashboard, collection, import, setting)
-       └→ database/ (db.go, daily.go, hour.go, time.go, session.go, run.go, cache.go, config.go)
-       └→ collector/orchestrator/ (parallel collect + transactional write)
-       └→ config/ (DATA_DIR, COLLECTOR_PARALLELISM, defaults)
-       └→ pricing/ (model pricing resolution)
-```
+App root (`App.jsx:44`) **must** have `flex flex-col min-h-screen` for any child `flex-1 min-h-0` chain to work (e.g. scrollable table panels). Without it, flex-1 in height direction is a no-op because no parent allocates remaining space.
 
 ## Collection System
 
@@ -54,16 +49,9 @@ app.go (thin forwarding ~150 lines)
 | OpenCode | SQLite | `~/.local/share/opencode/` |
 | CC-Switch | SQLite | `~/.cc-switch/cc-switch.db` (external, configurable) |
 
-### Two Sync Paths
-
-| Trigger | Handler | CC-Switch Behavior |
-|---------|---------|-------------------|
-| "同步" button | `StartFullCollection()` → `runCollection()` | Incremental (uses checkpoint) |
-| "导入 CC-Switch" button | `ImportCCSwitchDB()` → `SyncCCSwitch()` | Reset CK → full sync |
-
 ### CC-Switch Checkpoint Timing (Fragile)
 
-**Critical**: Checkpoints are NOT saved inside `Collect()`. They are **staged** in struct fields and only persisted via `SavePendingCheckpoints()` **after** `processCollector()` (SQL write transaction) succeeds. This prevents data loss if the write fails.
+**Critical**: Checkpoints are NOT saved inside `Collect()`. They are **staged** in struct fields and only persisted via `SavePendingCheckpoints()` **after** `processCollector()` (SQL write transaction) succeeds.
 
 Stale CK detection runs at startup: if CK exists but `source='CC-Switch'` rows are 0 in both `daily_usage` and `hour_usage`, CKs are auto-cleared for full re-sync.
 
@@ -75,7 +63,7 @@ CC-Switch proxy  → hour_usage (direct)
 hour_usage       → BuildDailyFromHourUsage → daily_usage (SUM + MAX merge)
 ```
 
-Three-layer data merge for TrendChart/Heatmap (in frontend): `timeRows → hourRows → dailyRows` fallback.
+Three-layer data merge for TrendChart/Heatmap: `timeRows → hourRows → dailyRows` fallback.
 
 ## Database
 
@@ -89,14 +77,15 @@ Files: `internal/database/` — split by table (same `package database`).
 | `session_usage` | `(device,source,session_id)` | Per-session rollups (unused by CC-Switch) |
 | `app_config` | `key` | CK storage, CC-Switch DB path, settings |
 | `parse_cache` | `(source,file_path)` | `mtime:size` fingerprint cache |
-| `collection_runs` | `id` | Sync history |
+| `collection_runs` | `id` | Sync history (backend only; frontend UI removed) |
 
 ## Key Conventions
 
 - **`totalTokens`** = `input + output + cacheRead + cacheWrite` (NO `+ reasoning` — API `output_tokens` already includes thinking tokens)
 - **`deltaPct` returns `null`** when `prev === 0` (no badge rendered for no-prior-data cases)
-- **Model icon SVGs**: at `frontend/src/assets/models/`. Matching uses `\b`-anchored prefix/keyword regex.
-- **shadcn config**: JSX not TSX, base-nova style, `@/` alias
+- **Model icon SVGs**: `frontend/src/assets/models/`. Matching via `\b`-anchored prefix/keyword regex.
 - **CSS**: Tailwind CSS v4 with `@import "tailwindcss"` (no `tailwind.config.js`)
-- **No HTTP API** — Wails IPC bridge between WebView2 JS and Go. Frontend calls `window.go.main.App.*`
+- **No HTTP API** — Wails IPC bridge. Frontend calls `window.go.main.App.*`.
 - **oxlint** only runs two React rules: `rules-of-hooks` and `only-export-components`
+- **SourceBadge color** comes from `iconMap.js` `getSourceColor()` → oklch palette. Badge uses `color-mix(in oklch, ${color} 15%, transparent)` for semi-transparent background.
+- **Collected data is local only** — no network upload. Database stored in `~/.token-dashboard/td.db`.
