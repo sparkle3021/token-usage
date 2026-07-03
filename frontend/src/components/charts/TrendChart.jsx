@@ -66,7 +66,13 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
       return pt;
     });
   }, [dates, sources, byKey, hasHourly]);
-  const palette = sources.map(s => U.getSourceColor(s));
+
+  const activeSources = useMemo(
+    () => sources.filter(s => chartData.some(pt => pt[s] > 0)),
+    [sources, chartData],
+  );
+
+  const palette = activeSources.map(s => U.getSourceColor(s));
 
   return (
     <Card>
@@ -84,6 +90,11 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
         </div>
       </CardHeader>
       <CardContent>
+        {activeSources.length === 0 ? (
+          <div className="flex items-center justify-center" style={{ height: 325 }}>
+            <span className="text-sm text-muted-foreground">当前时间范围内无数据</span>
+          </div>
+        ) : (
         <div style={{ height: 325 }}>
           <ResponsiveContainer width="100%" height="100%">
             {mode === 'line' ? (
@@ -92,7 +103,7 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
                 <XAxis dataKey={hasHourly ? 'hour' : 'date'} tick={{ fontSize: 10.5, fill: 'oklch(0.55 0.005 80)' }} />
                 <YAxis tick={{ fontSize: 10.5, fill: 'oklch(0.62 0.004 80)' }} tickFormatter={v => U.compact(v)} />
                 <Tooltip content={<CTooltip />} />
-                {sources.map((s, i) => (<Line key={s} type="monotone" dataKey={s} stroke={palette[i]} strokeWidth={2} dot={false} />))}
+                {activeSources.map((s, i) => (<Line key={s} type="monotone" dataKey={s} stroke={palette[i]} strokeWidth={2} dot={false} />))}
               </LineChart>
             ) : (
               <BarChart data={chartData}>
@@ -100,11 +111,12 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
                 <XAxis dataKey={hasHourly ? 'hour' : 'date'} tick={{ fontSize: 10.5, fill: 'oklch(0.55 0.005 80)' }} />
                 <YAxis tick={{ fontSize: 10.5, fill: 'oklch(0.62 0.004 80)' }} tickFormatter={v => U.compact(v)} />
                 <Tooltip content={<CTooltip />} />
-                {sources.map((s, i) => (<Bar key={s} dataKey={s} stackId={mode === 'stacked' ? 'total' : undefined} fill={palette[i]} />))}
+                {activeSources.map((s, i) => (<Bar key={s} dataKey={s} stackId={mode === 'stacked' ? 'total' : undefined} fill={palette[i]} />))}
               </BarChart>
             )}
           </ResponsiveContainer>
         </div>
+        )}
       </CardContent>
     </Card>
   );
