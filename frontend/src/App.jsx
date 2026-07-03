@@ -41,7 +41,7 @@ function AppContent() {
   );
 
   return (
-    <div className="max-w-[1440px] mx-auto p-4 md:p-6 pb-16 space-y-4 font-sans">
+    <div className="max-w-[1440px] mx-auto p-4 md:p-6 pb-16 space-y-4 font-sans flex flex-col min-h-screen">
       <Header
         page={page}
         setPage={setPage}

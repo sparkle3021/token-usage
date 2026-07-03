@@ -5,7 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from '../ui/tabs.jsx';
 import * as U from '../../lib/utils.js';
 import SourceBadge from '../SourceBadge.jsx';
 
-export default function TablePanel({ daily = [], sessions = [], runs = [], onDrill, fullHeight = false }) {
+export default function TablePanel({ daily = [], sessions = [], onDrill, fullHeight = false }) {
   const [tab, setTab] = useState('sources');
   const [search, setSearch] = useState('');
 
@@ -42,7 +42,6 @@ export default function TablePanel({ daily = [], sessions = [], runs = [], onDri
     { id: 'sources', label: '来源', count: bySource.length },
     { id: 'models', label: '模型', count: byModel.length },
     { id: 'sessions', label: '会话', count: (sessions || []).length },
-    { id: 'runs', label: '采集', count: (runs || []).length },
   ];
 
   return (
@@ -60,7 +59,6 @@ export default function TablePanel({ daily = [], sessions = [], runs = [], onDri
         {tab === 'sources' && <SourceTable rows={bySource} search={search} onDrill={onDrill} fullHeight={fullHeight} />}
         {tab === 'models' && <ModelTable rows={byModel} search={search} onDrill={onDrill} fullHeight={fullHeight} />}
         {tab === 'sessions' && <SessionTable rows={sessions || []} search={search} onDrill={onDrill} fullHeight={fullHeight} />}
-        {tab === 'runs' && <RunTable rows={runs || []} search={search} onDrill={onDrill} fullHeight={fullHeight} />}
       </CardContent>
     </Card>
   );
@@ -84,28 +82,30 @@ function DTable({ rows, columns, sortField = 'total', search, fullHeight, onDril
   }), [filtered, sortBy, columns]);
 
   return (
-    <div className={`overflow-x-auto overflow-y-auto ${fullHeight ? 'flex-1 min-h-0' : 'max-h-[400px]'}`}>
-      <Table>
-        <TableHeader>
-          <TableRow>{columns.map(c => (
-            <TableHead key={c.field || c.label} className={`text-[11px] uppercase tracking-wider cursor-pointer ${sortBy.field === c.field ? 'text-foreground' : 'text-muted-foreground'}`}
-              style={{ textAlign: c.right ? 'right' : 'left' }}
-              onClick={() => setSortBy(p => p.field === c.field ? { field: c.field, dir: p.dir === 'asc' ? 'desc' : 'asc' } : { field: c.field, dir: 'desc' })}>
-              {c.label}
-            </TableHead>
-          ))}</TableRow>
-        </TableHeader>
-        <TableBody>
-          {sorted.length === 0 && <TableRow><TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">暂无数据</TableCell></TableRow>}
-          {sorted.map((r, i) => (
-            <TableRow key={i} onClick={() => onDrill?.(r)}>
-              {columns.map(c => <TableCell key={c.field || c.label} className="text-xs tabular-nums" style={{ textAlign: c.right ? 'right' : 'left' }}>
-                {c.render ? c.render(r) : (typeof c.val === 'function' ? c.val(r) : r?.[c.field])}
-              </TableCell>)}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div className={fullHeight ? 'relative flex-1 min-h-0' : ''}>
+      <div className={`absolute inset-0 overflow-auto ${fullHeight ? '' : 'static max-h-[400px]'}`}>
+        <Table>
+          <TableHeader>
+            <TableRow>{columns.map(c => (
+              <TableHead key={c.field || c.label} className={`text-[11px] uppercase tracking-wider cursor-pointer ${sortBy.field === c.field ? 'text-foreground' : 'text-muted-foreground'}`}
+                style={{ textAlign: c.right ? 'right' : 'left' }}
+                onClick={() => setSortBy(p => p.field === c.field ? { field: c.field, dir: p.dir === 'asc' ? 'desc' : 'asc' } : { field: c.field, dir: 'desc' })}>
+                {c.label}
+              </TableHead>
+            ))}</TableRow>
+          </TableHeader>
+          <TableBody>
+            {sorted.length === 0 && <TableRow><TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">暂无数据</TableCell></TableRow>}
+            {sorted.map((r, i) => (
+              <TableRow key={i} onClick={() => onDrill?.(r)}>
+                {columns.map(c => <TableCell key={c.field || c.label} className="text-xs tabular-nums" style={{ textAlign: c.right ? 'right' : 'left' }}>
+                  {c.render ? c.render(r) : (typeof c.val === 'function' ? c.val(r) : r?.[c.field])}
+                </TableCell>)}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
@@ -176,39 +176,8 @@ function SessionTable({ rows, search, onDrill, fullHeight }) {
   return <DTable rows={aggregated} columns={cols} search={search} sortField="totalTokens" fullHeight={fullHeight} onDrill={r => onDrill?.({ kind: 'session', row: r })} />;
 }
 
-function RunTable({ rows, fullHeight }) {
-  return (
-    <div className={`overflow-x-auto overflow-y-auto ${fullHeight ? 'flex-1 min-h-0' : 'max-h-[400px]'}`}>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-[11px] uppercase tracking-wider">时间</TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wider">来源</TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wider">状态</TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wider">说明</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {(rows || []).length === 0 && <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">暂无采集记录</TableCell></TableRow>}
-          {(rows || []).map((r, i) => (
-            <TableRow key={i} onClick={() => onDrill?.({ kind: 'run', row: r })}>
-              <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{U.formatTs(r?.collectedAt)}</TableCell>
-              <TableCell className="text-xs"><SourceBadgeLabel s={r?.source} /></TableCell>
-              <TableCell className="text-xs"><StatusBadge s={r?.status} /></TableCell>
-              <TableCell className="text-xs text-muted-foreground max-w-[300px] truncate" title={r?.message}>{r?.message || ''}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
 function SourceBadgeLabel({ s }) {
   return <SourceBadge source={s || 'unknown'} />;
 }
 
-function StatusBadge({ s }) {
-  const cls = s === 'ok' ? 'bg-green-50 text-green-700' : s === 'error' ? 'bg-red-50 text-red-600' : 'bg-muted text-muted-foreground';
-  return <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${cls}`}>{s || '—'}</span>;
-}
+

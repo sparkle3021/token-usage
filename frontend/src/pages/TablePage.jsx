@@ -56,7 +56,7 @@ export default function TablePage({ M, onRefresh }) {
 
       {/* Table */}
       <div className="flex flex-col flex-1 min-h-0">
-        <TablePanel daily={filtered} sessions={M.sessions} runs={M.runs} onDrill={setDrill} fullHeight />
+        <TablePanel daily={filtered} sessions={M.sessions} onDrill={setDrill} fullHeight />
       </div>
 
       <DrillDrawer drill={drill} daily={M.daily} timeRows={M.time} onClose={() => setDrill(null)} />
