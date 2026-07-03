@@ -15,17 +15,7 @@ export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
       filterFn = r => r.source === row.source && r.device === row.device;
     } else if (kind === 'model') {
       title = row.model;
-      const srcList = row.sources || [{ source: row.source, total: row.total }];
-      sub = (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {srcList.map(s => (
-            <span key={s.source} className="flex items-center gap-1 text-xs">
-              <SourceIcon name={s.source} className="w-3 h-3" />
-              {s.source}
-            </span>
-          ))}
-        </div>
-      );
+      // sub: 来源列表已由下方"来源分布"区域展示
       filterFn = r => r.model === row.model;
     } else if (kind === 'session') {
       title = row.projectPath || row.sessionId;
@@ -97,7 +87,7 @@ export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
 
           <div className="flex items-center justify-between mb-4">
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">
+              <div className="text-xs text-muted-foreground mb-0.5">
                 {detail.kind === 'source' && '来源详情'}
                 {detail.kind === 'model' && '模型详情'}
                 {detail.kind === 'session' && '项目详情'}
@@ -112,26 +102,26 @@ export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
             <>
               <div className="grid grid-cols-4 gap-2 mb-4">
                 <div className="p-2.5 bg-muted rounded-lg">
-                  <div className="text-[10px] uppercase text-muted-foreground">总 Token</div>
+                  <div className="text-xs text-muted-foreground">总 Token</div>
                   <div className="text-lg font-semibold tabular-nums">{U.compactCN(detail.totals.totalTokens)}</div>
                 </div>
                 <div className="p-2.5 bg-muted rounded-lg">
-                  <div className="text-[10px] uppercase text-muted-foreground">费用</div>
+                  <div className="text-xs text-muted-foreground">费用</div>
                   <div className="text-lg font-semibold tabular-nums">{detail.totals.costUSD > 0 ? '$' + detail.totals.costUSD.toFixed(2) : '—'}</div>
                 </div>
                 <div className="p-2.5 bg-muted rounded-lg">
-                  <div className="text-[10px] uppercase text-muted-foreground">活跃</div>
+                  <div className="text-xs text-muted-foreground">活跃</div>
                   <div className="text-lg font-semibold tabular-nums">{detail.dates.length}<span className="text-xs text-muted-foreground font-normal"> 天</span></div>
                 </div>
                 <div className="p-2.5 bg-muted rounded-lg">
-                  <div className="text-[10px] uppercase text-muted-foreground">项目</div>
+                  <div className="text-xs text-muted-foreground">项目</div>
                   <div className="text-lg font-semibold tabular-nums">{detail.projectCount || <span className="text-muted-foreground font-normal">—</span>}</div>
                 </div>
               </div>
 
               {detail.kind === 'session' && detail.modelBreakdown && (
                 <div className="mb-4">
-                  <h4 className="text-[10px] font-semibold uppercase text-muted-foreground mb-2">模型用量</h4>
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-2">模型用量</h4>
                   <div className="space-y-2">
                     {detail.modelBreakdown.map(m => (
                       <div key={m.model} className="p-2.5 bg-muted rounded-lg">
@@ -139,7 +129,7 @@ export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
                           <span className="text-xs font-mono font-medium">{m.model}</span>
                           <span className="text-xs tabular-nums font-semibold">{U.compactCN(m.total)}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <span>Input {U.compact(m.input)}</span>
                           <span>Output {U.compact(m.output)}</span>
                           <span>Cache {U.compact(m.cache)}</span>
@@ -153,11 +143,11 @@ export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
 
               {detail.kind === 'model' && detail.sourceBreakdown.length > 1 && (
                 <div className="mb-4">
-                  <h4 className="text-[10px] font-semibold uppercase text-muted-foreground mb-2">来源分布</h4>
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-2">来源分布</h4>
                   <div className="space-y-1.5">
                     {detail.sourceBreakdown.map(s => (
                       <div key={s.source} className="flex items-center gap-2 text-xs">
-                        <span className="w-20 shrink-0"><SourceBadge source={s.source} /></span>
+                        <span className="w-[100px] shrink-0"><SourceBadge source={s.source} /></span>
                         <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                           <div className="h-full rounded-full transition-all" style={{ width: `${(s.total / detail.totals.totalTokens) * 100}%`, background: U.getSourceColor(s.source) }} />
                         </div>
@@ -172,7 +162,7 @@ export default function DrillDrawer({ drill, daily, timeRows, onClose }) {
               {detail.dates.length > 1 && <SparkLine dates={detail.dates} values={detail.values} />}
 
               <div className="mt-4">
-                <h4 className="text-[10px] font-semibold uppercase text-muted-foreground mb-2">分布</h4>
+                <h4 className="text-xs font-semibold text-muted-foreground mb-2">分布</h4>
                 <div className="divide-y divide-dashed text-xs">
                   <Row label="Input" value={U.fmt.format(detail.totals.inputTokens)} />
                   <Row label="Output" value={U.fmt.format(detail.totals.outputTokens)} />
