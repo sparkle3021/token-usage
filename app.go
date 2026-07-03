@@ -121,8 +121,8 @@ func (a *App) GetDashboardData() *model.DashboardData {
 	return a.dashboardSvc.GetDashboardData()
 }
 
-func (a *App) GetTimeSeriesData() *model.TimeSeriesData {
-	return a.dashboardSvc.GetTimeSeriesData()
+func (a *App) GetTimeSeriesData(days int) *model.TimeSeriesData {
+	return a.dashboardSvc.GetTimeSeriesData(days)
 }
 
 // ---------------------------------------------------------------------------

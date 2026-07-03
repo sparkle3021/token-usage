@@ -12,7 +12,7 @@ export default function TablePage({ M, onRefresh }) {
   const [f, setF] = useState(defaults);
   const [drill, setDrill] = useState(null);
 
-  const allSources = useMemo(() => [...new Set(M.daily.map(r => r.source))], [M.daily]);
+  const allSources = useMemo(() => [...new Set(M.daily.map(r => r.source))].sort(), [M.daily]);
   const allModels = useMemo(() => [...new Set(M.daily.map(r => r.model))].filter(Boolean).sort(), [M.daily]);
 
   const filtered = useMemo(() => U.filterDaily(M.daily, f), [f, M.daily]);

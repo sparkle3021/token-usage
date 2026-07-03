@@ -17,11 +17,11 @@ export function useDashboardData() {
     setLoadError(null);
   }, []);
 
-  const fetchData = useCallback((silent) => {
+  const fetchData = useCallback((silent, days) => {
     if (!silent) setRefreshing(true);
     return Promise.all([
       api.getDashboardData(),
-      api.getTimeSeriesData()
+      api.getTimeSeriesData(days === undefined ? 90 : days)
     ])
       .then(([data, tsData]) => setData(data, tsData))
       .catch(err => setLoadError(String(err)))
@@ -32,7 +32,7 @@ export function useDashboardData() {
 
   const M = raw;
 
-  const allSources = useMemo(() => M ? [...new Set(M.daily.map(r => r.source))] : [], [M]);
+  const allSources = useMemo(() => M ? [...new Set(M.daily.map(r => r.source))].sort() : [], [M]);
   const allModels = useMemo(() => M ? [...new Set(M.daily.map(r => r.model))].filter(Boolean).sort() : [], [M]);
 
   const heatmapData = useMemo(() => {

@@ -26,8 +26,8 @@ export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
 
-export function GetTimeSeriesData() {
-  return window['go']['main']['App']['GetTimeSeriesData']();
+export function GetTimeSeriesData(arg1) {
+  return window['go']['main']['App']['GetTimeSeriesData'](arg1);
 }
 
 export function ImportCCSwitchDB() {

@@ -4,7 +4,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { useFilter } from '../store/filterStore.jsx';
+import { useFilter, rangeDays } from '../store/filterStore.jsx';
 import { filterDaily } from '../lib/filters.js';
 import { aggregateTotals } from '../lib/aggregators.js';
 import { addDays, rangeDates, compactCN, deltaPct } from '../lib/formatters.js';
@@ -104,7 +104,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
 
   const setRange = (rangeId) => {
     dispatch({ type: 'SET_RANGE', rangeId, daily: M?.daily || [] });
-    onRefresh();
+    onRefresh(rangeDays[rangeId]);
   };
 
   return (
@@ -117,7 +117,6 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
         onToggleSource={(s) => dispatch({ type: 'TOGGLE_SOURCE', source: s })}
         onSetModels={(models) => dispatch({ type: 'SET_MODELS', models })}
         onToggleCompare={() => dispatch({ type: 'TOGGLE_COMPARE' })}
-        onRefresh={onRefresh}
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

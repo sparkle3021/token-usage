@@ -14,7 +14,7 @@ export function GetDashboardData():Promise<model.DashboardData>;
 
 export function GetSettings():Promise<model.AppConfig>;
 
-export function GetTimeSeriesData():Promise<model.TimeSeriesData>;
+export function GetTimeSeriesData(arg1:number):Promise<model.TimeSeriesData>;
 
 export function ImportCCSwitchDB():Promise<model.CCSwitchImportResult>;
 

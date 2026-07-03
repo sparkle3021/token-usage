@@ -94,18 +94,18 @@ func (s *DashboardService) GetDashboardData() *model.DashboardData {
 
 // GetTimeSeriesData 获取时间序列数据，包含原始事件和小时聚合两层的用量。
 // 前端按 timeRows → hourRows → dailyRows 三级回退渲染趋势图。
-func (s *DashboardService) GetTimeSeriesData() *model.TimeSeriesData {
+func (s *DashboardService) GetTimeSeriesData(days int) *model.TimeSeriesData {
 	start := time.Now()
 	if s.db == nil {
 		log.Printf("[service] GetTimeSeriesData db=nil")
 		return &model.TimeSeriesData{}
 	}
-	timeRows, err := s.db.QueryTimeUsage()
+	timeRows, err := s.db.QueryTimeUsage(days)
 	if err != nil {
-		log.Printf("[service] GetTimeSeriesData QueryTimeUsage ERR: %v", err)
+		log.Printf("[service] GetTimeSeriesData(%d) QueryTimeUsage ERR: %v", days, err)
 	}
 	hourRows, _ := s.db.QueryHourUsage()
-	log.Printf("[service] GetTimeSeriesData timeRows=%d hourRows=%d elapsed=%v", len(timeRows), len(hourRows), time.Since(start))
+	log.Printf("[service] GetTimeSeriesData(%d) timeRows=%d hourRows=%d elapsed=%v", days, len(timeRows), len(hourRows), time.Since(start))
 	return &model.TimeSeriesData{Time: timeRows, Hour: hourRows}
 }
 

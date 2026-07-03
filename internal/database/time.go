@@ -77,16 +77,36 @@ func (m *Manager) DeleteTimeUsageForSource(device, source string) error {
 	return err
 }
 
-func (m *Manager) QueryTimeUsage() ([]model.TimeUsage, error) {
+func (m *Manager) QueryTimeUsage(days int) ([]model.TimeUsage, error) {
 	start := time.Now()
-	rows, err := m.db.Query(`
-		SELECT rowid, device, source, event_time, usage_date, model,
-			COALESCE(project_path,''), COALESCE(session_id,''),
-			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-			reasoning_output_tokens, total_tokens, cost_usd
-		FROM time_usage
-		ORDER BY event_time DESC
-	`)
+
+	since := ""
+	if days > 0 {
+		since = time.Now().AddDate(0, 0, -days).Format("2006-01-02")
+	}
+
+	var rows *sql.Rows
+	var err error
+	if since != "" {
+		rows, err = m.db.Query(`
+			SELECT rowid, device, source, event_time, usage_date, model,
+				COALESCE(project_path,''), COALESCE(session_id,''),
+				input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+				reasoning_output_tokens, total_tokens, cost_usd
+			FROM time_usage
+			WHERE usage_date >= ?
+			ORDER BY event_time DESC
+		`, since)
+	} else {
+		rows, err = m.db.Query(`
+			SELECT rowid, device, source, event_time, usage_date, model,
+				COALESCE(project_path,''), COALESCE(session_id,''),
+				input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+				reasoning_output_tokens, total_tokens, cost_usd
+			FROM time_usage
+			ORDER BY event_time DESC
+		`)
+	}
 	if err != nil {
 		return nil, err
 	}

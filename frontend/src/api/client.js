@@ -8,9 +8,9 @@ export function getDashboardData() {
   return window.go.main.App.GetDashboardData();
 }
 
-/** 获取时间序列数据（原始事件 + 小时聚合），对应 Go 后端 GetTimeSeriesData */
-export function getTimeSeriesData() {
-  return window.go.main.App.GetTimeSeriesData();
+/** 获取时间序列数据（原始事件 + 小时聚合），对应 Go 后端 GetTimeSeriesData(days) */
+export function getTimeSeriesData(days) {
+  return window.go.main.App.GetTimeSeriesData(days);
 }
 
 /** 触发增量采集，返回 false 表示采集已在运行 */
