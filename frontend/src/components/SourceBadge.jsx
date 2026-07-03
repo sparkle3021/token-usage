@@ -15,28 +15,28 @@ export default function SourceBadge({ source, selected, onClick, size = 'sm' }) 
     // Clickable filter badge with selected/unselected state
     const stateCls = selected
       ? 'text-white border-transparent'
-      : 'bg-transparent border';
+      : 'border';
     return (
       <span
         className={`${base} ${stateCls}`}
         style={{
           borderColor: selected ? 'transparent' : color,
-          backgroundColor: selected ? color : 'transparent',
+          backgroundColor: selected ? color : `color-mix(in oklch, ${color} 15%, transparent)`,
           color: selected ? '#fff' : color,
         }}
         onClick={onClick}
       >
-        <SourceIcon name={source} className={iconSize} />
+        <SourceIcon name={source} className={`${iconSize}${selected ? ' brightness-0 invert' : ''}`} />
         {source}
       </span>
     );
   }
 
-  // Display-only badge (TopModels style)
+  // Display-only badge with semi-transparent background
   return (
     <span
-      className={`${base} bg-transparent border`}
-      style={{ borderColor: color, color }}
+      className={`${base} border`}
+      style={{ borderColor: color, color, backgroundColor: `color-mix(in oklch, ${color} 15%, transparent)` }}
       onClick={onClick}
     >
       <SourceIcon name={source} className={iconSize} />

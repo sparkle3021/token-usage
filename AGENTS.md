@@ -3,12 +3,10 @@
 ## Quick Start
 
 ```bash
-# Kill old dev server first, then start
+# Kill old dev server first, then start in background
 Get-Process -Name "TokenUsage","wails" -EA 0 | Stop-Process -Force
-$logDir = "$env:USERPROFILE\.token-dashboard\logs"
-Start-Process -FilePath "C:\Users\mii\go\bin\wails.exe" -ArgumentList "dev" -WindowStyle Hidden `
-  -RedirectStandardOutput "$logDir\vite.log" -RedirectStandardError "$logDir\wails-dev.log"
-# Tail Go logs: Get-Content "$env:USERPROFILE\.token-dashboard\logs\app.log" -Follow
+Start-Process -FilePath "wails" -ArgumentList "dev" -WindowStyle Hidden
+# Tail Go logs (in another terminal): Get-Content "$env:USERPROFILE\.token-dashboard\logs\app.log" -Follow
 
 # Build (must succeed before dev; generates Go bindings)
 wails build
