@@ -86,8 +86,8 @@ func (s *CollectionService) CollectStatus() *model.CollectStatus {
 	}
 }
 
-// ClearAllData 清除所有用量数据和采集历史，保留 app_config 设置。
-// 同时清除采集器的文件解析缓存，确保下次同步会重新解析。
+// ClearAllData 清除所有用量数据、采集历史、及同步状态（checkpoint）。
+// 仅保留用户配置（cc_switch_db_path、auto_sync_minutes 等）。
 func (s *CollectionService) ClearAllData() error {
 	if s.db == nil {
 		return fmt.Errorf("数据库未初始化")
