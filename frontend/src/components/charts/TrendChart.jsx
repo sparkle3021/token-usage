@@ -91,11 +91,11 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
       </CardHeader>
       <CardContent>
         {activeSources.length === 0 ? (
-          <div className="flex items-center justify-center" style={{ height: 325 }}>
+          <div className="flex items-center justify-center" style={{ minHeight: 280, height: 'clamp(280px, 35vh, 400px)' }}>
             <span className="text-sm text-muted-foreground">当前时间范围内无数据</span>
           </div>
         ) : (
-        <div style={{ height: 325 }}>
+        <div style={{ minHeight: 280, height: 'clamp(280px, 35vh, 400px)' }}>
           <ResponsiveContainer width="100%" height="100%">
             {mode === 'line' ? (
               <LineChart data={chartData}>

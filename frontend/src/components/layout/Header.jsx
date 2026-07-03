@@ -8,7 +8,7 @@ import SettingsDialog from '../SettingsDialog.jsx';
 
 export default function Header({ page, setPage, lastSync, onCollect, collecting, refreshing, onRefresh, onClearData, onSettingsChange }) {
   return (
-    <div className="flex items-center justify-between gap-4 pb-4 border-b">
+    <div className="flex items-center justify-between gap-4 pb-4 border-b flex-wrap">
       <div className="flex items-center gap-3">
         <div>
           <h1 className="text-base font-semibold">Token Usage</h1>

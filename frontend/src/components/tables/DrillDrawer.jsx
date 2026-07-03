@@ -207,7 +207,7 @@ function SparkLine({ dates, values }) {
   const pts = values.map((v, i) => [16 + (i / Math.max(1, values.length - 1)) * (w - 32), h - 16 - (v / max) * (h - 32)]);
   const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ');
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full block" style={{ height: 100 }}>
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full block" style={{ minHeight: 60, height: 'clamp(60px, 12vh, 100px)' }}>
       <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="oklch(0.55 0.16 265)" stopOpacity="0.25"/><stop offset="100%" stopColor="oklch(0.55 0.16 265)" stopOpacity="0"/></linearGradient></defs>
       <path d={d + ` L${w-16},${h-16} L16,${h-16} Z`} fill="url(#sg)"/>
       <path d={d} fill="none" stroke="oklch(0.55 0.16 265)" strokeWidth="2"/>

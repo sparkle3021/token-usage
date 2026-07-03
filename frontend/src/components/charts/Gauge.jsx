@@ -22,7 +22,7 @@ export default function Gauge({ rate, cacheRead, cacheCreation, prevRate }) {
       </CardHeader>
       <CardContent>
         <div className="flex flex-col items-center py-2">
-          <svg viewBox="0 0 180 100" width="160" height="85">
+          <svg viewBox="0 0 180 100" className="w-40 max-w-full h-auto">
             <path d="M 10 90 A 80 80 0 0 1 170 90" stroke="oklch(0.93 0.004 80)" strokeWidth="14" fill="none" strokeLinecap="round"/>
             <path d="M 10 90 A 80 80 0 0 1 170 90" stroke="url(#gg)" strokeWidth="14" fill="none" strokeLinecap="round" strokeDasharray={`${dash} ${C}`} style={{ transition: 'stroke-dasharray 0.6s' }} />
             <defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="oklch(0.65 0.13 200)"/><stop offset="100%" stopColor="oklch(0.55 0.16 265)"/></linearGradient></defs>

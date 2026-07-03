@@ -90,7 +90,7 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
           <CardContent className="pt-4">
             <h4 className="text-sm font-medium mb-3">Token 使用趋势（24 小时）</h4>
             {hasHourly ? (
-              <div style={{ height: 200 }}>
+              <div style={{ minHeight: 160, height: 'clamp(160px, 25vh, 250px)' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={hourlyData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
