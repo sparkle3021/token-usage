@@ -104,7 +104,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
 
   const setRange = (rangeId) => {
     dispatch({ type: 'SET_RANGE', rangeId, daily: M?.daily || [] });
-    onRefresh(rangeDays[rangeId]);
+    onRefresh(false, rangeDays[rangeId]);
   };
 
   return (

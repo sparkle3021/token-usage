@@ -100,9 +100,14 @@ func (s *DashboardService) GetTimeSeriesData(days int) *model.TimeSeriesData {
 		log.Printf("[service] GetTimeSeriesData db=nil")
 		return &model.TimeSeriesData{}
 	}
-	timeRows, err := s.db.QueryTimeUsage(days)
-	if err != nil {
-		log.Printf("[service] GetTimeSeriesData(%d) QueryTimeUsage ERR: %v", days, err)
+	var timeRows []model.TimeUsage
+	// time_usage 仅在"今天"小时视图需要（days=1），其他时间范围前端只用 daily 数据
+	if days == 1 {
+		var err error
+		timeRows, err = s.db.QueryTimeUsage(days)
+		if err != nil {
+			log.Printf("[service] GetTimeSeriesData(%d) QueryTimeUsage ERR: %v", days, err)
+		}
 	}
 	hourRows, _ := s.db.QueryHourUsage()
 	log.Printf("[service] GetTimeSeriesData(%d) timeRows=%d hourRows=%d elapsed=%v", days, len(timeRows), len(hourRows), time.Since(start))
