@@ -274,9 +274,8 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 // ---------------------------------------------------------------------------
 
 type rollupAccKey struct {
-	source string
-	date   string
-	model  string
+	date  string
+	model string
 }
 
 func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) error {
@@ -284,8 +283,7 @@ func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) 
 
 	query := `SELECT date, app_type, model, input_tokens, output_tokens,
 		cache_read_tokens, cache_creation_tokens, total_cost_usd
-		FROM usage_daily_rollups
-		WHERE app_type NOT IN ('claude', 'codex', 'opencode')`
+		FROM usage_daily_rollups`
 	args := []interface{}{}
 	if rollupDate != "" {
 		query += ` AND date > ?`
@@ -323,17 +321,15 @@ func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) 
 			modelName = "unknown"
 		}
 		costUSD, _ := strconv.ParseFloat(costStr, 64)
-		source := ccSourceFromAppType(appType)
-
 		if usageDate > maxDate {
 			maxDate = usageDate
 		}
 
-		key := rollupAccKey{source: source, date: usageDate, model: modelName}
+		key := rollupAccKey{date: usageDate, model: modelName}
 		existing, ok := rollupAcc[key]
 		if !ok {
 			rollupAcc[key] = &model.DailyUsage{
-				Device: c.device, Source: source, UsageDate: usageDate, Model: modelName,
+				Device: c.device, UsageDate: usageDate, Model: modelName,
 			}
 			existing = rollupAcc[key]
 		}
