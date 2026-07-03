@@ -18,6 +18,16 @@ jobs:
         with:
           go-version: "1.25"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build frontend (required for go:embed)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
       - name: go vet
         run: go vet ./...
 
@@ -26,7 +36,7 @@ jobs:
 
   # ── 前端检查（跨平台） ──────────────────────────────────
   frontend-check:
-    name: Frontend Lint & Build
+    name: Frontend Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,10 +52,6 @@ jobs:
       - name: oxlint
         working-directory: frontend
         run: npx oxlint@latest
-
-      - name: Vite build
-        working-directory: frontend
-        run: npm run build
 
   # ── 桌面应用构建（仅 Windows） ──────────────────────────
   desktop-build:
