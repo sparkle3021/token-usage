@@ -68,7 +68,4 @@ export function importCCSwitchDB() {
   return window.go.main.App.ImportCCSwitchDB();
 }
 
-/** 打开文件对话框选择 CSV 文件并导入 */
-export function importCSV() {
-  return window.go.main.App.ImportCSV();
-}
+

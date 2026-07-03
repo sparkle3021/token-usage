@@ -13,8 +13,6 @@ import (
 	"token-dashboard/internal/model"
 	"token-dashboard/internal/pricing"
 	"token-dashboard/internal/service"
-
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App Wails 应用主结构体，持有各服务实例，并将方法绑定到前端 window.go.main.App.*。
@@ -193,24 +191,4 @@ func (a *App) ImportCCSwitchDB() model.CCSwitchImportResult {
 	return a.importSvc.ImportCCSwitchDB()
 }
 
-// ImportCSV 打开文件选择对话框让用户选择 CSV 文件，然后委托 importSvc 解析导入。
-func (a *App) ImportCSV() model.CSVImportResult {
-	if a.db == nil {
-		return model.CSVImportResult{Error: "数据库未初始化"}
-	}
 
-	filePath, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title: "选择 cc-switch 历史数据 CSV",
-		Filters: []wailsRuntime.FileFilter{
-			{DisplayName: "CSV Files (*.csv)", Pattern: "*.csv"},
-		},
-	})
-	if err != nil {
-		return model.CSVImportResult{Error: fmt.Sprintf("打开文件对话框失败: %v", err)}
-	}
-	if filePath == "" {
-		return model.CSVImportResult{Error: "已取消"}
-	}
-
-	return a.importSvc.ImportCSV(filePath)
-}

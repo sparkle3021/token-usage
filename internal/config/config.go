@@ -3,13 +3,10 @@
 package config
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
-	"time"
 
 	"token-dashboard/internal/config/seed"
 )
@@ -101,27 +98,4 @@ func AtoiDef(s string, def int) int {
 	return n
 }
 
-func PadNum(s string) string {
-	s = strings.TrimSpace(s)
-	if len(s) == 1 {
-		return "0" + s
-	}
-	return s
-}
 
-func NormalizeCSVDate(s string) string {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return ""
-	}
-	parts := strings.Split(s, "/")
-	if len(parts) == 3 && len(parts[0]) == 4 {
-		return fmt.Sprintf("%s-%s-%s", parts[0], PadNum(parts[1]), PadNum(parts[2]))
-	}
-	for _, layout := range []string{"2006-01-02", "2006/1/2", time.RFC3339[:10]} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t.Format("2006-01-02")
-		}
-	}
-	return ""
-}

@@ -84,14 +84,6 @@ type CollectStatus struct {
 	Stderr     string  `json:"stderr"`
 }
 
-// CSVImportResult is returned by ImportCSV.
-type CSVImportResult struct {
-	Total    int    `json:"total"`
-	Imported int    `json:"imported"`
-	Skipped  int    `json:"skipped"`
-	Error    string `json:"error,omitempty"`
-}
-
 // AppConfig holds persistent application settings.
 type AppConfig struct {
 	AutoSyncMinutes int    `json:"autoSyncMinutes"`

@@ -34,10 +34,6 @@ export function ImportCCSwitchDB() {
   return window['go']['main']['App']['ImportCCSwitchDB']();
 }
 
-export function ImportCSV() {
-  return window['go']['main']['App']['ImportCSV']();
-}
-
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
 }
