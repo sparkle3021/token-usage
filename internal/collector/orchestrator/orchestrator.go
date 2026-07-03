@@ -1,4 +1,6 @@
-package engine
+// Package orchestrator 采集编排引擎，负责并行运行所有 collector、顺序事务写入和检查点管理。
+// 核心流程：goroutine pool 并行收集 → 顺序 processCollector 事务写入 → checkpoint 持久化。
+package orchestrator
 
 import (
 	"context"
@@ -15,6 +17,7 @@ import (
 	"token-dashboard/internal/pricing"
 )
 
+// Status 采集引擎运行状态，供前端轮询展示。
 type Status struct {
 	Status     string  `json:"status"`
 	Message    string  `json:"message"`
@@ -25,8 +28,10 @@ type Status struct {
 	Stderr     string  `json:"stderr"`
 }
 
+// EventCallback 采集事件回调签名，用于桥接到 Wails 运行时。
 type EventCallback func(event string, data interface{})
 
+// Engine 采集编排引擎，管理 collector 池、并行执行和事务写入。
 type Engine struct {
 	collectors []collector.Collector
 	db         *database.Manager
@@ -43,6 +48,8 @@ type Engine struct {
 	forceFull   bool // force full collection on next run
 }
 
+// New 创建采集编排引擎，初始化所有内置 collector 和 CC-Switch 收集器。
+// 从环境变量 COLLECTOR_PARALLELISM 读取并发数，默认 4。
 func New(db *database.Manager, pr *pricing.Engine) *Engine {
 	e := &Engine{
 		db:     db,

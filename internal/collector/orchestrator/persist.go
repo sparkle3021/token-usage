@@ -1,4 +1,5 @@
-package engine
+// Package orchestrator 的子文件，文件指纹持久化适配层。
+package orchestrator
 
 import (
 	"token-dashboard/internal/collector"

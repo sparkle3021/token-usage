@@ -23,10 +23,21 @@ go build ./...
 ## Architecture
 
 - **Desktop shell**: Wails v2 (Go → WebView2). Entry: `main.go` binds `App` struct methods as `window.go.main.App.*`
-- **Go backend**: `app.go` (dashboard API + collection), `internal/collector/engine/engine.go` (orchestration), `internal/database/database.go` (SQLite)
+- **Go backend**: `app.go` (thin forwarding layer, ~150 lines), `internal/service/` (business logic), `internal/orchestrator/` (collection orchestration), `internal/database/` (SQLite DAO split by table), `internal/config/` (env vars)
 - **Frontend**: React 19 JSX (not TSX), Vite 8, Tailwind CSS v4, shadcn/ui (base-nova style), Recharts
 - **Database**: `~/.token-dashboard/td.db` (SQLite, WAL mode, `modernc.org/sqlite` no CGO). Override via `DATA_DIR` env.
 - **Pricing engine**: model resolution chain = exact → prefix → fuzzy → hardcoded override
+
+### Backend Layer Stack
+
+```
+app.go (thin forwarding ~150 lines)
+  └→ service/ (dashboard, collection, import, setting)
+       └→ database/ (db.go, daily.go, hour.go, time.go, session.go, run.go, cache.go, config.go)
+       └→ collector/orchestrator/ (parallel collect + transactional write)
+       └→ config/ (DATA_DIR, COLLECTOR_PARALLELISM, defaults)
+       └→ pricing/ (model pricing resolution)
+```
 
 ## Collection System
 
@@ -66,6 +77,8 @@ hour_usage       → BuildDailyFromHourUsage → daily_usage (SUM + MAX merge)
 Three-layer data merge for TrendChart/Heatmap (in frontend): `timeRows → hourRows → dailyRows` fallback.
 
 ## Database
+
+Files: `internal/database/` — split by table (same `package database`).
 
 | Table | PK | Notes |
 |-------|-----|-------|
