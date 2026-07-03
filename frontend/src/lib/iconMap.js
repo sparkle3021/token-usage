@@ -67,7 +67,7 @@ const PALETTE = {
   'claude-desktop': 'oklch(0.654 0.147 38.2)',
   'Codex CLI': 'oklch(0.418 0.193 262.0)',
   'Hermes Agent': 'oklch(0.58 0.14 240)',
-  'OpenClaw': 'oklch(0.549 0.187 25.9)',
+  'OpenClaw': 'oklch(0.463 0.184 25.2)',
   'OpenCode': 'oklch(0.45 0.160 140.0)',
   'Gemini CLI': 'oklch(0.529 0.223 295.0)',
   'Cursor': 'oklch(0.68 0.12 220)',
