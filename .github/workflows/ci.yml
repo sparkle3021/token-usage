@@ -2,12 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
 
 jobs:
-  # ── Go 后端检查（跨平台） ──────────────────────────────
+  # ── Go 后端检查 ──────────────────────────────────────
   go-check:
     name: Go Vet & Build
     runs-on: ubuntu-latest
@@ -34,7 +36,7 @@ jobs:
       - name: go build
         run: go build ./...
 
-  # ── 前端检查（跨平台） ──────────────────────────────────
+  # ── 前端代码检查 ──────────────────────────────────────
   frontend-check:
     name: Frontend Lint
     runs-on: ubuntu-latest
@@ -53,9 +55,9 @@ jobs:
         working-directory: frontend
         run: npx oxlint@latest
 
-  # ── 桌面应用构建（仅 Windows） ──────────────────────────
+  # ── 桌面应用构建 & Release ─────────────────────────────
   desktop-build:
-    name: Wails Build (Windows)
+    name: Wails Build & Release (Windows)
     runs-on: windows-latest
     needs: [go-check, frontend-check]
     steps:
@@ -84,3 +86,9 @@ jobs:
         with:
           name: TokenUsage-windows
           path: build/bin/TokenUsage.exe
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/bin/TokenUsage.exe
+          generate_release_notes: true
