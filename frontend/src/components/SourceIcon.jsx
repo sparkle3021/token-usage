@@ -7,6 +7,7 @@ import opencodeIcon from '../assets/icons/opencode.svg';
 
 const SOURCE_ICONS = {
   'Claude Code': claudeIcon,
+  'claude-desktop': claudeIcon,
   'Codex CLI': gptIcon,
   'Gemini CLI': geminiIcon,
   'Hermes Agent': hermesIcon,

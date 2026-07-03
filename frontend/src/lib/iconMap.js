@@ -26,6 +26,7 @@ import modelZhipu from '../assets/models/zhipu.svg';
 
 const SOURCE_ICONS = {
   'Claude Code': claudeIcon,
+  'claude-desktop': claudeIcon,
   'Codex CLI': gptIcon,
   'Gemini CLI': geminiIcon,
   'Hermes Agent': hermesIcon,
@@ -63,6 +64,7 @@ export function getModelIconUrl(name) {
 
 const PALETTE = {
   'Claude Code': 'oklch(0.55 0.16 265)',
+  'claude-desktop': 'oklch(0.55 0.16 265)',
   'Codex CLI': 'oklch(0.60 0.15 295)',
   'Hermes Agent': 'oklch(0.58 0.14 240)',
   'OpenClaw': 'oklch(0.65 0.11 200)',
