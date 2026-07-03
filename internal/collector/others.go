@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -87,10 +86,7 @@ func (c *HermesCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 // OpenCode
 // ---------------------------------------------------------------------------
 
-type OpenCodeCollector struct {
-	store             CheckpointStore
-	pendingMaxCreated int64
-}
+type OpenCodeCollector struct{}
 
 func NewOpenCodeCollector() *OpenCodeCollector {
 	return &OpenCodeCollector{}
@@ -98,16 +94,6 @@ func NewOpenCodeCollector() *OpenCodeCollector {
 
 func (c *OpenCodeCollector) ID() string    { return "opencode" }
 func (c *OpenCodeCollector) Source() string { return "OpenCode" }
-
-func (c *OpenCodeCollector) SetStore(store CheckpointStore) {
-	c.store = store
-}
-
-func (c *OpenCodeCollector) SavePendingCheckpoints() {
-	if c.pendingMaxCreated > 0 {
-		c.store.SetCheckpoint("opencode_max_time_created", strconv.FormatInt(c.pendingMaxCreated, 10))
-	}
-}
 
 func opencodeDBPath() string {
 	if env := os.Getenv("OPENCODE_DATA_DIR"); env != "" {
@@ -127,47 +113,34 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
+		log.Printf("[collector] OpenCode open db error: %v", err)
 		return emptyResult("opencode", "OpenCode"), nil
 	}
 	defer db.Close()
-
-	// Read checkpoint: skip messages older than the last sync
-	var since int64
-	if c.store != nil {
-		ck, _ := c.store.GetCheckpoint("opencode_max_time_created")
-		if ck != "" {
-			since, _ = strconv.ParseInt(ck, 10, 64)
-		}
-	}
-	log.Printf("[collector] OpenCode checkpoint since=%d", since)
 
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
 	var events []EventRow
 
-	query := `SELECT m.id, m.session_id, m.time_created, m.data
+	var scanned, parseFailed, zeroTokens, noModelID int
+	var minCreated, maxCreated int64
+
+	rows, err := db.Query(`SELECT m.id, m.session_id, m.time_created, m.data
 		FROM message m
 		WHERE json_extract(m.data, '$.tokens') IS NOT NULL
-		AND json_extract(m.data, '$.modelID') IS NOT NULL`
-	args := []interface{}{}
-	if since > 0 {
-		query += ` AND m.time_created > ?`
-		args = append(args, since)
-	}
-	query += ` ORDER BY m.time_created ASC`
-
-	rows, err := db.Query(query, args...)
+		AND json_extract(m.data, '$.modelID') IS NOT NULL
+		ORDER BY m.time_created ASC`)
 	if err != nil {
 		log.Printf("[collector] OpenCode message query error: %v", err)
 	} else {
 		defer rows.Close()
-		var maxCreated int64
 		for rows.Next() {
 			var msgID, sessionID, dataStr string
 			var timeCreated int64
 			if err := rows.Scan(&msgID, &sessionID, &timeCreated, &dataStr); err != nil {
 				continue
 			}
+			scanned++
 
 			var msg struct {
 				ModelID string `json:"modelID"`
@@ -182,18 +155,24 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 				} `json:"tokens"`
 			}
 			if err := json.Unmarshal([]byte(dataStr), &msg); err != nil {
+				parseFailed++
 				continue
 			}
 			if msg.Tokens == nil || (msg.Tokens.Input == 0 && msg.Tokens.Output == 0) {
+				zeroTokens++
 				continue
 			}
 
+			if minCreated == 0 || timeCreated < minCreated {
+				minCreated = timeCreated
+			}
 			if timeCreated > maxCreated {
 				maxCreated = timeCreated
 			}
 
 			modelID := NormalizeModelForGrouping(msg.ModelID)
 			if modelID == "" {
+				noModelID++
 				modelID = "unknown"
 			}
 
@@ -225,13 +204,12 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 			}
 			dailyMap[dk].add(t.Input, t.Output, t.CacheRead, t.CacheWrite, t.Reasoning, cost)
 		}
-
-		if maxCreated > 0 {
-			c.pendingMaxCreated = maxCreated
-		}
 	}
 
-	log.Printf("[collector] OpenCode done daily=%d events=%d pendingCK=%d", len(dailyMap), len(events), c.pendingMaxCreated)
+	log.Printf("[collector] OpenCode done scanned=%d events=%d parseFailed=%d zeroTokens=%d noModelID=%d daily=%d dateRange=[%s..%s]",
+		scanned, len(events), parseFailed, zeroTokens, noModelID, len(dailyMap),
+		time.UnixMilli(minCreated).Format("2006-01-02"),
+		time.UnixMilli(maxCreated).Format("2006-01-02"))
 
 	return buildResult("opencode", "OpenCode", dailyMap, sessionMap, events), nil
 }
