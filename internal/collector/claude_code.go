@@ -162,8 +162,9 @@ func (c *ClaudeCodeCollector) scanAndParse(dir string,
 }
 
 func (c *ClaudeCodeCollector) parseFile(filePath string) []claudeRecord {
-	if cached, ok := c.cache.Get(filePath); ok {
-		return cached.([]claudeRecord)
+	records, offset, state := c.cache.GetWithOffset(filePath)
+	if state == StateCached {
+		return records.([]claudeRecord)
 	}
 
 	f, err := os.Open(filePath)
@@ -172,7 +173,14 @@ func (c *ClaudeCodeCollector) parseFile(filePath string) []claudeRecord {
 	}
 	defer f.Close()
 
-	var records []claudeRecord
+	fi, _ := f.Stat()
+	fileSize := fi.Size()
+
+	if state == StateIncremental && offset > 0 {
+		f.Seek(offset, 0)
+	}
+
+	var parsed []claudeRecord
 	dedupIndex := make(map[string]int)
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
@@ -224,7 +232,7 @@ func (c *ClaudeCodeCollector) parseFile(filePath string) []claudeRecord {
 		}
 		if dedupKey != "" {
 			if idx, ok := dedupIndex[dedupKey]; ok {
-				existing := &records[idx]
+				existing := &parsed[idx]
 				if rec.input > existing.input {
 					existing.input = rec.input
 				}
@@ -245,13 +253,13 @@ func (c *ClaudeCodeCollector) parseFile(filePath string) []claudeRecord {
 				}
 				continue
 			}
-			dedupIndex[dedupKey] = len(records)
+			dedupIndex[dedupKey] = len(parsed)
 		}
-		records = append(records, rec)
+		parsed = append(parsed, rec)
 	}
 
-	c.cache.Set(filePath, records)
-	return records
+	c.cache.SetWithOffset(filePath, parsed, fileSize)
+	return parsed
 }
 
 // ---------------------------------------------------------------------------

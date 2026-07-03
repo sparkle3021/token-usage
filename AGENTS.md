@@ -6,7 +6,7 @@
 # Kill old dev server first, then start in background
 Get-Process -Name "TokenUsage","wails" -EA 0 | Stop-Process -Force
 Start-Process -FilePath "wails" -ArgumentList "dev" -WindowStyle Hidden
-# Tail Go logs (in another terminal): Get-Content "$env:USERPROFILE\.token-dashboard\logs\app.log" -Follow
+# Tail Go logs (in another terminal): Get-Content "$env:USERPROFILE\.token-usage\logs\app.log" -Follow
 
 # Build (must succeed before dev; generates Go bindings)
 wails build
@@ -28,7 +28,7 @@ go build ./...
 - **Desktop shell**: Wails v2 (Go → WebView2). Entry: `main.go` binds `App` struct methods as `window.go.main.App.*`
 - **Go backend**: `app.go` (thin forwarding layer, ~190 lines), `internal/service/` (business logic), `internal/orchestrator/` (collection orchestration), `internal/database/` (SQLite DAO split by table), `internal/config/` (env vars)
 - **Frontend**: React 19 JSX (not TSX), Vite 8, Tailwind CSS v4, shadcn/ui (base-nova style, `@/` alias), Recharts
-- **Database**: `~/.token-dashboard/td.db` (SQLite, WAL mode, `modernc.org/sqlite` no CGO). Override via `DATA_DIR` env.
+- **Database**: `~/.token-usage/td.db` (SQLite, WAL mode, `modernc.org/sqlite` no CGO). Override via `DATA_DIR` env.
 - **Pricing engine**: model resolution chain = exact → prefix → fuzzy → hardcoded override. Seed data bundled via `internal/config/seed/`.
 
 ### App Container Height Constraint
@@ -88,4 +88,4 @@ Files: `internal/database/` — split by table (same `package database`).
 - **No HTTP API** — Wails IPC bridge. Frontend calls `window.go.main.App.*`.
 - **oxlint** only runs two React rules: `rules-of-hooks` and `only-export-components`
 - **SourceBadge color** comes from `iconMap.js` `getSourceColor()` → oklch palette. Badge uses `color-mix(in oklch, ${color} 15%, transparent)` for semi-transparent background.
-- **Collected data is local only** — no network upload. Database stored in `~/.token-dashboard/td.db`.
+- **Collected data is local only** — no network upload. Database stored in `~/.token-usage/td.db`.

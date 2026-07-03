@@ -13,7 +13,7 @@ import (
 
 // Config 应用配置，从环境变量和默认值加载。
 type Config struct {
-	DataDir              string // 数据目录，默认 ~/.token-dashboard，可用 DATA_DIR 覆盖
+	DataDir              string // 数据目录，默认 ~/.token-usage，可用 DATA_DIR 覆盖
 	DBPath               string // SQLite 数据库路径
 	CollectorParallelism int    // 采集并发数，默认 4，环境变量 COLLECTOR_PARALLELISM
 }
@@ -45,7 +45,7 @@ func resolveDataDir() string {
 		abs, _ := filepath.Abs("data")
 		return abs
 	}
-	target := filepath.Join(home, ".token-dashboard")
+	target := filepath.Join(home, ".token-usage")
 
 	os.MkdirAll(target, 0755)
 	return target

@@ -17,13 +17,12 @@ func newCachePersister(db *database.Manager) *cachePersister {
 	return &cachePersister{db: db}
 }
 
-func (p *cachePersister) LoadParseCache(source, filePath string) (fingerprint string, ok bool) {
-	fp, _, found := p.db.GetParseCache(source, filePath)
-	return fp, found
+func (p *cachePersister) LoadParseCache(source, filePath string) (fingerprint string, lastOffset int64, ok bool) {
+	return p.db.GetParseCache(source, filePath)
 }
 
-func (p *cachePersister) SaveParseCache(source, filePath, fingerprint string) error {
-	return p.db.UpsertParseCacheFingerprint(source, filePath, fingerprint)
+func (p *cachePersister) SaveParseCache(source, filePath, fingerprint string, lastOffset int64) error {
+	return p.db.UpsertParseCacheFingerprint(source, filePath, fingerprint, lastOffset)
 }
 
 func (p *cachePersister) DeleteParseCacheBySource(source string) error {

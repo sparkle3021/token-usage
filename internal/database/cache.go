@@ -17,18 +17,30 @@ func (m *Manager) UpsertParseCache(source, filePath, fingerprint string, records
 	return err
 }
 
-func (m *Manager) UpsertParseCacheFingerprint(source, filePath, fingerprint string) error {
+func (m *Manager) UpsertParseCacheFingerprint(source, filePath, fingerprint string, lastOffset int64) error {
 	_, err := m.db.Exec(`
-		INSERT INTO parse_cache(source, file_path, fingerprint, records, updated_at)
-		VALUES (?, ?, ?, NULL, datetime('now','localtime'))
+		INSERT INTO parse_cache(source, file_path, fingerprint, records, last_parsed_offset, updated_at)
+		VALUES (?, ?, ?, NULL, ?, datetime('now','localtime'))
 		ON CONFLICT(source, file_path) DO UPDATE SET
 			fingerprint = excluded.fingerprint,
+			last_parsed_offset = excluded.last_parsed_offset,
 			updated_at = datetime('now','localtime')
-	`, source, filePath, fingerprint)
+	`, source, filePath, fingerprint, lastOffset)
 	return err
 }
 
-func (m *Manager) GetParseCache(source, filePath string) (fingerprint string, records []byte, ok bool) {
+func (m *Manager) GetParseCache(source, filePath string) (fingerprint string, lastOffset int64, ok bool) {
+	err := m.db.QueryRow(`
+		SELECT fingerprint, last_parsed_offset FROM parse_cache
+		WHERE source = ? AND file_path = ?
+	`, source, filePath).Scan(&fingerprint, &lastOffset)
+	if err != nil {
+		return "", 0, false
+	}
+	return fingerprint, lastOffset, true
+}
+
+func (m *Manager) GetParseCacheWithRecord(source, filePath string) (fingerprint string, records []byte, ok bool) {
 	err := m.db.QueryRow(`
 		SELECT fingerprint, records FROM parse_cache
 		WHERE source = ? AND file_path = ?

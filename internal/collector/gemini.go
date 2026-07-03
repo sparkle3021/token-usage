@@ -98,8 +98,9 @@ func (c *GeminiCollector) collectFile(fp string,
 	dailyMap map[string]*dailyAgg, sessionMap map[string]*sessionAgg,
 	events *[]EventRow, pricing TokenCalc,
 ) {
-	if cached, ok := c.cache.Get(fp); ok {
-		for _, ev := range cached.([]geminiEvent) {
+	records, offset, state := c.cache.GetWithOffset(fp)
+	if state == StateCached {
+		for _, ev := range records.([]geminiEvent) {
 			c.accumulate(ev, dailyMap, sessionMap, events, pricing)
 		}
 		return
@@ -109,11 +110,14 @@ func (c *GeminiCollector) collectFile(fp string,
 	var results []geminiEvent
 	switch ext {
 	case ".jsonl":
-		results = c.parseJSONL(fp)
+		results = c.parseJSONL(fp, offset, state == StateIncremental)
 	default:
 		results = c.parseJSON(fp)
 	}
-	c.cache.Set(fp, results)
+	fi, _ := os.Stat(fp)
+	if fi != nil {
+		c.cache.SetWithOffset(fp, results, fi.Size())
+	}
 	for _, ev := range results {
 		c.accumulate(ev, dailyMap, sessionMap, events, pricing)
 	}
@@ -281,12 +285,16 @@ func (c *GeminiCollector) parseHeadlessStats(raw json.RawMessage, modelHint, dat
 // JSONL parser
 // ---------------------------------------------------------------------------
 
-func (c *GeminiCollector) parseJSONL(fp string) []geminiEvent {
+func (c *GeminiCollector) parseJSONL(fp string, offset int64, incremental bool) []geminiEvent {
 	f, err := os.Open(fp)
 	if err != nil {
 		return nil
 	}
 	defer f.Close()
+
+	if incremental && offset > 0 {
+		f.Seek(offset, 0)
+	}
 
 	var results []geminiEvent
 	var currentModel, sessionID string

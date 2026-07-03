@@ -139,8 +139,9 @@ func (s *codexUsageSummary) isZero() bool {
 }
 
 func (c *CodexCollector) parseSessionFile(fp string) []codexEvent {
-	if cached, ok := c.cache.Get(fp); ok {
-		return cached.([]codexEvent)
+	records, offset, state := c.cache.GetWithOffset(fp)
+	if state == StateCached {
+		return records.([]codexEvent)
 	}
 
 	f, err := os.Open(fp)
@@ -148,6 +149,13 @@ func (c *CodexCollector) parseSessionFile(fp string) []codexEvent {
 		return nil
 	}
 	defer f.Close()
+
+	fi, _ := f.Stat()
+	fileSize := fi.Size()
+
+	if state == StateIncremental && offset > 0 {
+		f.Seek(offset, 0)
+	}
 
 	var events []codexEvent
 	var currentModel string
@@ -249,6 +257,6 @@ func (c *CodexCollector) parseSessionFile(fp string) []codexEvent {
 		}
 	}
 
-	c.cache.Set(fp, events)
+	c.cache.SetWithOffset(fp, events, fileSize)
 	return events
 }

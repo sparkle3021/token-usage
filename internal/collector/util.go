@@ -338,10 +338,18 @@ func int64ToStr(n int64) string {
 
 // PersistHandler is the optional persistence backend for ParseCache.
 type PersistHandler interface {
-	LoadParseCache(source, filePath string) (fingerprint string, ok bool)
-	SaveParseCache(source, filePath, fingerprint string) error
+	LoadParseCache(source, filePath string) (fingerprint string, lastOffset int64, ok bool)
+	SaveParseCache(source, filePath, fingerprint string, lastOffset int64) error
 	DeleteParseCacheBySource(source string) error
 }
+
+type ParseState int
+
+const (
+	StateCached      ParseState = iota // fingerprint matches, records in memory
+	StateIncremental                   // file grew (size > last_offset), incremental parse
+	StateParse                         // no cache or file shrank, full parse
+)
 
 // ParseCache is a simple file-fingerprint based parse cache.
 // Fingerprints are stored in memory immediately but only persisted
@@ -361,6 +369,7 @@ type ParseCache struct {
 type cacheEntry struct {
 	Fingerprint string
 	Records     interface{}
+	LastOffset  int64
 }
 
 func NewParseCache(version int) *ParseCache {
@@ -388,10 +397,10 @@ func (c *ParseCache) LoadFromDB(source string, paths []string) int {
 	defer c.mu.Unlock()
 	loaded := 0
 	for _, path := range paths {
-		fp, ok := c.persister.LoadParseCache(source, path)
+		fp, offset, ok := c.persister.LoadParseCache(source, path)
 		if ok {
 			if _, exists := c.store[path]; !exists {
-				c.store[path] = &cacheEntry{Fingerprint: fp}
+				c.store[path] = &cacheEntry{Fingerprint: fp, LastOffset: offset}
 				loaded++
 			}
 		}
@@ -445,31 +454,39 @@ func (c *ParseCache) Clear() {
 }
 
 // Get returns cached records if the file is unchanged.
-func (c *ParseCache) Get(filePath string) (interface{}, bool) {
+func (c *ParseCache) GetWithOffset(filePath string) (interface{}, int64, ParseState) {
 	fp := FileFingerprint(filePath)
 	if fp == "" {
-		return nil, false
+		return nil, 0, StateParse
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	entry, ok := c.store[filePath]
-	if ok && entry.Fingerprint == fp {
-		if entry.Records != nil {
-			return entry.Records, true
-		}
-		// fingerprint matches but records not in memory — caller must re-parse
-		return nil, false
+	if !ok {
+		return nil, 0, StateParse
 	}
-	return nil, false
+
+	if entry.Fingerprint == fp && entry.Records != nil {
+		return entry.Records, 0, StateCached
+	}
+
+	if entry.LastOffset > 0 {
+		fi, err := os.Stat(filePath)
+		if err == nil && fi.Size() > entry.LastOffset {
+			return nil, entry.LastOffset, StateIncremental
+		}
+	}
+
+	return nil, 0, StateParse
 }
 
 // Set stores parsed records for a file. The fingerprint is held in memory
 // but NOT persisted yet — call PersistPending() to write all pending
 // fingerprints to the backend. This prevents the cache from skipping
 // re-parses after a crash during the engine's write phase.
-func (c *ParseCache) Set(filePath string, records interface{}) {
+func (c *ParseCache) SetWithOffset(filePath string, records interface{}, fileSize int64) {
 	fp := FileFingerprint(filePath)
 	if fp == "" {
 		return
@@ -480,6 +497,7 @@ func (c *ParseCache) Set(filePath string, records interface{}) {
 	c.store[filePath] = &cacheEntry{
 		Fingerprint: fp,
 		Records:     records,
+		LastOffset:  fileSize,
 	}
 	if !existed {
 		c.newPaths++
@@ -494,26 +512,38 @@ func (c *ParseCache) PersistPending() error {
 	c.mu.Lock()
 	pending := c.pending
 	c.pending = nil
+	persistData := make([]struct {
+		path   string
+		offset int64
+	}, 0, len(pending))
+	for _, path := range pending {
+		if entry, ok := c.store[path]; ok {
+			persistData = append(persistData, struct {
+				path   string
+				offset int64
+			}{path, entry.LastOffset})
+		}
+	}
 	persister, source := c.persister, c.source
 	c.mu.Unlock()
 
-	if persister == nil || len(pending) == 0 {
+	if persister == nil || len(persistData) == 0 {
 		return nil
 	}
 
 	var lastErr error
-	for _, path := range pending {
-		fp := FileFingerprint(path)
+	for _, d := range persistData {
+		fp := FileFingerprint(d.path)
 		if fp == "" {
 			continue
 		}
-		if err := persister.SaveParseCache(source, path, fp); err != nil {
-			log.Printf("[cache] PersistPending error source=%s path=%s err=%v", source, path, err)
+		if err := persister.SaveParseCache(source, d.path, fp, d.offset); err != nil {
+			log.Printf("[cache] PersistPending error source=%s path=%s err=%v", source, d.path, err)
 			lastErr = err
 		}
 	}
 	if lastErr == nil {
-		log.Printf("[cache] PersistPending ok source=%s count=%d", source, len(pending))
+		log.Printf("[cache] PersistPending ok source=%s count=%d", source, len(persistData))
 	}
 	return lastErr
 }

@@ -139,13 +139,13 @@ func (m *Manager) initPreparedStmts() error {
 			last_activity = excluded.last_activity,
 			project_path = excluded.project_path,
 			model = excluded.model,
-			input_tokens = excluded.input_tokens,
-			output_tokens = excluded.output_tokens,
-			cache_creation_tokens = excluded.cache_creation_tokens,
-			cache_read_tokens = excluded.cache_read_tokens,
-			reasoning_output_tokens = excluded.reasoning_output_tokens,
-			total_tokens = excluded.total_tokens,
-			cost_usd = excluded.cost_usd,
+			input_tokens = MAX(excluded.input_tokens, session_usage.input_tokens),
+			output_tokens = MAX(excluded.output_tokens, session_usage.output_tokens),
+			cache_creation_tokens = MAX(excluded.cache_creation_tokens, session_usage.cache_creation_tokens),
+			cache_read_tokens = MAX(excluded.cache_read_tokens, session_usage.cache_read_tokens),
+			reasoning_output_tokens = MAX(excluded.reasoning_output_tokens, session_usage.reasoning_output_tokens),
+			total_tokens = MAX(excluded.total_tokens, session_usage.total_tokens),
+			cost_usd = MAX(excluded.cost_usd, session_usage.cost_usd),
 			updated_at = datetime('now','localtime')
 	`)
 	if err != nil {
@@ -314,6 +314,7 @@ func (m *Manager) initSchema() error {
 	}
 
 	m.db.Exec("ALTER TABLE collection_runs ADD COLUMN last_file_mtime INTEGER")
+	m.db.Exec("ALTER TABLE parse_cache ADD COLUMN last_parsed_offset INTEGER NOT NULL DEFAULT 0")
 	m.db.Exec("DELETE FROM app_config WHERE key IN ('cc_switch_enabled', 'cc_switch_auto_sync')")
 
 	if err := m.migrateSessionModel(); err != nil {

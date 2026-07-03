@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -306,18 +307,29 @@ type openclawRecord struct {
 }
 
 func (c *OpenClawCollector) parseFile(fp string) []openclawRecord {
-	if cached, ok := c.cache.Get(fp); ok {
-		return cached.([]openclawRecord)
+	records, offset, state := c.cache.GetWithOffset(fp)
+	if state == StateCached {
+		return records.([]openclawRecord)
 	}
 
-	data, err := os.ReadFile(fp)
+	f, err := os.Open(fp)
 	if err != nil {
 		return nil
 	}
+	defer f.Close()
 
-	var records []openclawRecord
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
+	fi, _ := f.Stat()
+	fileSize := fi.Size()
+
+	if state == StateIncremental && offset > 0 {
+		f.Seek(offset, 0)
+	}
+
+	var parsed []openclawRecord
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 1<<20), 10<<20)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
 		}
@@ -338,7 +350,7 @@ func (c *OpenClawCollector) parseFile(fp string) []openclawRecord {
 		if obj.Type != "assistant" || obj.Usage == nil {
 			continue
 		}
-		records = append(records, openclawRecord{
+		parsed = append(parsed, openclawRecord{
 			timestamp: obj.Timestamp, model: obj.Model,
 			input:     posIntFromJSON(obj.Usage.InputTokens),
 			output:    posIntFromJSON(obj.Usage.OutputTokens),
@@ -347,8 +359,8 @@ func (c *OpenClawCollector) parseFile(fp string) []openclawRecord {
 		})
 	}
 
-	c.cache.Set(fp, records)
-	return records
+	c.cache.SetWithOffset(fp, parsed, fileSize)
+	return parsed
 }
 
 // ---------------------------------------------------------------------------

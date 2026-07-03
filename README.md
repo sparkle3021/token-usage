@@ -74,7 +74,7 @@ wails dev
 
 | 环境变量 | 默认值 | 说明 |
 |---------|--------|------|
-| `DATA_DIR` | `~/.token-dashboard` | 数据目录（数据库 + 日志 + 定价缓存） |
+| `DATA_DIR` | `~/.token-usage` | 数据目录（数据库 + 日志 + 定价缓存） |
 | `COLLECTOR_PARALLELISM` | `4` | 采集并发数 |
 
 首次启动时，应用会自动在数据目录下创建 SQLite 数据库和默认定价文件，无需额外配置。
@@ -82,7 +82,7 @@ wails dev
 ### 数据目录结构
 
 ```
-~/.token-dashboard/
+~/.token-usage/
 ├── td.db                   # SQLite 数据库（WAL 模式）
 ├── logs/
 │   └── app.log             # 应用日志
