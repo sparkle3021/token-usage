@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -86,7 +87,10 @@ func (c *HermesCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 // OpenCode
 // ---------------------------------------------------------------------------
 
-type OpenCodeCollector struct{}
+type OpenCodeCollector struct {
+	store             CheckpointStore
+	pendingMaxCreated int64
+}
 
 func NewOpenCodeCollector() *OpenCodeCollector {
 	return &OpenCodeCollector{}
@@ -94,6 +98,16 @@ func NewOpenCodeCollector() *OpenCodeCollector {
 
 func (c *OpenCodeCollector) ID() string    { return "opencode" }
 func (c *OpenCodeCollector) Source() string { return "OpenCode" }
+
+func (c *OpenCodeCollector) SetStore(store CheckpointStore) {
+	c.store = store
+}
+
+func (c *OpenCodeCollector) SavePendingCheckpoints() {
+	if c.pendingMaxCreated > 0 {
+		c.store.SetCheckpoint("opencode_max_time_created", strconv.FormatInt(c.pendingMaxCreated, 10))
+	}
+}
 
 func opencodeDBPath() string {
 	if env := os.Getenv("OPENCODE_DATA_DIR"); env != "" {
@@ -117,63 +131,109 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	}
 	defer db.Close()
 
+	// Read checkpoint: skip messages older than the last sync
+	var since int64
+	if c.store != nil {
+		ck, _ := c.store.GetCheckpoint("opencode_max_time_created")
+		if ck != "" {
+			since, _ = strconv.ParseInt(ck, 10, 64)
+		}
+	}
+	log.Printf("[collector] OpenCode checkpoint since=%d", since)
+
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
+	var events []EventRow
 
-	rows, err := db.Query(`SELECT time_created, model, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, cost FROM session WHERE model IS NOT NULL AND model != ''`)
+	query := `SELECT m.id, m.session_id, m.time_created, m.data
+		FROM message m
+		WHERE json_extract(m.data, '$.tokens') IS NOT NULL
+		AND json_extract(m.data, '$.modelID') IS NOT NULL`
+	args := []interface{}{}
+	if since > 0 {
+		query += ` AND m.time_created > ?`
+		args = append(args, since)
+	}
+	query += ` ORDER BY m.time_created ASC`
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
-		log.Printf("[collector] OpenCode session query error: %v", err)
+		log.Printf("[collector] OpenCode message query error: %v", err)
 	} else {
 		defer rows.Close()
+		var maxCreated int64
 		for rows.Next() {
+			var msgID, sessionID, dataStr string
 			var timeCreated int64
-			var modelJSON string
-			var inp, out, reas, cr, cw int64
-			var cost float64
-			if err := rows.Scan(&timeCreated, &modelJSON, &inp, &out, &reas, &cr, &cw, &cost); err != nil {
+			if err := rows.Scan(&msgID, &sessionID, &timeCreated, &dataStr); err != nil {
 				continue
 			}
 
-			modelID := parseModelID(modelJSON)
-			if modelID == "" {
+			var msg struct {
+				ModelID string `json:"modelID"`
+				Tokens  *struct {
+					Input     int64 `json:"input"`
+					Output    int64 `json:"output"`
+					Reasoning int64 `json:"reasoning"`
+					Cache     struct {
+						Read  int64 `json:"read"`
+						Write int64 `json:"write"`
+					} `json:"cache"`
+				} `json:"tokens"`
+			}
+			if err := json.Unmarshal([]byte(dataStr), &msg); err != nil {
 				continue
 			}
-			modelID = NormalizeModelForGrouping(modelID)
+			if msg.Tokens == nil || (msg.Tokens.Input == 0 && msg.Tokens.Output == 0) {
+				continue
+			}
+
+			if timeCreated > maxCreated {
+				maxCreated = timeCreated
+			}
+
+			modelID := NormalizeModelForGrouping(msg.ModelID)
 			if modelID == "" {
 				modelID = "unknown"
 			}
 
+			eventTime := time.UnixMilli(timeCreated).Format(time.RFC3339)
 			date := time.UnixMilli(timeCreated).Format("2006-01-02")
 
 			t := struct{ Input, Output, CacheRead, CacheWrite, Reasoning int64 }{
-				inp, out, cr, cw, reas,
+				msg.Tokens.Input, msg.Tokens.Output, msg.Tokens.Cache.Read, msg.Tokens.Cache.Write, msg.Tokens.Reasoning,
 			}
-			calcCost := pricing.CalculateCost(modelID, t)
-			if calcCost == 0 && cost > 0 {
-				calcCost = cost
-			}
+			cost := pricing.CalculateCost(modelID, t)
+
+			events = append(events, EventRow{
+				EventKey:         msgID,
+				EventTime:        eventTime,
+				UsageDate:        date,
+				Model:            modelID,
+				SessionID:        sessionID,
+				InputTokens:      msg.Tokens.Input,
+				OutputTokens:     msg.Tokens.Output,
+				CacheReadTokens:  msg.Tokens.Cache.Read,
+				CacheWriteTokens: msg.Tokens.Cache.Write,
+				ReasoningTokens:  msg.Tokens.Reasoning,
+				CostUSD:          cost,
+			})
 
 			dk := date + "::" + modelID
 			if _, ok := dailyMap[dk]; !ok {
 				dailyMap[dk] = &dailyAgg{date: date, model: modelID}
 			}
-			dailyMap[dk].add(t.Input, t.Output, t.CacheRead, t.CacheWrite, t.Reasoning, calcCost)
+			dailyMap[dk].add(t.Input, t.Output, t.CacheRead, t.CacheWrite, t.Reasoning, cost)
+		}
+
+		if maxCreated > 0 {
+			c.pendingMaxCreated = maxCreated
 		}
 	}
 
-	log.Printf("[collector] OpenCode done daily=%d", len(dailyMap))
+	log.Printf("[collector] OpenCode done daily=%d events=%d pendingCK=%d", len(dailyMap), len(events), c.pendingMaxCreated)
 
-	return buildResult("opencode", "OpenCode", dailyMap, sessionMap, nil), nil
-}
-
-func parseModelID(jsonStr string) string {
-	var obj struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
-		return ""
-	}
-	return obj.ID
+	return buildResult("opencode", "OpenCode", dailyMap, sessionMap, events), nil
 }
 
 // ---------------------------------------------------------------------------

@@ -56,12 +56,15 @@ func New(db *database.Manager, pr *pricing.Engine) *Engine {
 		pricing: pr,
 		status: Status{Status: "idle", Message: "尚未启动采集"},
 	}
+	ocCol := collector.NewOpenCodeCollector()
+	ocCol.SetStore(db)
+
 	e.collectors = []collector.Collector{
 		collector.NewClaudeCodeCollector(),
 		collector.NewCodexCollector(),
 		collector.NewGeminiCollector(),
 		collector.NewHermesCollector(),
-		collector.NewOpenCodeCollector(),
+		ocCol,
 		collector.NewOpenClawCollector(),
 	}
 
