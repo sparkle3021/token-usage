@@ -25,8 +25,9 @@ type CollectResult struct {
 }
 
 type DailyRow struct {
-	UsageDate string
-	Model     string
+	Source     string
+	UsageDate  string
+	Model      string
 	InputTokens int64
 	OutputTokens int64
 	CacheReadTokens int64

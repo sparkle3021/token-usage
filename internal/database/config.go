@@ -63,3 +63,12 @@ func (m *Manager) ResetCCSwitchCheckpoints() error {
 	}
 	return m.DeleteCheckpointsByPrefix("cc_switch_rollup_")
 }
+
+func (m *Manager) GetMinUsageDate(source string) (string, error) {
+	var v sql.NullString
+	err := m.db.QueryRow(`SELECT MIN(usage_date) FROM daily_usage WHERE source = ?`, source).Scan(&v)
+	if err != nil || !v.Valid {
+		return "", err
+	}
+	return v.String, nil
+}

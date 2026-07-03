@@ -455,12 +455,18 @@ func sessionToModel(device, source string, rows []collector.SessionRow) []model.
 }
 
 // dailyToModel converts collector DailyRow to model.DailyUsage slice.
-func dailyToModel(device, source string, rows []collector.DailyRow) []model.DailyUsage {
+// Uses row.Source when set (e.g. CC-Switch per-app_type attribution),
+// otherwise falls back to the collector's default source.
+func dailyToModel(device, defaultSource string, rows []collector.DailyRow) []model.DailyUsage {
 	out := make([]model.DailyUsage, len(rows))
 	for i, r := range rows {
 		total := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens
+		src := r.Source
+		if src == "" {
+			src = defaultSource
+		}
 		out[i] = model.DailyUsage{
-			Device: device, Source: source, UsageDate: r.UsageDate, Model: r.Model,
+			Device: device, Source: src, UsageDate: r.UsageDate, Model: r.Model,
 			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
 			CacheCreationTokens: r.CacheWriteTokens, CacheReadTokens: r.CacheReadTokens,
 			ReasoningOutputTokens: r.ReasoningTokens, TotalTokens: total, CostUSD: r.CostUSD,

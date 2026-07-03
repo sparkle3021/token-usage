@@ -92,11 +92,10 @@ func (a *App) startup(ctx context.Context) {
 		ckProxy, _ := a.db.GetCheckpoint("cc_switch_cursor_proxy_request_logs")
 		ckRollup, _ := a.db.GetCheckpoint("cc_switch_rollup_max_date")
 		if ckProxy != "" || ckRollup != "" {
-			var dailyCnt, hourCnt int
-			a.db.DB().QueryRow("SELECT COUNT(*) FROM daily_usage WHERE source='CC-Switch'").Scan(&dailyCnt)
-			a.db.DB().QueryRow("SELECT COUNT(*) FROM hour_usage WHERE source='CC-Switch'").Scan(&hourCnt)
-			if dailyCnt == 0 && hourCnt == 0 {
-				log.Printf("[app] stale CC-Switch checkpoint detected (proxy=%q rollup=%q), data count=0 — resetting for full re-sync", ckProxy, ckRollup)
+			var cnt int
+			a.db.DB().QueryRow("SELECT (SELECT COUNT(*) FROM daily_usage) + (SELECT COUNT(*) FROM hour_usage)").Scan(&cnt)
+			if cnt == 0 {
+				log.Printf("[app] stale CC-Switch checkpoint detected (proxy=%q rollup=%q), total_data=0 — resetting for full re-sync", ckProxy, ckRollup)
 				a.db.ResetCCSwitchCheckpoints()
 			}
 		}

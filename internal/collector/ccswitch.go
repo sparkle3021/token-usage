@@ -60,6 +60,7 @@ type CheckpointStore interface {
 	SetCheckpoint(key, value string) error
 	DeleteCheckpointsByPrefix(prefix string) error
 	GetConfig(key string) (string, error)
+	GetMinUsageDate(source string) (string, error)
 	UpsertDaily(row *model.DailyUsage) error
 	BulkUpsertHourUsage(rows []model.HourUsage) error
 	BuildDailyFromHourUsage() error
@@ -117,11 +118,11 @@ func (c *CCSwitchCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	start := time.Now()
 	ext := &collectResultExt{}
 
-	if err := c.importProxyLogs(extDB, ext); err != nil {
+	if err := c.importProxyLogs(extDB, ext, pricing); err != nil {
 		return nil, fmt.Errorf("proxy logs import: %w", err)
 	}
 
-	if err := c.importRollups(extDB, ext); err != nil {
+	if err := c.importRollups(extDB, ext, pricing); err != nil {
 		return nil, fmt.Errorf("rollup import: %w", err)
 	}
 
@@ -170,7 +171,7 @@ type collectResultExt struct {
 	rollupMaxDate    string
 }
 
-func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt) error {
+func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt, pricing TokenCalc) error {
 	cursorStr, _ := c.store.GetCheckpoint(ckCursorProxyLogs)
 	var cursorVal int64
 	if cursorStr != "" {
@@ -192,8 +193,7 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 		cache_read_tokens, cache_creation_tokens, total_cost_usd
 		FROM proxy_request_logs
 		WHERE data_source = 'proxy'
-		  AND status_code >= 200 AND status_code < 300
-		  AND app_type NOT IN ('claude', 'codex', 'opencode')`
+		  AND status_code >= 200 AND status_code < 300`
 	args := []interface{}{}
 	if cursorVal > 0 {
 		query += ` AND created_at > ?`
@@ -209,6 +209,7 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 
 	acc := make(map[hourAccKey]*model.HourUsage)
 	var lastCreated int64
+	var proxyScanned, proxyIncluded int
 
 	for rows.Next() {
 		var createdAt int64
@@ -221,6 +222,7 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 			&inputTokens, &outputTokens, &cacheRead, &cacheCreation, &costStr); err != nil {
 			continue
 		}
+		proxyScanned++
 		if createdAt > lastCreated {
 			lastCreated = createdAt
 		}
@@ -232,8 +234,12 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 		if modelName == "" {
 			modelName = "unknown"
 		}
-		costUSD, _ := strconv.ParseFloat(costStr, 64)
 		source := ccSourceFromAppType(appType)
+		t := struct{ Input, Output, CacheRead, CacheWrite, Reasoning int64 }{
+			inputTokens, outputTokens, cacheRead, cacheCreation, 0,
+		}
+		costUSD := pricing.CalculateCost(modelName, t)
+
 		key := hourAccKey{date: usageDate, hour: hour, source: source, model: modelName}
 		existing, ok := acc[key]
 		if !ok {
@@ -247,7 +253,7 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 		existing.CacheReadTokens += cacheRead
 		existing.CacheCreationTokens += cacheCreation
 		existing.CostUSD += costUSD
-		ext.ProxyRows++
+		proxyIncluded++
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("rows iteration: %w", err)
@@ -261,10 +267,14 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 		}
 		batch = append(batch, *row)
 	}
+	ext.ProxyRows = proxyIncluded
 	ext.ProxyKeys = len(batch)
 	ext.proxyBatch = batch
 	ext.proxyLastCreated = lastCreated
 	ext.proxyMaxCreated = maxCreated
+
+	log.Printf("[collector] CCSwitch proxy scanned=%d included=%d keys=%d lastCk=%d",
+		proxyScanned, proxyIncluded, len(batch), lastCreated)
 
 	return nil
 }
@@ -274,12 +284,15 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 // ---------------------------------------------------------------------------
 
 type rollupAccKey struct {
-	date  string
-	model string
+	source string
+	date   string
+	model  string
 }
 
-func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) error {
+func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt, pricing TokenCalc) error {
 	rollupDate, _ := c.store.GetCheckpoint(ckRollupMaxDate)
+
+	localMinDates := c.queryLocalMinDates()
 
 	query := `SELECT date, app_type, model, input_tokens, output_tokens,
 		cache_read_tokens, cache_creation_tokens, total_cost_usd
@@ -303,6 +316,7 @@ func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) 
 
 	rollupAcc := make(map[rollupAccKey]*model.DailyUsage)
 	var maxDate string
+	var rollupScanned, rollupSkipped int
 
 	for rows.Next() {
 		var dateStr, appType, modelName string
@@ -316,20 +330,33 @@ func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) 
 		if usageDate == "" {
 			continue
 		}
+		rollupScanned++
+
+		source := ccSourceFromAppType(appType)
+
+		if localMin, ok := localMinDates[source]; ok && usageDate >= localMin {
+			rollupSkipped++
+			continue
+		}
+
 		modelName = NormalizeModelForGrouping(modelName)
 		if modelName == "" {
 			modelName = "unknown"
 		}
-		costUSD, _ := strconv.ParseFloat(costStr, 64)
+		t := struct{ Input, Output, CacheRead, CacheWrite, Reasoning int64 }{
+			inputTokens, outputTokens, cacheRead, cacheCreation, 0,
+		}
+		costUSD := pricing.CalculateCost(modelName, t)
+
 		if usageDate > maxDate {
 			maxDate = usageDate
 		}
 
-		key := rollupAccKey{date: usageDate, model: modelName}
+		key := rollupAccKey{source: source, date: usageDate, model: modelName}
 		existing, ok := rollupAcc[key]
 		if !ok {
 			rollupAcc[key] = &model.DailyUsage{
-				Device: c.device, UsageDate: usageDate, Model: modelName,
+				Device: c.device, Source: source, UsageDate: usageDate, Model: modelName,
 			}
 			existing = rollupAcc[key]
 		}
@@ -352,25 +379,46 @@ func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt) 
 		}
 		ext.ReconChecked++
 		dailyRows = append(dailyRows, DailyRow{
-			UsageDate:      row.UsageDate,
-			Model:          row.Model,
-			InputTokens:    row.InputTokens,
-			OutputTokens:   row.OutputTokens,
+			Source:          row.Source,
+			UsageDate:       row.UsageDate,
+			Model:           row.Model,
+			InputTokens:     row.InputTokens,
+			OutputTokens:    row.OutputTokens,
 			CacheReadTokens: row.CacheReadTokens,
 			CacheWriteTokens: row.CacheCreationTokens,
 			ReasoningTokens: row.ReasoningOutputTokens,
-			CostUSD:        row.CostUSD,
+			CostUSD:         row.CostUSD,
 		})
 		ext.ReconSupplement++
 	}
-	ext.ReconSkipped = ext.ReconChecked - ext.ReconSupplement
+	ext.ReconSkipped = rollupSkipped
 	ext.rollupRows = dailyRows
 
 	if maxDate > rollupDate {
 		ext.rollupMaxDate = maxDate
 	}
 
+	log.Printf("[collector] CCSwitch rollup scanned=%d included=%d skipped=%d daily=%d localMinDates=%v",
+		rollupScanned, ext.RollupRows, rollupSkipped, len(dailyRows), localMinDates)
+
 	return nil
+}
+
+// queryLocalMinDates 从 dashboard daily_usage 查每个 CC-Switch 映射源的最早日期，
+// 用于避免 rollup 数据与本地收集器重叠。
+func (c *CCSwitchCollector) queryLocalMinDates() map[string]string {
+	if c.store == nil {
+		return nil
+	}
+	sources := []string{"Claude Code", "Codex CLI", "OpenCode", "claude-desktop"}
+	result := make(map[string]string)
+	for _, src := range sources {
+		minDate, err := c.store.GetMinUsageDate(src)
+		if err == nil && minDate != "" {
+			result[src] = minDate
+		}
+	}
+	return result
 }
 
 // ---------------------------------------------------------------------------
