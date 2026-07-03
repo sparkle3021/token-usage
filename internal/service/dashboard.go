@@ -100,7 +100,10 @@ func (s *DashboardService) GetTimeSeriesData() *model.TimeSeriesData {
 		log.Printf("[service] GetTimeSeriesData db=nil")
 		return &model.TimeSeriesData{}
 	}
-	timeRows, _ := s.db.QueryTimeUsage()
+	timeRows, err := s.db.QueryTimeUsage()
+	if err != nil {
+		log.Printf("[service] GetTimeSeriesData QueryTimeUsage ERR: %v", err)
+	}
 	hourRows, _ := s.db.QueryHourUsage()
 	log.Printf("[service] GetTimeSeriesData timeRows=%d hourRows=%d elapsed=%v", len(timeRows), len(hourRows), time.Since(start))
 	return &model.TimeSeriesData{Time: timeRows, Hour: hourRows}

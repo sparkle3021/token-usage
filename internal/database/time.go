@@ -80,7 +80,8 @@ func (m *Manager) DeleteTimeUsageForSource(device, source string) error {
 func (m *Manager) QueryTimeUsage() ([]model.TimeUsage, error) {
 	start := time.Now()
 	rows, err := m.db.Query(`
-		SELECT rowid, device, source, event_time, usage_date, model, project_path, session_id,
+		SELECT rowid, device, source, event_time, usage_date, model,
+			COALESCE(project_path,''), COALESCE(session_id,''),
 			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 			reasoning_output_tokens, total_tokens, cost_usd
 		FROM time_usage
