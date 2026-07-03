@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"token-dashboard/internal/config/seed"
 )
 
 // Config 应用配置，从环境变量和默认值加载。
@@ -20,9 +22,10 @@ type Config struct {
 }
 
 // Load 加载配置，解析环境变量并初始化数据目录。
-// 首次运行时自动从 data/ 目录迁移旧数据。
+// 首次运行时自动写入定价兜底文件，确保分发后无需外部文件即可使用。
 func Load() *Config {
 	dataDir := resolveDataDir()
+	ensurePricingDefaults(dataDir)
 	return &Config{
 		DataDir:              dataDir,
 		DBPath:               filepath.Join(dataDir, "td.db"),
@@ -47,92 +50,33 @@ func resolveDataDir() string {
 	}
 	target := filepath.Join(home, ".token-dashboard")
 
-	if err := migrateFromOldData(target); err != nil {
-		log.Printf("[config] resolveDataDir migration warning: %v", err)
-	}
-
-	migratePricingToSubdir(target)
-
 	os.MkdirAll(target, 0755)
 	return target
 }
 
-func migrateFromOldData(target string) error {
-	if _, err := os.Stat(filepath.Join(target, "td.db")); err == nil {
-		return nil
+// ensurePricingDefaults 将嵌入的默认定价数据写入配置目录，仅当文件不存在时写入。
+func ensurePricingDefaults(dataDir string) {
+	priceDir := filepath.Join(dataDir, "config")
+	if err := os.MkdirAll(priceDir, 0755); err != nil {
+		log.Printf("[config] create price dir error: %v", err)
+		return
 	}
 
-	oldDir := "data"
-	if _, err := os.Stat(filepath.Join(oldDir, "usage.sqlite")); err != nil {
-		return nil
+	defaults := map[string][]byte{
+		"pricing-litellm.json":   seed.PricingLitellm,
+		"pricing-openrouter.json": seed.PricingOpenRouter,
 	}
 
-	log.Printf("[config] migrating data/ → %s", target)
-	if err := os.MkdirAll(target, 0755); err != nil {
-		return fmt.Errorf("create target dir: %w", err)
-	}
-
-	priceDir := filepath.Join(target, "config")
-	os.MkdirAll(priceDir, 0755)
-
-	entries, err := os.ReadDir(oldDir)
-	if err != nil {
-		return fmt.Errorf("read old dir: %w", err)
-	}
-
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		src := filepath.Join(oldDir, e.Name())
-
-		dstDir := target
-		if strings.HasPrefix(e.Name(), "pricing-") {
-			dstDir = priceDir
-		}
-
-		dst := filepath.Join(dstDir, e.Name())
-		data, err := os.ReadFile(src)
-		if err != nil {
-			log.Printf("[config] migrate skip %s: %v", e.Name(), err)
-			continue
-		}
-		if err := os.WriteFile(dst, data, 0644); err != nil {
-			return fmt.Errorf("write %s: %w", e.Name(), err)
-		}
-		log.Printf("[config] migrate copied %s", e.Name())
-	}
-
-	log.Printf("[config] migration complete: data/ → %s", target)
-	return nil
-}
-
-func migratePricingToSubdir(target string) {
-	priceDir := filepath.Join(target, "config")
-	os.MkdirAll(priceDir, 0755)
-
-	for _, name := range []string{"pricing-litellm.json", "pricing-openrouter.json"} {
-		src := filepath.Join(target, name)
-		if _, err := os.Stat(src); err != nil {
-			continue
-		}
+	for name, data := range defaults {
 		dst := filepath.Join(priceDir, name)
 		if _, err := os.Stat(dst); err == nil {
-			os.Remove(src)
-			log.Printf("[config] migratePricingToSubdir cleaned up %s", name)
-			continue
-		}
-		data, err := os.ReadFile(src)
-		if err != nil {
-			log.Printf("[config] migratePricingToSubdir skip %s: %v", name, err)
-			continue
+			continue // 已存在，不覆盖
 		}
 		if err := os.WriteFile(dst, data, 0644); err != nil {
-			log.Printf("[config] migratePricingToSubdir write %s: %v", name, err)
-			continue
+			log.Printf("[config] write pricing default %s error: %v", name, err)
+		} else {
+			log.Printf("[config] wrote pricing default %s (%d bytes)", name, len(data))
 		}
-		os.Remove(src)
-		log.Printf("[config] migratePricingToSubdir moved %s → price/", name)
 	}
 }
 
