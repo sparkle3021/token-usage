@@ -20,9 +20,12 @@ import (
 // proxy_request_logs (per-request, current month) and
 // usage_daily_rollups (daily aggregated, historical).
 type CCSwitchCollector struct {
-	store      CheckpointStore
-	device     string
-	lastResult CCSwitchStats
+	store             CheckpointStore
+	device            string
+	lastResult        CCSwitchStats
+	pendingProxyCur   int64
+	pendingProxyMax   int64
+	pendingRollupDate string
 }
 
 // CCSwitchStats holds the result statistics from the last Collect() run.
@@ -37,6 +40,19 @@ type CCSwitchStats struct {
 
 // Stats returns the statistics from the last Collect() call.
 func (c *CCSwitchCollector) Stats() CCSwitchStats { return c.lastResult }
+
+// SavePendingCheckpoints persists staged checkpoints to the store.
+// Must be called after data is successfully committed to the database.
+func (c *CCSwitchCollector) SavePendingCheckpoints() {
+	if c.pendingProxyCur > 0 {
+		c.store.SetCheckpoint(ckCursorProxyLogs, strconv.FormatInt(c.pendingProxyCur, 10))
+	} else if c.pendingProxyMax > 0 && c.pendingProxyCur == 0 {
+		c.store.SetCheckpoint(ckCursorProxyLogs, strconv.FormatInt(c.pendingProxyMax, 10))
+	}
+	if c.pendingRollupDate != "" {
+		c.store.SetCheckpoint(ckRollupMaxDate, c.pendingRollupDate)
+	}
+}
 
 // CheckpointStore is the minimal interface the collector needs for checkpoint persistence.
 type CheckpointStore interface {
@@ -112,15 +128,10 @@ func (c *CCSwitchCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	log.Printf("[collector] CCSwitch done proxy_rows=%d proxy_keys=%d rollup_rows=%d recon_checked=%d recon_supplement=%d recon_skipped=%d elapsed=%v",
 		ext.ProxyRows, ext.ProxyKeys, ext.RollupRows, ext.ReconChecked, ext.ReconSupplement, ext.ReconSkipped, time.Since(start))
 
-	// Save checkpoints after successful data collection
-	if ext.proxyLastCreated > 0 {
-		_ = c.store.SetCheckpoint(ckCursorProxyLogs, strconv.FormatInt(ext.proxyLastCreated, 10))
-	} else if ext.proxyBatch == nil && ext.proxyMaxCreated > 0 {
-		_ = c.store.SetCheckpoint(ckCursorProxyLogs, strconv.FormatInt(ext.proxyMaxCreated, 10))
-	}
-	if ext.rollupMaxDate != "" {
-		_ = c.store.SetCheckpoint(ckRollupMaxDate, ext.rollupMaxDate)
-	}
+	// Stage checkpoints (persisted to store only after SQL write succeeds)
+	c.pendingProxyCur = ext.proxyLastCreated
+	c.pendingProxyMax = ext.proxyMaxCreated
+	c.pendingRollupDate = ext.rollupMaxDate
 
 	c.lastResult = CCSwitchStats{
 		ProxyRows:       ext.ProxyRows,

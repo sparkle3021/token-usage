@@ -907,7 +907,10 @@ func (m *Manager) DeleteCheckpointsByPrefix(prefix string) error {
 
 // ResetCCSwitchCheckpoints clears all CC-Switch related checkpoints, forcing a full re-sync.
 func (m *Manager) ResetCCSwitchCheckpoints() error {
-	return m.DeleteCheckpointsByPrefix("cc_switch_cursor_")
+	if err := m.DeleteCheckpointsByPrefix("cc_switch_cursor_"); err != nil {
+		return err
+	}
+	return m.DeleteCheckpointsByPrefix("cc_switch_rollup_")
 }
 
 func (m *Manager) SetConfig(key, value string) error {

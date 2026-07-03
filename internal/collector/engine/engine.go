@@ -174,6 +174,8 @@ func (e *Engine) SyncCCSwitch() (collector.CCSwitchStats, error) {
 	if !e.processCollector(result, e.ccSwitchCol) {
 		return e.ccSwitchCol.Stats(), fmt.Errorf("sync cc-switch: process failed")
 	}
+	// Persist checkpoints only after data is safely committed
+	e.ccSwitchCol.SavePendingCheckpoints()
 	// Rebuild daily from the hour data
 	if err := e.db.BuildDailyFromHourUsage(); err != nil {
 		return e.ccSwitchCol.Stats(), fmt.Errorf("rebuild daily: %w", err)
@@ -268,6 +270,8 @@ func (e *Engine) runCollection() {
 		ok := e.processCollector(r.result, r.col)
 		if !ok {
 			hadError = true
+		} else if cs, ok := r.col.(interface{ SavePendingCheckpoints() }); ok {
+			cs.SavePendingCheckpoints()
 		}
 	}
 
