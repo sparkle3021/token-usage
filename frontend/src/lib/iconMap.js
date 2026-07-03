@@ -68,7 +68,7 @@ const PALETTE = {
   'Codex CLI': 'oklch(0.472 0.282 270.1)',
   'Hermes Agent': 'oklch(0.58 0.14 240)',
   'OpenClaw': 'oklch(0.65 0.11 200)',
-  'OpenCode': 'oklch(0.62 0.12 195)',
+  'OpenCode': 'oklch(0.598 0.135 141.5)',
   'Gemini CLI': 'oklch(0.72 0.14 75)',
   'Cursor': 'oklch(0.68 0.12 220)',
   'Aider': 'oklch(0.65 0.13 155)',
