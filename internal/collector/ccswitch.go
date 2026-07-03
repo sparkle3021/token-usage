@@ -296,7 +296,7 @@ func (c *CCSwitchCollector) importRollups(extDB *sql.DB, ext *collectResultExt, 
 
 	query := `SELECT date, app_type, model, input_tokens, output_tokens,
 		cache_read_tokens, cache_creation_tokens, total_cost_usd
-		FROM usage_daily_rollups`
+		FROM usage_daily_rollups WHERE 1=1`
 	args := []interface{}{}
 	if rollupDate != "" {
 		query += ` AND date > ?`
