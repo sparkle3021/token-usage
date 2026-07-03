@@ -65,7 +65,7 @@ export function getModelIconUrl(name) {
 const PALETTE = {
   'Claude Code': 'oklch(0.654 0.147 38.2)',
   'claude-desktop': 'oklch(0.654 0.147 38.2)',
-  'Codex CLI': 'oklch(0.60 0.15 295)',
+  'Codex CLI': 'oklch(0.472 0.282 270.1)',
   'Hermes Agent': 'oklch(0.58 0.14 240)',
   'OpenClaw': 'oklch(0.65 0.11 200)',
   'OpenCode': 'oklch(0.62 0.12 195)',
