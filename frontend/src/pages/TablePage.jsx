@@ -1,8 +1,9 @@
+import { ranges, rangeDays } from '../store/filterStore.jsx';
 import { useState, useMemo } from 'react';
 import { Card } from '../components/ui/card.jsx';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
 import TablePanel from '../components/tables/TablePanel.jsx';
-import DrillDrawer from '../components/tables/DrillDrawer.jsx';
+import DrillDialog from '../components/tables/DrillDialog.jsx';
 import SourceBadge from '../components/SourceBadge.jsx';
 import MultiSelect from '../components/MultiSelect.jsx';
 import * as U from '../lib/utils.js';
@@ -22,16 +23,11 @@ export default function TablePage({ M, onRefresh }) {
       const sorted = M.daily.map(x => x.usageDate).filter(Boolean).sort();
       setF({ ...f, rangeId, startDate: sorted[0] || U.daysAgo(0), endDate: sorted[sorted.length - 1] || U.daysAgo(0) });
     } else {
-      const days = { today: 1, '7d': 7, '14d': 14, '30d': 30, '90d': 90 }[rangeId] || 30;
+      const days = rangeDays[rangeId] || 30;
       setF({ ...f, rangeId, startDate: U.daysAgo(days - 1), endDate: U.daysAgo(0) });
     }
     if (onRefresh) onRefresh();
   };
-
-  const ranges = [
-    { id: 'today', label: '今天' }, { id: '7d', label: '7 天' }, { id: '14d', label: '14 天' },
-    { id: '30d', label: '30 天' }, { id: '90d', label: '90 天' }, { id: 'all', label: '全部' },
-  ];
 
   return (
     <div className="flex flex-col min-h-0 flex-1 space-y-4">
@@ -59,7 +55,7 @@ export default function TablePage({ M, onRefresh }) {
         <TablePanel daily={filtered} sessions={M.sessions} onDrill={setDrill} fullHeight />
       </div>
 
-      <DrillDrawer drill={drill} daily={M.daily} timeRows={M.time} onClose={() => setDrill(null)} />
+      <DrillDialog drill={drill} daily={M.daily} timeRows={M.time} onClose={() => setDrill(null)} />
     </div>
   );
 }

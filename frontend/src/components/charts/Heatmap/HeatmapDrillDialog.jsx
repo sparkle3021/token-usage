@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../ui/dialog.jsx';
 import { Card, CardContent } from '../../ui/card.jsx';
@@ -14,14 +14,22 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
     return [...new Set(dayDaily.map(r => r.source))];
   }, [dayDaily]);
 
-  const dayTotals = useMemo(() => U.aggregateTotals(dayDaily), [dayDaily]);
+  // Top model for the day (just name, not full list)
+  const topModel = useMemo(() => {
+    const m = new Map();
+    for (const r of dayDaily) {
+      if (!r.model) continue;
+      m.set(r.model, (m.get(r.model) || 0) + (r.totalTokens || 0));
+    }
+    const sorted = [...m.entries()].sort((a, b) => b[1] - a[1]);
+    return sorted.length > 0 ? { name: sorted[0][0], tokens: sorted[0][1], count: sorted.length } : null;
+  }, [dayDaily]);
 
   // Hourly data from timeRows + hourRows + daily fallback
   const hourlyData = useMemo(() => {
     if (!date) return [];
     const byHour = new Map();
 
-    // 1) event-level time usage
     for (const r of timeRows || []) {
       if (r.usageDate !== date) continue;
       const d = new Date(r.eventTime);
@@ -30,7 +38,6 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
       byHour.set(`${hour}::${r.source}`, (byHour.get(`${hour}::${r.source}`) || 0) + r.totalTokens);
     }
 
-    // 2) hour-level usage — fill hours not covered by timeRows
     for (const r of hourRows || []) {
       if (r.usageDate !== date) continue;
       const hour = String(r.hour).padStart(2, '0');
@@ -39,7 +46,6 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
       byHour.set(key, (byHour.get(key) || 0) + r.totalTokens);
     }
 
-    // 3) daily-only sources — put into current hour
     const currentHour = String(new Date().getHours()).padStart(2, '0');
     for (const r of dayDaily) {
       const key = `${currentHour}::${r.source}`;
@@ -55,19 +61,6 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
     });
   }, [timeRows, hourRows, date, daySources, dayDaily]);
 
-  // Top models for the day
-  const topModels = useMemo(() => {
-    const m = new Map();
-    for (const r of dayDaily) {
-      if (!r.model) continue;
-      if (!m.has(r.model)) m.set(r.model, { model: r.model, total: 0, cost: 0, source: r.source });
-      const x = m.get(r.model);
-      x.total += r.totalTokens || 0;
-      x.cost += r.costUSD || 0;
-    }
-    return [...m.values()].sort((a, b) => b.total - a.total).slice(0, 8);
-  }, [dayDaily]);
-
   const palette = daySources.map(s => U.getSourceColor(s));
   const hasHourly = hourlyData.some(pt => daySources.some(s => pt[s] > 0));
 
@@ -78,14 +71,12 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
           <DialogTitle>{date} 用量详情</DialogTitle>
         </DialogHeader>
 
-        {/* Summary bar */}
-        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
-          <span>总用量: <strong className="text-foreground">{U.compactCN(dayTotals.totalTokens)}</strong></span>
-          <span>费用: <strong className="text-foreground">${(dayTotals.costUSD || 0).toFixed(2)}</strong></span>
-          <span>模型: <strong className="text-foreground">{topModels.length}</strong></span>
-        </div>
+        {topModel && (
+          <div className="text-xs text-muted-foreground mb-2">
+            模型数 <strong className="text-foreground">{topModel.count}</strong> · 峰值 <strong className="text-foreground">{topModel.name}</strong>（{U.compactCN(topModel.tokens)}）
+          </div>
+        )}
 
-        {/* Hourly trend */}
         <Card>
           <CardContent className="pt-4">
             <h4 className="text-sm font-medium mb-3">Token 使用趋势（24 小时）</h4>
@@ -110,32 +101,6 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
               <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
                 暂无小时级数据
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Top models */}
-        <Card>
-          <CardContent className="pt-4">
-            <h4 className="text-sm font-medium mb-3">Top 模型</h4>
-            {topModels.length > 0 ? (
-              <div className="space-y-2">
-                {topModels.map((m, i) => (
-                  <div key={m.model} className="flex items-center justify-between gap-3 px-2 py-1.5 rounded-md bg-muted/30">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="text-xs text-muted-foreground w-4 shrink-0 text-right">#{i + 1}</span>
-                      {U.getModelIconUrl(m.model) && <img src={U.getModelIconUrl(m.model)} className="w-4 h-4 shrink-0" alt="" />}
-                      <span className="text-xs font-medium truncate">{m.model}</span>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-xs font-semibold tabular-nums">{U.compactCN(m.total)}</span>
-                      {m.cost > 0 && <span className="text-[10px] text-muted-foreground ml-2">${m.cost.toFixed(2)}</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">无数据</div>
             )}
           </CardContent>
         </Card>

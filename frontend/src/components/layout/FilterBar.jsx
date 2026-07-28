@@ -2,16 +2,12 @@
  * 过滤器行组件：时间范围 Tabs、来源标签选择、模型多选、对比切换。
  */
 
+import { ranges } from '../../store/filterStore.jsx';
 import { Card } from '../ui/card.jsx';
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs.jsx';
 import { Button } from '../ui/button.jsx';
 import SourceBadge from '../SourceBadge.jsx';
 import MultiSelect from '../MultiSelect.jsx';
-
-const ranges = [
-  { id: 'today', label: '今天' }, { id: '7d', label: '7 天' }, { id: '14d', label: '14 天' },
-  { id: '30d', label: '30 天' }, { id: '90d', label: '90 天' }, { id: 'all', label: '全部' },
-];
 
 export default function FilterBar({ f, allSources, allModels, onSetRange, onToggleSource, onSetModels, onToggleCompare }) {
   return (

@@ -21,10 +21,8 @@ export default function SettingsDialog({ onSettingsChange, onClear }) {
     if (open) {
       setLoadErr(null);
       window.go.main.App.GetSettings().then(cfg => {
-        console.log('[settings] loaded:', JSON.stringify(cfg));
         setCfg(cfg);
       }).catch(err => {
-        console.error('[settings] load failed:', err);
         setLoadErr(String(err));
         setCfg({ ...DEFAULTS });
       });

@@ -14,7 +14,7 @@ import TrendChart from '../components/charts/TrendChart.jsx';
 import TopModels from '../components/charts/TopModels.jsx';
 import Heatmap from '../components/charts/Heatmap/Heatmap.jsx';
 import HeatmapDrillDialog from '../components/charts/Heatmap/HeatmapDrillDialog.jsx';
-import DrillDrawer from '../components/tables/DrillDrawer.jsx';
+import DrillDialog from '../components/tables/DrillDialog.jsx';
 
 export default function DashboardPage({ M, allSources, allModels, heatmapData, onRefresh }) {
   const { f, dispatch } = useFilter();
@@ -142,7 +142,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       <Heatmap data={heatmapData} onSelect={setHeatmapDate} />
       {heatmapDate && <HeatmapDrillDialog date={heatmapDate} daily={M?.daily} timeRows={M?.time} hourRows={M?.hour} onClose={() => setHeatmapDate(null)} />}
 
-      <DrillDrawer drill={drill} daily={M?.daily} timeRows={M?.time} onClose={() => setDrill(null)} />
+      <DrillDialog drill={drill} daily={M?.daily} timeRows={M?.time} onClose={() => setDrill(null)} />
     </>
   );
 }
