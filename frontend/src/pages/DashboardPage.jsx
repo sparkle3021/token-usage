@@ -8,6 +8,7 @@ import { useFilter, rangeDays } from '../store/filterStore.jsx';
 import { filterDaily } from '../lib/filters.js';
 import { aggregateTotals } from '../lib/aggregators.js';
 import { addDays, rangeDates, compactCN, deltaPct } from '../lib/formatters.js';
+import * as U from '../lib/utils.js';
 import KPI from '../components/common/KPI.jsx';
 import FilterBar from '../components/layout/FilterBar.jsx';
 import TrendChart from '../components/charts/TrendChart.jsx';
@@ -21,6 +22,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
   const [trendMode, setTrendMode] = useState('stacked');
   const [drill, setDrill] = useState(null);
   const [heatmapDate, setHeatmapDate] = useState(null);
+  const [granularity, setGranularity] = useState('daily');
 
   const filtered = useMemo(() => filterDaily(M?.daily || [], f), [f, M]);
 
@@ -86,8 +88,10 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
   }, [isHourly, dates, M, filtered]);
 
   const sparkValues = useMemo(
-    () => hourlySpark ? hourlySpark.total : dates.map(d => dailyMap.get(d) || 0),
-    [hourlySpark, dates, dailyMap],
+    () => hourlySpark ? hourlySpark.total
+      : granularity !== 'daily' ? U.aggregateMapToArray(dailyMap, dates, granularity)
+      : dates.map(d => dailyMap.get(d) || 0),
+    [hourlySpark, granularity, dailyMap, dates],
   );
 
   const sparkBy = useMemo(() => (key) => {
@@ -95,16 +99,27 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       const m = { totalTokens: 'total', inputTokens: 'input', outputTokens: 'output', cacheReadTokens: 'cacheRead', reasoningOutputTokens: 'reasoning', costUSD: 'cost' };
       return hourlySpark[m[key]] || hourlySpark.total;
     }
+    if (granularity !== 'daily') return U.aggregateField(filtered, dates, granularity, key);
     const m = new Map();
     for (const r of filtered) m.set(r.usageDate, (m.get(r.usageDate) || 0) + (r[key] || 0));
     return dates.map(d => m.get(d) || 0);
-  }, [hourlySpark, filtered, dates]);
+  }, [hourlySpark, granularity, filtered, dates]);
 
   const presentSources = useMemo(() => Array.from(f.sources.size ? f.sources : new Set(allSources)), [f.sources, allSources]);
 
   const setRange = (rangeId) => {
     dispatch({ type: 'SET_RANGE', rangeId, daily: M?.daily || [] });
     onRefresh(false, rangeDays[rangeId]);
+    // Compute expected range length for granularity recommendation
+    let days = rangeDays[rangeId];
+    if (!days && rangeId === 'all' && M?.daily?.length) {
+      const sorted = M.daily.map(x => x.usageDate).filter(Boolean).sort();
+      if (sorted.length > 0) days = Math.max(1, Math.round((Date.now() - new Date(sorted[0]).getTime()) / 86400000));
+    }
+    if (days > 730) setGranularity('yearly');
+    else if (days > 365) setGranularity('monthly');
+    else if (days > 90) setGranularity('weekly');
+    else setGranularity('daily');
   };
 
   return (
@@ -130,7 +145,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
 
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="flex-1 min-w-0">
-          <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={M?.time} hourRows={M?.hour} isHourly={f.rangeId === 'today'} />
+          <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={M?.time} hourRows={M?.hour} isHourly={f.rangeId === 'today'} granularity={granularity} onGranularityChange={setGranularity} />
         </div>
         <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-0 lg:relative">
           <div className="flex flex-col min-h-0 max-lg:h-auto lg:absolute lg:inset-0">

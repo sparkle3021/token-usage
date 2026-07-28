@@ -9,6 +9,7 @@ import gptIcon from '../assets/icons/gpt.svg';
 import hermesIcon from '../assets/icons/hermes.svg';
 import openclawIcon from '../assets/icons/openclaw.svg';
 import opencodeIcon from '../assets/icons/opencode.svg';
+import commonIcon from '../assets/icons/common.svg';
 
 import modelClaude from '../assets/models/claude.svg';
 import modelDeepseek from '../assets/models/deepseek.svg';
@@ -35,7 +36,7 @@ const SOURCE_ICONS = {
 };
 
 export function getSourceIconUrl(name) {
-  return SOURCE_ICONS[name] || null;
+  return SOURCE_ICONS[name] || commonIcon;
 }
 
 const MODEL_ICON_RULES = [
@@ -55,11 +56,11 @@ const MODEL_ICON_RULES = [
 ];
 
 export function getModelIconUrl(name) {
-  if (!name) return null;
+  if (!name) return commonIcon;
   for (const { test, icon } of MODEL_ICON_RULES) {
     if (test(name)) return icon;
   }
-  return null;
+  return commonIcon;
 }
 
 const PALETTE = {
