@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"time"
 
 	"token-dashboard/internal/model"
@@ -36,9 +37,9 @@ type bigModelResp struct {
 // unitLabel 将 BigModel unit 编码映射为展示标签。
 func unitLabel(unit int) string {
 	switch unit {
-	case 6:
-		return "5小时用量"
 	case 3:
+		return "5小时用量"
+	case 6:
 		return "每周用量"
 	case 5:
 		return "每月用量"
@@ -51,7 +52,7 @@ func unitLabel(unit int) string {
 type BigModelProvider struct{}
 
 func (p *BigModelProvider) ID() string            { return "bigmodel" }
-func (p *BigModelProvider) PlanName() string      { return "Plan" }
+func (p *BigModelProvider) PlanName() string      { return "Coding Plan" }
 func (p *BigModelProvider) DisplayType() string   { return DisplayQuota }
 func (p *BigModelProvider) BalanceLabel() string  { return "" }
 
@@ -119,14 +120,28 @@ func (p *BigModelProvider) Fetch(configJSON string) (*model.QuotaData, error) {
 			if slot.ResetInSec < 0 {
 				slot.ResetInSec = 0
 			}
+		} else {
+			slot.ResetInSec = -1 // 无重置时间（未使用）
 		}
 		slots = append(slots, slot)
 	}
 
 	log.Printf("[bigmodel] level=%s limits=%d", br.Data.Level, len(slots))
+
+	// 按 5小时(3) → 每周(6) → 每月(5) 排序
+	unitOrder := map[int]int{3: 0, 6: 1, 5: 2}
+	sort.Slice(slots, func(i, j int) bool {
+		ui, uj := 99, 99
+		for u, o := range unitOrder {
+			if unitLabel(u) == slots[i].Label { ui = o }
+			if unitLabel(u) == slots[j].Label { uj = o }
+		}
+		return ui < uj
+	})
+
 	return &model.QuotaData{
 		Provider: "bigmodel",
-		Plan:     "Plan",
+		Plan:     "Coding Plan",
 		Slots:    slots,
 	}, nil
 }

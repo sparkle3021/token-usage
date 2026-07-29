@@ -95,7 +95,7 @@ func (m *Manager) GetQuotaConfigByID(id int64) (*model.QuotaConfig, error) {
 	err := m.db.QueryRow(`
 		SELECT id, provider, plan, display_name, seq, is_valid, config_json, created_at, updated_at
 		FROM quota_configs WHERE id = ?
-	`, id).Scan(&c.ID, &c.Provider, &c.Plan, &c.DisplayName, &c.Seq, &c.ConfigJSON, &c.CreatedAt, &c.UpdatedAt)
+	`, id).Scan(&c.ID, &c.Provider, &c.Plan, &c.DisplayName, &c.Seq, &c.IsValid, &c.ConfigJSON, &c.CreatedAt, &c.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

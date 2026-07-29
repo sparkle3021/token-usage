@@ -5,8 +5,15 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { PencilIcon, Trash2Icon, RefreshCwIcon } from 'lucide-react';
 import { getSourceIconUrl } from '../lib/iconMap.js';
 
-/** 格式化倒计时 */
+const PROVIDER_NAMES = {
+  opencode: 'OpenCode',
+  deepseek: 'DeepSeek',
+  bigmodel: 'BigModel',
+};
+
+/** 格式化倒计时：-1 表示待使用，0 表示重置中，>0 正常倒计时 */
 function fmtCountdown(sec) {
+  if (sec === -1) return '待使用';
   if (sec <= 0) return '重置中…';
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
@@ -111,7 +118,7 @@ export default function QuotaCard({ cfg, data, displayType, slotsLabels, balance
 
   useEffect(() => { setLocalData(data); }, [data]);
 
-  // 倒计时每秒自减
+  // 倒计时每秒自减（-1 表示待使用，不递减）
   useEffect(() => {
     const t = setInterval(() => {
       setLocalData(d => {
@@ -120,7 +127,7 @@ export default function QuotaCard({ cfg, data, displayType, slotsLabels, balance
           ...d,
           slots: d.slots.map(s => ({
             ...s,
-            resetInSec: Math.max(0, (s.resetInSec || 0) - 1),
+            resetInSec: s.resetInSec > 0 ? s.resetInSec - 1 : s.resetInSec,
           })),
         };
       });
@@ -130,7 +137,8 @@ export default function QuotaCard({ cfg, data, displayType, slotsLabels, balance
 
   const getTitle = () => {
     const alias = cfg.displayName || cfg.seq;
-    return `${cfg.provider}-${cfg.plan}：${alias}`;
+    const provider = PROVIDER_NAMES[cfg.provider] || cfg.provider;
+    return `${provider} ${cfg.plan} - ${alias}`;
   };
 
   if (loading) return <CardSkeleton displayType={displayType} />;

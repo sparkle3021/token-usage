@@ -303,6 +303,7 @@ export namespace model {
 	    displayName: string;
 	    seq: number;
 	    configJson?: string;
+	    isValid: boolean;
 	    createdAt: string;
 	    updatedAt: string;
 	
@@ -318,6 +319,7 @@ export namespace model {
 	        this.displayName = source["displayName"];
 	        this.seq = source["seq"];
 	        this.configJson = source["configJson"];
+	        this.isValid = source["isValid"];
 	        this.createdAt = source["createdAt"];
 	        this.updatedAt = source["updatedAt"];
 	    }
