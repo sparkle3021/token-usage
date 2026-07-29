@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button.jsx';
 import { PlusIcon } from 'lucide-react';
 import {
   listQuotaConfigs, getProviderSchemas, createQuotaConfig, updateQuotaConfig,
-  deleteQuotaConfig, fetchAllQuota, fetchQuota,
+  deleteQuotaConfig, fetchQuota,
 } from '../api/client.js';
 import QuotaCard from '../components/QuotaCard.jsx';
 import QuotaDialog from '../components/QuotaDialog.jsx';
@@ -15,6 +15,7 @@ export default function QuotaPage() {
   const [loading, setLoading] = useState(true);
   const [dlgOpen, setDlgOpen] = useState(false);
   const [editCfg, setEditCfg] = useState(null);
+  const fetchIdRef = useRef(0);
 
   // 加载配置列表 + schema
   const load = useCallback(async () => {
@@ -22,43 +23,76 @@ export default function QuotaPage() {
       const [cfgs, schs] = await Promise.all([listQuotaConfigs(), getProviderSchemas()]);
       setConfigs(Array.isArray(cfgs) ? cfgs : []);
       setSchemas(Array.isArray(schs) ? schs : []);
-    } catch { /* ignore */ }
-    setLoading(false);
+      return Array.isArray(cfgs) ? cfgs : [];
+    } catch { return []; }
   }, []);
 
-  // 拉取所有用量数据，之后刷新配置以同步 is_valid 状态
-  const refreshAll = useCallback(async () => {
-    if (configs.length === 0) return;
+  // 逐条拉取用量数据——哪个先回来先渲染
+  const fetchAllIncremental = useCallback(async (cfgs, fetchId) => {
+    // 逐个并发，每条返回即更新对应卡片
+    cfgs.forEach(async (cfg) => {
+      try {
+        const d = await fetchQuota(cfg.id);
+        if (fetchId !== fetchIdRef.current) return; // 过时的请求，丢弃
+        if (d) setQuotaData(prev => ({ ...prev, [cfg.id]: d }));
+      } catch { /* ignore */ }
+    });
+    // 全部完成后刷新配置以同步 is_valid
     try {
-      const [dataList, cfgs] = await Promise.all([fetchAllQuota(), listQuotaConfigs()]);
-      if (Array.isArray(dataList)) {
-        const map = {};
-        for (const d of dataList) map[d.configId] = d;
-        setQuotaData(map);
-      }
+      await Promise.allSettled(cfgs.map(c => fetchQuota(c.id)));
+      if (fetchId !== fetchIdRef.current) return;
+      const cfgs = await listQuotaConfigs();
       if (Array.isArray(cfgs)) setConfigs(cfgs);
     } catch { /* ignore */ }
-  }, [configs.length]);
+  }, []);
 
-  // 初始化
-  useEffect(() => { load(); }, [load]);
-
-  // 配置变更后重新拉取
+  // 初始化：先加载配置 → 立刻渲染卡片骨架 → 逐条拉取用量
   useEffect(() => {
-    if (configs.length > 0) refreshAll();
-  }, [configs.length, refreshAll]);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const cfgs = await load();
+      if (cancelled) return;
+      setLoading(false);
+      if (cfgs.length > 0) {
+        const id = ++fetchIdRef.current;
+        fetchAllIncremental(cfgs, id);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 单条刷新
+  const refreshOne = useCallback(async (cfg) => {
+    try {
+      const d = await fetchQuota(cfg.id);
+      setQuotaData(prev => ({ ...prev, [cfg.id]: d }));
+      const cfgs = await listQuotaConfigs();
+      if (Array.isArray(cfgs)) setConfigs(cfgs);
+    } catch { /* ignore */ }
+  }, []);
+
+  // 全量重新拉取（新建/编辑后）
+  const refreshAll = useCallback(async () => {
+    const cfgs = await load();
+    if (cfgs.length > 0) {
+      const id = ++fetchIdRef.current;
+      fetchAllIncremental(cfgs, id);
+    }
+  }, [load, fetchAllIncremental]);
 
   // 自动刷新 5 分钟
   useEffect(() => {
     if (configs.length === 0) return;
-    const t = setInterval(refreshAll, 5 * 60 * 1000);
+    const t = setInterval(() => {
+      const id = ++fetchIdRef.current;
+      fetchAllIncremental(configs, id);
+    }, 5 * 60 * 1000);
     return () => clearInterval(t);
-  }, [configs.length, refreshAll]);
+  }, [configs, fetchAllIncremental]);
 
-  // 获取特定配置的 schema
   const getSchema = (provider) => schemas.find(s => s.id === provider);
 
-  // 保存（新建 or 编辑）
   const handleSave = async (cfg) => {
     try {
       if (cfg.id) {
@@ -66,41 +100,23 @@ export default function QuotaPage() {
       } else {
         await createQuotaConfig(cfg);
       }
-      await load(); // 重新加载配置列表
+      await refreshAll();
       setEditCfg(null);
     } catch { /* ignore */ }
   };
 
-  // 编辑
-  const handleEdit = (cfg) => {
-    setEditCfg(cfg);
-    setDlgOpen(true);
-  };
+  const handleEdit = (cfg) => { setEditCfg(cfg); setDlgOpen(true); };
 
-  // 删除
   const handleDelete = async (cfg) => {
     if (!window.confirm(`确定删除 "${cfg.displayName || cfg.provider + '-' + cfg.plan + '-' + cfg.seq}"？`)) return;
     try {
       await deleteQuotaConfig(cfg.id);
-      await load();
+      setQuotaData(prev => { const n = { ...prev }; delete n[cfg.id]; return n; });
+      setConfigs(prev => prev.filter(c => c.id !== cfg.id));
     } catch { /* ignore */ }
   };
 
-  // 单个刷新
-  const handleRefreshOne = async (cfg) => {
-    try {
-      const d = await fetchQuota(cfg.id);
-      setQuotaData(prev => ({ ...prev, [cfg.id]: d }));
-      // 同步 is_valid 状态
-      const cfgs = await listQuotaConfigs();
-      if (Array.isArray(cfgs)) setConfigs(cfgs);
-    } catch { /* ignore */ }
-  };
-
-  const handleAdd = () => {
-    setEditCfg(null);
-    setDlgOpen(true);
-  };
+  const handleAdd = () => { setEditCfg(null); setDlgOpen(true); };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64 text-sm text-muted-foreground">加载中…</div>
@@ -136,7 +152,7 @@ export default function QuotaPage() {
                 balanceLabel={sch?.balanceLabel}
                 onEdit={() => handleEdit(cfg)}
                 onDelete={() => handleDelete(cfg)}
-                onRefresh={() => handleRefreshOne(cfg)}
+                onRefresh={() => refreshOne(cfg)}
               />
             );
           })}
