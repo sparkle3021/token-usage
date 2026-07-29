@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
+import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { PencilIcon, Trash2Icon, RefreshCwIcon } from 'lucide-react';
+import { getSourceIconUrl } from '../lib/iconMap.js';
 
 /** 格式化倒计时 */
 function fmtCountdown(sec) {
@@ -12,6 +14,14 @@ function fmtCountdown(sec) {
   if (h > 0) return `剩 ${h}h${m}m`;
   if (m > 0) return `剩 ${m}m${s}s`;
   return `剩 ${s}s`;
+}
+
+/** 格式化时间 */
+function fmtTime(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 /** 百分比颜色 */
@@ -42,7 +52,7 @@ function RingGauge({ pct, size = 80, strokeWidth = 7 }) {
 }
 
 /** Quota 类型卡片：多个圆环进度条 */
-function QuotaSlots({ slots, data, onCountdownTick }) {
+function QuotaSlots({ slots }) {
   return (
     <div className="flex items-center justify-center gap-10 flex-wrap">
       {slots.map((s, i) => (
@@ -56,18 +66,48 @@ function QuotaSlots({ slots, data, onCountdownTick }) {
   );
 }
 
-/** Balance 类型卡片：余额数字 */
-function BalanceDisplay({ data }) {
-  const balance = typeof data.balance === 'number' ? data.balance.toFixed(2) : '—';
+/** Skeleton 骨架屏 */
+function CardSkeleton({ displayType }) {
   return (
-    <div className="flex flex-col items-center py-3">
-      <span className="text-3xl font-bold tabular-nums">$ {balance}</span>
-    </div>
+    <Card>
+      <CardHeader className="pb-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="size-4 rounded" />
+            <Skeleton className="h-4 w-28" />
+          </div>
+          <div className="flex items-center gap-0.5">
+            <Skeleton className="size-7 rounded" />
+            <Skeleton className="size-7 rounded" />
+            <Skeleton className="size-7 rounded" />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {displayType === 'quota' ? (
+          <div className="flex items-center justify-center gap-10">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="flex flex-col items-center gap-1.5">
+                <Skeleton className="size-20 rounded-full" />
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-3 w-12" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2 py-2">
+            <Skeleton className="h-5 w-40 mx-auto" />
+            <Skeleton className="h-4 w-32 mx-auto" />
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
 export default function QuotaCard({ cfg, data, displayType, slotsLabels, balanceLabel, onEdit, onDelete, onRefresh }) {
   const [localData, setLocalData] = useState(data);
+  const loading = !data;
 
   useEffect(() => { setLocalData(data); }, [data]);
 
@@ -90,8 +130,10 @@ export default function QuotaCard({ cfg, data, displayType, slotsLabels, balance
 
   const getTitle = () => {
     const alias = cfg.displayName || cfg.seq;
-    return `${cfg.provider}-${cfg.plan}-${alias}`;
+    return `${cfg.provider}-${cfg.plan}：${alias}`;
   };
+
+  if (loading) return <CardSkeleton displayType={displayType} />;
 
   const isError = localData?.error;
 
@@ -99,7 +141,10 @@ export default function QuotaCard({ cfg, data, displayType, slotsLabels, balance
     <Card className={isError ? 'border-red-200 bg-red-50/50' : ''}>
       <CardHeader className="pb-1">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium">{getTitle()}</CardTitle>
+          <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+            <img src={getSourceIconUrl(cfg.provider)} alt={cfg.provider} className="size-4 shrink-0" />
+            {getTitle()}
+          </CardTitle>
           <div className="flex items-center gap-0.5">
             <Button size="icon" variant="ghost" className="size-7" onClick={onRefresh}>
               <RefreshCwIcon className="size-3.5" />
@@ -117,12 +162,19 @@ export default function QuotaCard({ cfg, data, displayType, slotsLabels, balance
         {isError ? (
           <p className="text-xs text-red-500 text-center py-4">{localData.error}</p>
         ) : displayType === 'quota' ? (
-          <QuotaSlots slots={localData?.slots || []} data={localData} />
+          <QuotaSlots slots={localData?.slots || []} />
         ) : displayType === 'balance' ? (
-          <>
-            <BalanceDisplay data={localData} />
-            {balanceLabel && <p className="text-xs text-center text-muted-foreground mt-1">{balanceLabel}</p>}
-          </>
+          <div className="text-sm text-center py-2 space-y-1">
+            <p>
+              <span className="text-muted-foreground">可用余额：</span>
+              <span className="font-bold tabular-nums">
+                                {localData && typeof localData.balance === 'number' ? localData.balance.toFixed(2) : '—'}
+              </span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              查询时间：{fmtTime(localData?.fetchedAt)}
+            </p>
+          </div>
         ) : (
           <p className="text-xs text-muted-foreground text-center py-4">不支持的展示类型</p>
         )}

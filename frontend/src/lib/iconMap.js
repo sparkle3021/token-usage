@@ -33,6 +33,9 @@ const SOURCE_ICONS = {
   'Hermes Agent': hermesIcon,
   'OpenClaw': openclawIcon,
   'OpenCode': opencodeIcon,
+  // 用量查询供应商
+  'opencode': opencodeIcon,
+  'deepseek': modelDeepseek,
 };
 
 export function getSourceIconUrl(name) {
