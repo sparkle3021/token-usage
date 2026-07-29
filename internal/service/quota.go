@@ -45,11 +45,12 @@ func (s *QuotaService) CreateConfig(cfg model.QuotaConfig) (model.QuotaConfig, e
 	return cfg, nil
 }
 
-// UpdateConfig 修改已有配置的别名或 config_json。
+// UpdateConfig 修改已有配置的别名或 config_json，变更后重置有效性。
 func (s *QuotaService) UpdateConfig(cfg model.QuotaConfig) error {
 	if err := s.db.UpdateQuotaConfig(&cfg); err != nil {
 		return fmt.Errorf("修改配置失败: %w", err)
 	}
+	s.db.SetQuotaConfigValid(cfg.ID, true)
 	log.Printf("[quota] UpdateConfig ok id=%d", cfg.ID)
 	return nil
 }
@@ -80,7 +81,14 @@ func (s *QuotaService) FetchQuota(id int64) *model.QuotaData {
 
 	data, err := p.Fetch(cfg.ConfigJSON)
 	if err != nil {
+		s.db.SetQuotaConfigValid(id, false)
+		log.Printf("[quota] FetchQuota error id=%d err=%v", id, err)
 		return &model.QuotaData{ConfigID: id, Provider: cfg.Provider, Plan: cfg.Plan, Name: cfg.DisplayName, Error: err.Error(), FetchedAt: time.Now().Format(time.RFC3339)}
+	}
+
+	// 请求成功，标记为有效
+	if !cfg.IsValid {
+		s.db.SetQuotaConfigValid(id, true)
 	}
 
 	data.ConfigID = id

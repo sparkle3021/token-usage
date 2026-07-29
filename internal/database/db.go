@@ -328,6 +328,7 @@ func (m *Manager) initSchema() error {
 
 	m.db.Exec("ALTER TABLE collection_runs ADD COLUMN last_file_mtime INTEGER")
 	m.db.Exec("ALTER TABLE parse_cache ADD COLUMN last_parsed_offset INTEGER NOT NULL DEFAULT 0")
+	m.db.Exec("ALTER TABLE quota_configs ADD COLUMN is_valid INTEGER NOT NULL DEFAULT 1")
 	m.db.Exec("DELETE FROM app_config WHERE key IN ('cc_switch_enabled', 'cc_switch_auto_sync')")
 
 	if err := m.migrateSessionModel(); err != nil {

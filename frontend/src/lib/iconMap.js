@@ -36,6 +36,7 @@ const SOURCE_ICONS = {
   // 用量查询供应商
   'opencode': opencodeIcon,
   'deepseek': modelDeepseek,
+  'bigmodel': modelZhipu,
 };
 
 export function getSourceIconUrl(name) {

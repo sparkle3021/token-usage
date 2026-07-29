@@ -116,6 +116,7 @@ type QuotaConfig struct {
 	DisplayName string `json:"displayName"`
 	Seq         int    `json:"seq"`
 	ConfigJSON  string `json:"configJson,omitempty"`
+	IsValid     bool   `json:"isValid"`
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
 }

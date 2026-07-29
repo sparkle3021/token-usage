@@ -26,16 +26,17 @@ export default function QuotaPage() {
     setLoading(false);
   }, []);
 
-  // 拉取所有用量数据
+  // 拉取所有用量数据，之后刷新配置以同步 is_valid 状态
   const refreshAll = useCallback(async () => {
     if (configs.length === 0) return;
     try {
-      const dataList = await fetchAllQuota();
+      const [dataList, cfgs] = await Promise.all([fetchAllQuota(), listQuotaConfigs()]);
       if (Array.isArray(dataList)) {
         const map = {};
         for (const d of dataList) map[d.configId] = d;
         setQuotaData(map);
       }
+      if (Array.isArray(cfgs)) setConfigs(cfgs);
     } catch { /* ignore */ }
   }, [configs.length]);
 
@@ -90,6 +91,9 @@ export default function QuotaPage() {
     try {
       const d = await fetchQuota(cfg.id);
       setQuotaData(prev => ({ ...prev, [cfg.id]: d }));
+      // 同步 is_valid 状态
+      const cfgs = await listQuotaConfigs();
+      if (Array.isArray(cfgs)) setConfigs(cfgs);
     } catch { /* ignore */ }
   };
 

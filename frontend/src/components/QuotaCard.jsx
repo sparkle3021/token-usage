@@ -135,6 +135,34 @@ export default function QuotaCard({ cfg, data, displayType, slotsLabels, balance
 
   if (loading) return <CardSkeleton displayType={displayType} />;
 
+  // Token 已过期
+  if (cfg.isValid === false) {
+    return (
+      <Card className="border-red-200 bg-red-50/50">
+        <CardHeader className="pb-1">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+              <img src={getSourceIconUrl(cfg.provider)} alt={cfg.provider} className="size-4 shrink-0" />
+              {getTitle()}
+            </CardTitle>
+            <div className="flex items-center gap-0.5">
+              <Button size="icon" variant="ghost" className="size-7" onClick={onEdit}>
+                <PencilIcon className="size-3.5" />
+              </Button>
+              <Button size="icon" variant="ghost" className="size-7 text-red-500" onClick={onDelete}>
+                <Trash2Icon className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="text-center py-4">
+          <p className="text-xs text-red-500 mb-2">Token 已过期，请更新</p>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onEdit}>更新配置</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const isError = localData?.error;
 
   return (

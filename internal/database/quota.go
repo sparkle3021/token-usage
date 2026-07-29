@@ -11,7 +11,7 @@ import (
 // ListQuotaConfigs 返回所有用量查询配置，按 id 排序。
 func (m *Manager) ListQuotaConfigs() ([]model.QuotaConfig, error) {
 	rows, err := m.db.Query(`
-		SELECT id, provider, plan, display_name, seq, config_json, created_at, updated_at
+		SELECT id, provider, plan, display_name, seq, is_valid, config_json, created_at, updated_at
 		FROM quota_configs ORDER BY id ASC
 	`)
 	if err != nil {
@@ -22,7 +22,7 @@ func (m *Manager) ListQuotaConfigs() ([]model.QuotaConfig, error) {
 	var out []model.QuotaConfig
 	for rows.Next() {
 		var c model.QuotaConfig
-		if err := rows.Scan(&c.ID, &c.Provider, &c.Plan, &c.DisplayName, &c.Seq, &c.ConfigJSON, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Provider, &c.Plan, &c.DisplayName, &c.Seq, &c.IsValid, &c.ConfigJSON, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan quota config: %w", err)
 		}
 		out = append(out, c)
@@ -81,11 +81,19 @@ func (m *Manager) DeleteQuotaConfig(id int64) error {
 	return nil
 }
 
+// SetQuotaConfigValid 更新配置的 is_valid 状态。
+func (m *Manager) SetQuotaConfigValid(id int64, valid bool) error {
+	val := 0
+	if valid { val = 1 }
+	_, err := m.db.Exec(`UPDATE quota_configs SET is_valid = ?, updated_at = datetime('now','localtime') WHERE id = ?`, val, id)
+	return err
+}
+
 // GetQuotaConfigByID 根据 ID 获取单条配置。
 func (m *Manager) GetQuotaConfigByID(id int64) (*model.QuotaConfig, error) {
 	var c model.QuotaConfig
 	err := m.db.QueryRow(`
-		SELECT id, provider, plan, display_name, seq, config_json, created_at, updated_at
+		SELECT id, provider, plan, display_name, seq, is_valid, config_json, created_at, updated_at
 		FROM quota_configs WHERE id = ?
 	`, id).Scan(&c.ID, &c.Provider, &c.Plan, &c.DisplayName, &c.Seq, &c.ConfigJSON, &c.CreatedAt, &c.UpdatedAt)
 	if err == sql.ErrNoRows {

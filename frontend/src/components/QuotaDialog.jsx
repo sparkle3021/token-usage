@@ -21,6 +21,12 @@ const PROVIDER_HINTS = {
       { label: 'API Key', detail: '登录 platform.deepseek.com → API Keys → 创建或复制已有的 API Key（sk- 开头）' },
     ],
   },
+  bigmodel: {
+    title: '如何获取 Token？',
+    steps: [
+      { label: 'Authorization Token', detail: '打开 www.bigmodel.cn 并登录 → 按 F12 打开 DevTools → Network 标签 → 刷新页面 → 搜索 quota/limit → 复制请求头中 Authorization 的值（eyJ... 开头）' },
+    ],
+  },
 };
 
 export default function QuotaDialog({ open, onOpenChange, schemas, editCfg, onSave }) {
