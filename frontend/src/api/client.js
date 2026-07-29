@@ -43,6 +43,11 @@ export function getAutoSyncInterval() {
   return window.go.main.App.GetAutoSyncInterval();
 }
 
+/** 查询当前正在运行的操作名称（"collection"/"cc-import"/"clear-data"/""） */
+export function currentOp() {
+  return window.go.main.App.CurrentOp();
+}
+
 /** 获取应用设置 */
 export function getSettings() {
   return window.go.main.App.GetSettings();

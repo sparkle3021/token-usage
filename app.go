@@ -141,6 +141,14 @@ func (a *App) CollectStatus() *model.CollectStatus {
 	return a.collectionSvc.CollectStatus()
 }
 
+// CurrentOp 返回当前正在运行的操作名称，供前端展示。返回 "" 表示空闲。
+func (a *App) CurrentOp() string {
+	if a.engine == nil {
+		return ""
+	}
+	return a.engine.CurrentOp()
+}
+
 func (a *App) ClearAllData() error {
 	return a.collectionSvc.ClearAllData()
 }

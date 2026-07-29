@@ -10,6 +10,10 @@ export function CollectStatus() {
   return window['go']['main']['App']['CollectStatus']();
 }
 
+export function CurrentOp() {
+  return window['go']['main']['App']['CurrentOp']();
+}
+
 export function DetectCCSwitchDB() {
   return window['go']['main']['App']['DetectCCSwitchDB']();
 }

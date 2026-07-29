@@ -87,20 +87,12 @@ func (s *CollectionService) CollectStatus() *model.CollectStatus {
 }
 
 // ClearAllData 清除所有用量数据、采集历史、及同步状态（checkpoint）。
-// 仅保留用户配置（cc_switch_db_path、auto_sync_minutes 等）。
+// 委托给 Engine.ClearAllData 统一管理并发锁。
 func (s *CollectionService) ClearAllData() error {
-	if s.db == nil {
-		return fmt.Errorf("数据库未初始化")
+	if s.engine == nil {
+		return fmt.Errorf("引擎未初始化")
 	}
-	if err := s.db.ClearAllUsageData(); err != nil {
-		log.Printf("[service] ClearAllData error: %v", err)
-		return fmt.Errorf("清除失败: %v", err)
-	}
-	if s.engine != nil {
-		s.engine.ClearCollectorCaches()
-	}
-	log.Printf("[service] ClearAllData ok")
-	return nil
+	return s.engine.ClearAllData()
 }
 
 func (s *CollectionService) SetAutoSyncInterval(minutes int) {

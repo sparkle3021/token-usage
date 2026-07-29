@@ -26,6 +26,7 @@ type Status struct {
 	ExitCode   *int    `json:"exitCode"`
 	Stdout     string  `json:"stdout"`
 	Stderr     string  `json:"stderr"`
+	CurrentOp  string  `json:"currentOp"`
 }
 
 // EventCallback 采集事件回调签名，用于桥接到 Wails 运行时。
@@ -39,10 +40,10 @@ type Engine struct {
 
 	ccSwitchCol *collector.CCSwitchCollector
 
-	mu      sync.Mutex
-	status  Status
-	active  bool
-	onEvent EventCallback
+	mu         sync.Mutex
+	status     Status
+	currentOp  string // "" | "collection" | "full-collection" | "cc-import" | "clear-data"
+	onEvent    EventCallback
 
 	parallelism int
 	forceFull   bool // force full collection on next run
@@ -109,6 +110,65 @@ func (e *Engine) Collectors() []collector.Collector {
 	return e.collectors
 }
 
+// tryAcquire attempts to acquire the engine for a named operation.
+// Returns false if another operation is already running.
+func (e *Engine) tryAcquire(op string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.currentOp != "" {
+		return false
+	}
+	e.currentOp = op
+	return true
+}
+
+// release releases the engine after an operation completes.
+func (e *Engine) release(op string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.currentOp == op {
+		e.currentOp = ""
+	}
+}
+
+// CurrentOp returns the name of the currently running operation, or "" if idle.
+func (e *Engine) CurrentOp() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.currentOp
+}
+
+// ClearAllData wipes all usage data, collection history, and checkpoints.
+// Retains app config entries (cc-switch-db-path, auto-sync-minutes, etc.).
+func (e *Engine) ClearAllData() error {
+	e.mu.Lock()
+	if e.currentOp != "" {
+		e.mu.Unlock()
+		return fmt.Errorf("操作 %s 正在运行中，请等待完成后再试", e.currentOp)
+	}
+	e.currentOp = "clear-data"
+	e.mu.Unlock()
+
+	defer func() {
+		e.mu.Lock()
+		e.currentOp = ""
+		e.mu.Unlock()
+	}()
+
+	if e.db == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+	if err := e.db.ClearAllUsageData(); err != nil {
+		return fmt.Errorf("清除失败: %v", err)
+	}
+	for _, col := range e.collectors {
+		if s, ok := col.(interface{ ClearCache() }); ok {
+			s.ClearCache()
+		}
+	}
+	return nil
+}
+
 // ClearCollectorCaches clears in-memory file fingerprint caches so the next
 // Collect() call re-parses all source files instead of returning Cached=true.
 func (e *Engine) ClearCollectorCaches() {
@@ -133,14 +193,12 @@ func (e *Engine) Status() Status {
 }
 
 func (e *Engine) StartCollection() bool {
-	e.mu.Lock()
-	if e.active {
-		e.mu.Unlock()
-		log.Printf("[engine] StartCollection skipped (already active)")
+	if !e.tryAcquire("collection") {
+		log.Printf("[engine] StartCollection skipped (current op: %s)", e.CurrentOp())
 		return false
 	}
-	e.active = true
 	now := time.Now().Format(time.RFC3339)
+	e.mu.Lock()
 	e.status = Status{
 		Status:    "running",
 		Message:   "正在采集本机用量",
@@ -155,10 +213,6 @@ func (e *Engine) StartCollection() bool {
 // StartFullCollection forces a full collection, ignoring all incremental markers.
 func (e *Engine) StartFullCollection() bool {
 	e.mu.Lock()
-	if e.active {
-		e.mu.Unlock()
-		return false
-	}
 	e.forceFull = true
 	e.mu.Unlock()
 	return e.StartCollection()
@@ -167,6 +221,11 @@ func (e *Engine) StartFullCollection() bool {
 // SyncCCSwitch runs the CC-Switch collector synchronously and returns stats.
 // Unlike StartCollection/StartFullCollection, this blocks until complete.
 func (e *Engine) SyncCCSwitch() (collector.CCSwitchStats, error) {
+	if !e.tryAcquire("cc-import") {
+		return collector.CCSwitchStats{}, fmt.Errorf("操作 %s 正在运行中，请等待完成后重试", e.CurrentOp())
+	}
+	defer e.release("cc-import")
+
 	if e.ccSwitchCol == nil {
 		return collector.CCSwitchStats{}, fmt.Errorf("cc-switch collector not initialized")
 	}
@@ -298,8 +357,9 @@ func (e *Engine) runCollection() {
 		ExitCode: &exitCode,
 		Stderr: truncateStr(stderr, 12000),
 	}
-	e.active = false
+	
 	e.mu.Unlock()
+	e.release("collection")
 	e.emit("collection:done", map[string]string{"status": status, "message": msg})
 
 	elapsed := time.Now().Sub(mustParseRFC3339(startedAt))

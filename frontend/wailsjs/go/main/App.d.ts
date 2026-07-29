@@ -6,6 +6,8 @@ export function ClearAllData():Promise<void>;
 
 export function CollectStatus():Promise<model.CollectStatus>;
 
+export function CurrentOp():Promise<string>;
+
 export function DetectCCSwitchDB():Promise<string>;
 
 export function GetAutoSyncInterval():Promise<number>;
