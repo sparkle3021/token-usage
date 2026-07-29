@@ -3,6 +3,7 @@ import { Card, CardHeader, CardContent } from '../ui/card.jsx';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table.jsx';
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs.jsx';
 import * as U from '../../lib/utils.js';
+import { Button } from '../ui/button.jsx';
 import SourceBadge from '../SourceBadge.jsx';
 
 export default function TablePanel({ daily = [], sessions = [], onDrill, fullHeight = false }) {
@@ -92,15 +93,20 @@ function DTable({ rows, columns, sortField = 'total', search, fullHeight, onDril
                 onClick={() => setSortBy(p => p.field === c.field ? { field: c.field, dir: p.dir === 'asc' ? 'desc' : 'asc' } : { field: c.field, dir: 'desc' })}>
                 {c.label}
               </TableHead>
-            ))}</TableRow>
+            ))}
+              <TableHead className="w-8" />
+            </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.length === 0 && <TableRow><TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">暂无数据</TableCell></TableRow>}
+            {sorted.length === 0 && <TableRow><TableCell colSpan={columns.length + 1} className="text-center py-8 text-muted-foreground">暂无数据</TableCell></TableRow>}
             {sorted.map((r, i) => (
-              <TableRow key={i} onClick={() => onDrill?.(r)}>
+              <TableRow key={i}>
                 {columns.map(c => <TableCell key={c.field || c.label} className="text-xs tabular-nums" style={{ textAlign: c.right ? 'right' : 'left' }}>
                   {c.render ? c.render(r) : (typeof c.val === 'function' ? c.val(r) : r?.[c.field])}
                 </TableCell>)}
+                <TableCell className="w-14 p-0">
+                  <Button size="xs" variant="link" className="w-full h-full min-h-[32px] text-xs" onClick={() => onDrill?.(r)}>详情</Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

@@ -138,11 +138,6 @@ func mergeDaily(tx *sql.Tx) {
 			m.input_tokens, m.output_tokens, m.cache_read_tokens, m.cache_creation_tokens,
 			m.reasoning_output_tokens, m.total_tokens, m.cost_usd
 		FROM _merge_daily m
-		WHERE NOT EXISTS (
-			SELECT 1 FROM daily_usage d
-			WHERE d.device = m.device AND d.source = 'Claude Code'
-			  AND d.usage_date = m.usage_date AND d.model = m.model
-		)
 		ON CONFLICT(device, source, usage_date, model) DO UPDATE SET
 			input_tokens     = input_tokens     + excluded.input_tokens,
 			output_tokens    = output_tokens    + excluded.output_tokens,
@@ -182,11 +177,6 @@ func mergeHourly(tx *sql.Tx) {
 			m.input_tokens, m.output_tokens, m.cache_read_tokens, m.cache_creation_tokens,
 			m.reasoning_output_tokens, m.total_tokens, m.cost_usd
 		FROM _merge_hour m
-		WHERE NOT EXISTS (
-			SELECT 1 FROM hour_usage h
-			WHERE h.device = m.device AND h.source = 'Claude Code'
-			  AND h.usage_date = m.usage_date AND h.hour = m.hour AND h.model = m.model
-		)
 		ON CONFLICT(device, source, usage_date, hour, model) DO UPDATE SET
 			input_tokens     = input_tokens     + excluded.input_tokens,
 			output_tokens    = output_tokens    + excluded.output_tokens,

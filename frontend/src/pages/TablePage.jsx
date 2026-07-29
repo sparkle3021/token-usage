@@ -55,7 +55,7 @@ export default function TablePage({ M, onRefresh }) {
         <TablePanel daily={filtered} sessions={M.sessions} onDrill={setDrill} fullHeight />
       </div>
 
-      <DrillDialog drill={drill} daily={M.daily} timeRows={M.time} onClose={() => setDrill(null)} />
+      <DrillDialog drill={drill} daily={filtered} sessions={M.sessions} onClose={() => setDrill(null)} />
     </div>
   );
 }
