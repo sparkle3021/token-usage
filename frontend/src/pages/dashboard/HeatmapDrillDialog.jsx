@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../ui/dialog.jsx';
-import { Card, CardContent } from '../../ui/card.jsx';
-import * as U from '../../../lib/utils.js';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog.jsx';
+import { Card, CardContent } from '../../components/ui/card.jsx';
+import * as U from '../../lib/utils.js';
 
 export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, onClose }) {
   const dayDaily = useMemo(() => {

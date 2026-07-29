@@ -14,13 +14,15 @@ import FilterBar from '../components/layout/FilterBar.jsx';
 import TrendChart from '../components/charts/TrendChart.jsx';
 import TopModels from '../components/charts/TopModels.jsx';
 import Heatmap from '../components/charts/Heatmap/Heatmap.jsx';
-import HeatmapDrillDialog from '../components/charts/Heatmap/HeatmapDrillDialog.jsx';
-import DrillDialog from '../components/tables/DrillDialog.jsx';
+import HeatmapDrillDialog from './dashboard/HeatmapDrillDialog.jsx';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog.jsx';
+import DataTable from '../components/common/DataTable.jsx';
+import SourceBadge from '../components/SourceBadge.jsx';
 
 export default function DashboardPage({ M, allSources, allModels, heatmapData, onRefresh }) {
   const { f, dispatch } = useFilter();
   const [trendMode, setTrendMode] = useState('stacked');
-  const [drill, setDrill] = useState(null);
+  const [topModelDrill, setTopModelDrill] = useState(null);
   const [heatmapDate, setHeatmapDate] = useState(null);
   const [granularity, setGranularity] = useState('daily');
 
@@ -149,7 +151,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
         </div>
         <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-0 lg:relative">
           <div className="flex flex-col min-h-0 max-lg:h-auto lg:absolute lg:inset-0">
-            <TopModels rows={filtered} onDrillModel={r => setDrill({ kind: 'model', row: r })} />
+            <TopModels rows={filtered} onDrillModel={r => setTopModelDrill(r)} />
           </div>
         </div>
       </div>
@@ -157,7 +159,36 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       <Heatmap data={heatmapData} onSelect={setHeatmapDate} />
       {heatmapDate && <HeatmapDrillDialog date={heatmapDate} daily={M?.daily} timeRows={M?.time} hourRows={M?.hour} onClose={() => setHeatmapDate(null)} />}
 
-      <DrillDialog drill={drill} daily={M?.daily} timeRows={M?.time} onClose={() => setDrill(null)} />
+      {topModelDrill && (
+        <Dialog open onOpenChange={o => { if (!o) setTopModelDrill(null); }}>
+          <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto" showCloseButton>
+            <DialogTitle className="sr-only">{topModelDrill.model} 详情</DialogTitle>
+            <DialogDescription className="sr-only">模型用量详情</DialogDescription>
+
+            <div className="mb-4">
+              <div className="text-xs text-muted-foreground mb-0.5">模型详情</div>
+              <h3 className="text-sm font-semibold">{topModelDrill.model}</h3>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 flex-wrap">
+              <span>总 Token <strong className="text-foreground">{U.compactCN(topModelDrill.total)}</strong></span>
+              <span>费用 <strong className="text-foreground">${(topModelDrill.cost || 0).toFixed(2)}</strong></span>
+              <span>调用 <strong className="text-foreground">{topModelDrill.count}</strong> 次</span>
+            </div>
+
+            {topModelDrill.sources?.length > 0 && (
+              <DataTable rows={topModelDrill.sources.map(s => ({
+                ...s,
+                pct: (s.total / topModelDrill.total * 100).toFixed(1),
+              }))} cols={[
+                { label: '来源', field: 'source', render: v => <SourceBadge source={v} /> },
+                { label: 'Token', field: 'total', right: true, render: v => U.compactCN(v) },
+                { label: '占比', right: true, render: (_, r) => `${r.pct || '—'}%` },
+              ]} />
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
