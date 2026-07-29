@@ -278,6 +278,19 @@ func (m *Manager) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_parse_cache_source ON parse_cache(source);
 	CREATE INDEX IF NOT EXISTS idx_parse_cache_updated ON parse_cache(updated_at);
 
+	CREATE TABLE IF NOT EXISTS quota_configs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		provider TEXT NOT NULL,
+		plan TEXT NOT NULL DEFAULT '',
+		display_name TEXT NOT NULL DEFAULT '',
+		seq INTEGER NOT NULL DEFAULT 0,
+		config_json TEXT NOT NULL DEFAULT '{}',
+		created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+		updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_quota_display_name
+		ON quota_configs(display_name) WHERE display_name != '';
+
 	`
 	if _, err := m.db.Exec(schema); err != nil {
 		return fmt.Errorf("exec schema: %w", err)

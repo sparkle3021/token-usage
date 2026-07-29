@@ -13,6 +13,7 @@ import { Button } from './components/ui/button.jsx';
 import Header from './components/layout/Header.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import TablePage from './pages/TablePage.jsx';
+import QuotaPage from './pages/QuotaPage.jsx';
 
 function AppContent() {
   const [page, setPage] = useState('dashboard');
@@ -61,6 +62,8 @@ function AppContent() {
           heatmapData={heatmapData}
           onRefresh={fetchData}
         />
+      ) : page === 'quota' ? (
+        <QuotaPage />
       ) : (
         <TablePage M={M} onRefresh={fetchData} />
       )}

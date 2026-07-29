@@ -106,6 +106,57 @@ type PricingUpdateResult struct {
 	Error      string `json:"error,omitempty"`
 }
 
+// ── 用量查询（Quota）相关结构体 ──
+
+// QuotaConfig 持久化的用量查询配置。
+type QuotaConfig struct {
+	ID          int64  `json:"id"`
+	Provider    string `json:"provider"`
+	Plan        string `json:"plan"`
+	DisplayName string `json:"displayName"`
+	Seq         int    `json:"seq"`
+	ConfigJSON  string `json:"configJson,omitempty"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+// QuotaData 单次拉取的用量数据。
+type QuotaData struct {
+	ConfigID int64       `json:"configId"`
+	Provider string      `json:"provider"`
+	Plan     string      `json:"plan"`
+	Name     string      `json:"name"`
+	Slots    []QuotaSlot `json:"slots,omitempty"`
+	Balance  *float64    `json:"balance,omitempty"`
+	Error    string      `json:"error,omitempty"`
+	FetchedAt string     `json:"fetchedAt"`
+}
+
+// QuotaSlot 单个用量槽（quota 类型）。
+type QuotaSlot struct {
+	Label        string `json:"label"`
+	UsagePercent int    `json:"usagePercent"`
+	ResetInSec   int    `json:"resetInSec"`
+}
+
+// ProviderSchema 供应商注册信息，前端据此渲染配置表单。
+type ProviderSchema struct {
+	ID         string        `json:"id"`
+	PlanName   string        `json:"planName"`
+	DisplayType string       `json:"displayType"` // "quota" | "balance"
+	SlotsLabels []string     `json:"slotsLabels,omitempty"`
+	BalanceLabel string      `json:"balanceLabel,omitempty"`
+	Fields      []ConfigField `json:"fields"`
+}
+
+// ConfigField 配置表单字段定义。
+type ConfigField struct {
+	Key         string `json:"key"`
+	Label       string `json:"label"`
+	Type        string `json:"type"`        // "text" | "password"
+	Placeholder string `json:"placeholder"`
+}
+
 // HourUsage holds hourly aggregated token usage from both JSONL and CC-Switch.
 type HourUsage struct {
 	Device                string  `json:"device"`

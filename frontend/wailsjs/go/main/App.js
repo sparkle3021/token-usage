@@ -10,12 +10,28 @@ export function CollectStatus() {
   return window['go']['main']['App']['CollectStatus']();
 }
 
+export function CreateQuotaConfig(arg1) {
+  return window['go']['main']['App']['CreateQuotaConfig'](arg1);
+}
+
 export function CurrentOp() {
   return window['go']['main']['App']['CurrentOp']();
 }
 
+export function DeleteQuotaConfig(arg1) {
+  return window['go']['main']['App']['DeleteQuotaConfig'](arg1);
+}
+
 export function DetectCCSwitchDB() {
   return window['go']['main']['App']['DetectCCSwitchDB']();
+}
+
+export function FetchAllQuota() {
+  return window['go']['main']['App']['FetchAllQuota']();
+}
+
+export function FetchQuota(arg1) {
+  return window['go']['main']['App']['FetchQuota'](arg1);
 }
 
 export function GetAutoSyncInterval() {
@@ -24,6 +40,10 @@ export function GetAutoSyncInterval() {
 
 export function GetDashboardData() {
   return window['go']['main']['App']['GetDashboardData']();
+}
+
+export function GetProviderSchemas() {
+  return window['go']['main']['App']['GetProviderSchemas']();
 }
 
 export function GetSettings() {
@@ -36,6 +56,10 @@ export function GetTimeSeriesData(arg1) {
 
 export function ImportCCSwitchDB() {
   return window['go']['main']['App']['ImportCCSwitchDB']();
+}
+
+export function ListQuotaConfigs() {
+  return window['go']['main']['App']['ListQuotaConfigs']();
 }
 
 export function SaveSettings(arg1) {
@@ -56,4 +80,8 @@ export function StartFullCollection() {
 
 export function UpdatePricing() {
   return window['go']['main']['App']['UpdatePricing']();
+}
+
+export function UpdateQuotaConfig(arg1) {
+  return window['go']['main']['App']['UpdateQuotaConfig'](arg1);
 }

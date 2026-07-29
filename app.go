@@ -18,11 +18,12 @@ import (
 // App Wails 应用主结构体，持有各服务实例，并将方法绑定到前端 window.go.main.App.*。
 // 每个方法仅做参数转发，业务逻辑在各 service 中实现。
 type App struct {
-	ctx           context.Context
-	dashboardSvc  *service.DashboardService
-	collectionSvc *service.CollectionService
-	importSvc     *service.ImportService
-	settingSvc    *service.SettingService
+	ctx            context.Context
+	dashboardSvc   *service.DashboardService
+	collectionSvc  *service.CollectionService
+	importSvc      *service.ImportService
+	settingSvc     *service.SettingService
+	quotaSvc       *service.QuotaService
 
 	db      *database.Manager      // 保留用于 startup 中的 CC-Switch 检测
 	engine  *orchestrator.Engine   // 保留用于 startup 中的事件桥接
@@ -56,12 +57,14 @@ func NewApp() *App {
 	collectionSvc := service.NewCollectionService(db, eng)
 	importSvc := service.NewImportService(db, eng)
 	settingSvc := service.NewSettingService(db, collectionSvc)
+	quotaSvc := service.NewQuotaService(db)
 
 	return &App{
 		dashboardSvc:  dashboardSvc,
 		collectionSvc: collectionSvc,
 		importSvc:     importSvc,
 		settingSvc:    settingSvc,
+		quotaSvc:      quotaSvc,
 		db:            db,
 		engine:        eng,
 		dataDir:       cfg.DataDir,
@@ -184,6 +187,42 @@ func (a *App) SaveSettings(cfg model.AppConfig) error {
 // UpdatePricing 从远程源拉取最新定价数据并重载定价引擎。
 func (a *App) UpdatePricing() model.PricingUpdateResult {
 	return a.dashboardSvc.UpdatePricing()
+}
+
+// ---------------------------------------------------------------------------
+// Quota API
+// ---------------------------------------------------------------------------
+
+func (a *App) ListQuotaConfigs() []model.QuotaConfig {
+	return a.quotaSvc.ListConfigs()
+}
+
+func (a *App) GetProviderSchemas() []model.ProviderSchema {
+	return a.quotaSvc.GetProviderSchemas()
+}
+
+func (a *App) CreateQuotaConfig(cfg model.QuotaConfig) model.QuotaConfig {
+	created, err := a.quotaSvc.CreateConfig(cfg)
+	if err != nil {
+		return model.QuotaConfig{ConfigJSON: err.Error()}
+	}
+	return created
+}
+
+func (a *App) UpdateQuotaConfig(cfg model.QuotaConfig) error {
+	return a.quotaSvc.UpdateConfig(cfg)
+}
+
+func (a *App) DeleteQuotaConfig(id int64) error {
+	return a.quotaSvc.DeleteConfig(id)
+}
+
+func (a *App) FetchQuota(id int64) *model.QuotaData {
+	return a.quotaSvc.FetchQuota(id)
+}
+
+func (a *App) FetchAllQuota() []model.QuotaData {
+	return a.quotaSvc.FetchAllQuota()
 }
 
 // ---------------------------------------------------------------------------

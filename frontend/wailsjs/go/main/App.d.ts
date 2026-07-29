@@ -6,19 +6,31 @@ export function ClearAllData():Promise<void>;
 
 export function CollectStatus():Promise<model.CollectStatus>;
 
+export function CreateQuotaConfig(arg1:model.QuotaConfig):Promise<model.QuotaConfig>;
+
 export function CurrentOp():Promise<string>;
 
+export function DeleteQuotaConfig(arg1:number):Promise<void>;
+
 export function DetectCCSwitchDB():Promise<string>;
+
+export function FetchAllQuota():Promise<Array<model.QuotaData>>;
+
+export function FetchQuota(arg1:number):Promise<model.QuotaData>;
 
 export function GetAutoSyncInterval():Promise<number>;
 
 export function GetDashboardData():Promise<model.DashboardData>;
+
+export function GetProviderSchemas():Promise<Array<model.ProviderSchema>>;
 
 export function GetSettings():Promise<model.AppConfig>;
 
 export function GetTimeSeriesData(arg1:number):Promise<model.TimeSeriesData>;
 
 export function ImportCCSwitchDB():Promise<model.CCSwitchImportResult>;
+
+export function ListQuotaConfigs():Promise<Array<model.QuotaConfig>>;
 
 export function SaveSettings(arg1:model.AppConfig):Promise<void>;
 
@@ -29,3 +41,5 @@ export function StartCollection():Promise<boolean>;
 export function StartFullCollection():Promise<boolean>;
 
 export function UpdatePricing():Promise<model.PricingUpdateResult>;
+
+export function UpdateQuotaConfig(arg1:model.QuotaConfig):Promise<void>;

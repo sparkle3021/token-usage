@@ -73,4 +73,27 @@ export function importCCSwitchDB() {
   return window.go.main.App.ImportCCSwitchDB();
 }
 
+// ── 用量查询 API ──
+
+/** 获取所有用量查询配置 */
+export function listQuotaConfigs() { return window.go.main.App.ListQuotaConfigs(); }
+
+/** 获取所有供应商 schema */
+export function getProviderSchemas() { return window.go.main.App.GetProviderSchemas(); }
+
+/** 创建用量查询配置 */
+export function createQuotaConfig(cfg) { return window.go.main.App.CreateQuotaConfig(cfg); }
+
+/** 修改用量查询配置 */
+export function updateQuotaConfig(cfg) { return window.go.main.App.UpdateQuotaConfig(cfg); }
+
+/** 删除用量查询配置 */
+export function deleteQuotaConfig(id) { return window.go.main.App.DeleteQuotaConfig(id); }
+
+/** 拉取单个用量数据 */
+export function fetchQuota(id) { return window.go.main.App.FetchQuota(id); }
+
+/** 并发拉取所有用量数据 */
+export function fetchAllQuota() { return window.go.main.App.FetchAllQuota(); }
+
 

@@ -80,6 +80,24 @@ export namespace model {
 	        this.command = source["command"];
 	    }
 	}
+	export class ConfigField {
+	    key: string;
+	    label: string;
+	    type: string;
+	    placeholder: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfigField(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.label = source["label"];
+	        this.type = source["type"];
+	        this.placeholder = source["placeholder"];
+	    }
+	}
 	export class DailyUsage {
 	    device: string;
 	    source: string;
@@ -238,6 +256,133 @@ export namespace model {
 	        this.error = source["error"];
 	    }
 	}
+	export class ProviderSchema {
+	    id: string;
+	    planName: string;
+	    displayType: string;
+	    slotsLabels?: string[];
+	    balanceLabel?: string;
+	    fields: ConfigField[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ProviderSchema(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.planName = source["planName"];
+	        this.displayType = source["displayType"];
+	        this.slotsLabels = source["slotsLabels"];
+	        this.balanceLabel = source["balanceLabel"];
+	        this.fields = this.convertValues(source["fields"], ConfigField);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class QuotaConfig {
+	    id: number;
+	    provider: string;
+	    plan: string;
+	    displayName: string;
+	    seq: number;
+	    configJson?: string;
+	    createdAt: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuotaConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.provider = source["provider"];
+	        this.plan = source["plan"];
+	        this.displayName = source["displayName"];
+	        this.seq = source["seq"];
+	        this.configJson = source["configJson"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+	export class QuotaSlot {
+	    label: string;
+	    usagePercent: number;
+	    resetInSec: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuotaSlot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.usagePercent = source["usagePercent"];
+	        this.resetInSec = source["resetInSec"];
+	    }
+	}
+	export class QuotaData {
+	    configId: number;
+	    provider: string;
+	    plan: string;
+	    name: string;
+	    slots?: QuotaSlot[];
+	    balance?: number;
+	    error?: string;
+	    fetchedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuotaData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.configId = source["configId"];
+	        this.provider = source["provider"];
+	        this.plan = source["plan"];
+	        this.name = source["name"];
+	        this.slots = this.convertValues(source["slots"], QuotaSlot);
+	        this.balance = source["balance"];
+	        this.error = source["error"];
+	        this.fetchedAt = source["fetchedAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	
 	export class TimeUsage {
 	    device: string;
