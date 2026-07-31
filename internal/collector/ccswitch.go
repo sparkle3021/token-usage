@@ -410,7 +410,7 @@ func (c *CCSwitchCollector) queryLocalMinDates() map[string]string {
 	if c.store == nil {
 		return nil
 	}
-	sources := []string{"Claude Code", "Codex CLI", "OpenCode", "claude-desktop"}
+	sources := []string{"Claude Code", "Codex CLI", "OpenCode"}
 	result := make(map[string]string)
 	for _, src := range sources {
 		minDate, err := c.store.GetMinUsageDate(src)
@@ -428,6 +428,8 @@ func (c *CCSwitchCollector) queryLocalMinDates() map[string]string {
 func ccSourceFromAppType(appType string) string {
 	switch strings.ToLower(strings.TrimSpace(appType)) {
 	case "claude":
+		return "Claude Code"
+	case "claude-desktop", "claude_desktop", "claude desktop":
 		return "Claude Code"
 	case "codex":
 		return "Codex CLI"
