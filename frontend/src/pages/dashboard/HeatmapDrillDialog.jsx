@@ -92,12 +92,13 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
 
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl min-h-[280px] max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>{date} 用量详情</DialogTitle>
         </DialogHeader>
 
-        <div className="text-xs text-muted-foreground mb-2">
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-subtle">
+        <div className="text-xs text-muted-foreground mb-2 shrink-0">
           来源数 <strong className="text-foreground">{daySources.length}</strong>
           {topSource && <> · 峰值 <strong className="text-foreground">{topSource.source}</strong>（{U.compactCN(topSource.tokens)}）</>}
           · 总量 <strong className="text-foreground">{U.compactCN(dayTotal)}</strong>
@@ -130,6 +131,7 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
             )}
           </CardContent>
         </Card>
+        </div>
       </DialogContent>
     </Dialog>
   );

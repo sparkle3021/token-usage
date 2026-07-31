@@ -163,21 +163,22 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
 
       {topModelDrill && (
         <Dialog open onOpenChange={o => { if (!o) setTopModelDrill(null); }}>
-          <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto" showCloseButton>
+          <DialogContent className="sm:max-w-lg min-h-[280px] max-h-[85vh] overflow-hidden flex flex-col" showCloseButton>
             <DialogTitle className="sr-only">{topModelDrill.model} 详情</DialogTitle>
             <DialogDescription className="sr-only">模型用量详情</DialogDescription>
 
-            <div className="mb-4">
+            <div className="mb-4 shrink-0">
               <div className="text-xs text-muted-foreground mb-0.5">模型详情</div>
               <h3 className="text-sm font-semibold">{topModelDrill.model}</h3>
             </div>
 
-            <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 flex-wrap">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
               <span>总 Token <strong className="text-foreground">{U.compactCN(topModelDrill.total)}</strong></span>
               <span>费用 <strong className="text-foreground">${(topModelDrill.cost || 0).toFixed(2)}</strong></span>
               <span>活跃 <strong className="text-foreground">{topModelDrill.dayCount}</strong> 天</span>
             </div>
 
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-subtle">
             {topModelDrill.sources?.length > 0 && (
               <div className="space-y-1.5">
                 {topModelDrill.sources.map(s => {
@@ -202,6 +203,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
                 })}
               </div>
             )}
+            </div>
           </DialogContent>
         </Dialog>
       )}
