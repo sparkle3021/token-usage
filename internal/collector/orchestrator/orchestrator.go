@@ -341,6 +341,14 @@ func (e *Engine) runCollection() {
 		}
 	}
 
+	// Rebuild daily_usage from hour_usage BEFORE announcing completion, so the
+	// frontend never reads stale daily data when it receives collection:done.
+	if err := e.db.BuildDailyFromHourUsage(); err != nil {
+		hadError = true
+		stderr += "[engine] BuildDailyFromHourUsage: " + err.Error() + "\n"
+		log.Printf("[engine] BuildDailyFromHourUsage error: %v", err)
+	}
+
 	e.mu.Lock()
 	finishedAt := time.Now().Format(time.RFC3339)
 	status := "ok"
@@ -357,17 +365,12 @@ func (e *Engine) runCollection() {
 		ExitCode: &exitCode,
 		Stderr: truncateStr(stderr, 12000),
 	}
-	
 	e.mu.Unlock()
 	e.release("collection")
 	e.emit("collection:done", map[string]string{"status": status, "message": msg})
 
 	elapsed := time.Now().Sub(mustParseRFC3339(startedAt))
-			// Rebuild daily_usage from hour_usage after all collectors finish
-		if err := e.db.BuildDailyFromHourUsage(); err != nil {
-			log.Printf("[engine] BuildDailyFromHourUsage error: %v", err)
-		}
-		log.Printf("[engine] runCollection complete status=%s elapsed=%v", status, elapsed)
+	log.Printf("[engine] runCollection complete status=%s elapsed=%v", status, elapsed)
 }
 
 func (e *Engine) processCollector(result *collector.CollectResult, col collector.Collector) bool {
