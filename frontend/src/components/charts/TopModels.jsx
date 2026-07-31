@@ -7,9 +7,10 @@ export default function TopModels({ rows, onDrillModel }) {
     const m = new Map();
     for (const r of rows) {
       if (!r.model) continue;
-      if (!m.has(r.model)) m.set(r.model, { model: r.model, source: r.source, sources: new Map(), total: 0, cost: 0, count: 0 });
+      if (!m.has(r.model)) m.set(r.model, { model: r.model, source: r.source, sources: new Map(), days: new Set(), total: 0, cost: 0 });
       const x = m.get(r.model);
-      x.total += r.totalTokens || 0; x.cost += r.costUSD || 0; x.count += 1;
+      x.total += r.totalTokens || 0; x.cost += r.costUSD || 0;
+      if (r.usageDate) x.days.add(r.usageDate);
       x.sources.set(r.source, (x.sources.get(r.source) || 0) + (r.totalTokens || 0));
     }
     return [...m.values()]
@@ -17,7 +18,8 @@ export default function TopModels({ rows, onDrillModel }) {
         const srcArr = [...x.sources.entries()]
           .map(([source, total]) => ({ source, total }))
           .sort((a, b) => b.total - a.total);
-        return { ...x, source: srcArr[0]?.source || x.source, sources: srcArr };
+        const { days, ...rest } = x;
+        return { ...rest, dayCount: days.size, source: srcArr[0]?.source || x.source, sources: srcArr };
       })
       .sort((a, b) => b.total - a.total).slice(0, 8);
   }, [rows]);

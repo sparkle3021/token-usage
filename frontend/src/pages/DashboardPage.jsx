@@ -16,8 +16,7 @@ import TopModels from '../components/charts/TopModels.jsx';
 import Heatmap from '../components/charts/Heatmap/Heatmap.jsx';
 import HeatmapDrillDialog from './dashboard/HeatmapDrillDialog.jsx';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog.jsx';
-import DataTable from '../components/common/DataTable.jsx';
-import SourceBadge from '../components/SourceBadge.jsx';
+import SourceIcon from '../components/SourceIcon.jsx';
 
 export default function DashboardPage({ M, allSources, allModels, heatmapData, onRefresh }) {
   const { f, dispatch } = useFilter();
@@ -176,18 +175,28 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
             <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 flex-wrap">
               <span>总 Token <strong className="text-foreground">{U.compactCN(topModelDrill.total)}</strong></span>
               <span>费用 <strong className="text-foreground">${(topModelDrill.cost || 0).toFixed(2)}</strong></span>
-              <span>调用 <strong className="text-foreground">{topModelDrill.count}</strong> 次</span>
+              <span>活跃 <strong className="text-foreground">{topModelDrill.dayCount}</strong> 天</span>
             </div>
 
             {topModelDrill.sources?.length > 0 && (
-              <DataTable rows={topModelDrill.sources.map(s => ({
-                ...s,
-                pct: (s.total / topModelDrill.total * 100).toFixed(1),
-              }))} cols={[
-                { label: '来源', field: 'source', render: v => <SourceBadge source={v} /> },
-                { label: 'Token', field: 'total', right: true, render: v => U.compactCN(v) },
-                { label: '占比', right: true, render: (_, r) => `${r.pct || '—'}%` },
-              ]} />
+              <div className="space-y-1.5">
+                {topModelDrill.sources.map(s => {
+                  const pct = (s.total / topModelDrill.total * 100).toFixed(1);
+                  return (
+                    <div key={s.source} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0 max-w-[10rem]">
+                        <SourceIcon name={s.source} className="w-3 h-3 shrink-0" />
+                        <span className="text-xs font-medium truncate">{s.source}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden min-w-0">
+                        <div className="h-full" style={{ width: `${pct}%`, background: U.getSourceColor(s.source) }} />
+                      </div>
+                      <span className="text-xs font-semibold tabular-nums w-16 text-right">{U.compactCN(s.total)}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">{pct}%</span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </DialogContent>
         </Dialog>
