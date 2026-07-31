@@ -13,3 +13,14 @@ export function filterDaily(rows, f) {
     (r.totalTokens > 0)
   );
 }
+
+/**
+ * 按来源/模型过滤时间序列数据（time_usage / hour_usage 行）。
+ * 与 filterDaily 同规则：空集合视为不限制。日期范围不在此过滤（today 由调用方保证）。
+ */
+export function filterTimeSeries(rows, f) {
+  return rows.filter(r =>
+    (f.sources.size === 0 || f.sources.has(r.source)) &&
+    (f.models.size === 0 || f.models.has(r.model))
+  );
+}

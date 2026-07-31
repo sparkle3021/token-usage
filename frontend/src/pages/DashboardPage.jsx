@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from 'react';
 import { useFilter, rangeDays } from '../store/filterStore.jsx';
-import { filterDaily } from '../lib/filters.js';
+import { filterDaily, filterTimeSeries } from '../lib/filters.js';
 import { aggregateTotals } from '../lib/aggregators.js';
 import { addDays, rangeDates, compactCN, deltaPct } from '../lib/formatters.js';
 import * as U from '../lib/utils.js';
@@ -27,6 +27,9 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
   const [granularity, setGranularity] = useState('daily');
 
   const filtered = useMemo(() => filterDaily(M?.daily || [], f), [f, M]);
+
+  const filteredTime = useMemo(() => filterTimeSeries(M?.time || [], f), [f, M]);
+  const filteredHour = useMemo(() => filterTimeSeries(M?.hour || [], f), [f, M]);
 
   const totals = useMemo(() => aggregateTotals(filtered), [filtered]);
 
@@ -53,7 +56,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
     const todayStr = dates[0];
     const hd = Array.from({ length: 24 }, () => ({ total: 0, input: 0, output: 0, cacheRd: 0, reason: 0, cost: 0 }));
 
-    for (const r of M.time || []) {
+    for (const r of filteredTime) {
       if (r.usageDate !== todayStr) continue;
       const d = new Date(r.eventTime);
       if (isNaN(d.getTime())) continue;
@@ -63,8 +66,8 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       hd[h].reason += r.reasoningOutputTokens || 0; hd[h].cost += r.costUSD || 0;
     }
 
-    const covered = new Set((M.time || []).filter(r => r.usageDate === todayStr).map(r => r.source));
-    for (const r of M.hour || []) {
+    const covered = new Set(filteredTime.filter(r => r.usageDate === todayStr).map(r => r.source));
+    for (const r of filteredHour) {
       if (r.usageDate !== todayStr || covered.has(r.source)) continue;
       const h = r.hour;
       hd[h].total += r.totalTokens || 0; hd[h].input += r.inputTokens || 0;
@@ -87,7 +90,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       output: hd.map(h => h.output), cacheRead: hd.map(h => h.cacheRd),
       reasoning: hd.map(h => h.reason), cost: hd.map(h => h.cost),
     };
-  }, [isHourly, dates, M, filtered]);
+  }, [isHourly, dates, M, filtered, filteredTime, filteredHour]);
 
   const sparkValues = useMemo(
     () => hourlySpark ? hourlySpark.total
@@ -147,7 +150,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
 
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="flex-1 min-w-0">
-          <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={M?.time} hourRows={M?.hour} isHourly={f.rangeId === 'today'} granularity={granularity} onGranularityChange={setGranularity} />
+          <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={filteredTime} hourRows={filteredHour} isHourly={f.rangeId === 'today'} granularity={granularity} onGranularityChange={setGranularity} />
         </div>
         <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-0 lg:relative">
           <div className="flex flex-col min-h-0 max-lg:h-auto lg:absolute lg:inset-0">
