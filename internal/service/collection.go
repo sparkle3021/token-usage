@@ -21,6 +21,9 @@ type CollectionService struct {
 	engine *orchestrator.Engine
 	ctx    context.Context
 
+	// onCollectionDone 采集完成时回调（App 注入，用于失效依赖采集结果的缓存）
+	onCollectionDone func()
+
 	autoSyncMu      sync.Mutex
 	autoSyncCancel  context.CancelFunc
 	autoSyncMinutes int // 自动同步间隔（分钟），≤0 表示禁用
@@ -29,6 +32,11 @@ type CollectionService struct {
 // NewCollectionService 创建采集服务实例。
 func NewCollectionService(db *database.Manager, eng *orchestrator.Engine) *CollectionService {
 	return &CollectionService{db: db, engine: eng}
+}
+
+// SetOnCollectionDone 注册采集完成回调，由 App 注入。
+func (s *CollectionService) SetOnCollectionDone(fn func()) {
+	s.onCollectionDone = fn
 }
 
 func (s *CollectionService) SetCtx(ctx context.Context) {
@@ -43,6 +51,9 @@ func (s *CollectionService) WireEngineEvents() {
 	s.engine.SetEventCallback(func(event string, data interface{}) {
 		log.Printf("[event] %s: %v\n", event, data)
 		wailsRuntime.EventsEmit(s.ctx, event, data)
+		if event == "collection:done" && s.onCollectionDone != nil {
+			s.onCollectionDone()
+		}
 	})
 }
 

@@ -260,6 +260,7 @@ func (m *Manager) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_session_usage_total ON session_usage(total_tokens DESC);
 	CREATE INDEX IF NOT EXISTS idx_time_usage_time ON time_usage(event_time);
 	CREATE INDEX IF NOT EXISTS idx_time_usage_date_source ON time_usage(usage_date, source);
+	CREATE INDEX IF NOT EXISTS idx_time_usage_session ON time_usage(session_id);
 
 	CREATE TABLE IF NOT EXISTS app_config (
 		key TEXT PRIMARY KEY,

@@ -128,3 +128,72 @@ func (m *Manager) QueryTimeUsage(days int) ([]model.TimeUsage, error) {
 	log.Printf("[db] QueryTimeUsage rows=%d elapsed=%v", len(results), time.Since(start))
 	return results, rows.Err()
 }
+
+// QuerySessionsFromTimeUsage 按 session_id 聚合 time_usage，作为会话 Tab 数据源。
+// 返回每个会话的 token 汇总、首/末事件时间、来源、设备、项目与模型列表。
+func (m *Manager) QuerySessionsFromTimeUsage() ([]model.SessionAgg, error) {
+	start := time.Now()
+	rows, err := m.db.Query(`
+		SELECT device, source, session_id,
+			COALESCE(MAX(project_path), ''),
+			MAX(event_time),
+			SUM(input_tokens), SUM(output_tokens),
+			SUM(cache_creation_tokens), SUM(cache_read_tokens),
+			SUM(reasoning_output_tokens), SUM(total_tokens), SUM(cost_usd)
+		FROM time_usage
+		WHERE session_id IS NOT NULL AND session_id != ''
+		GROUP BY device, source, session_id
+		ORDER BY MAX(event_time) DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.SessionAgg
+	for rows.Next() {
+		var r model.SessionAgg
+		if err := rows.Scan(&r.Device, &r.Source, &r.SessionID, &r.ProjectPath, &r.LastTs,
+			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens,
+			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	log.Printf("[db] QuerySessionsFromTimeUsage sessions=%d elapsed=%v", len(results), time.Since(start))
+	return results, rows.Err()
+}
+
+// QuerySessionModelBreakdown 按 session_id 聚合 time_usage 的模型拆分明细，供会话详情弹窗展示。
+func (m *Manager) QuerySessionModelBreakdown(sessionID string) ([]model.SessionModelRow, error) {
+	start := time.Now()
+	rows, err := m.db.Query(`
+		SELECT model,
+			SUM(input_tokens), SUM(output_tokens),
+			SUM(cache_creation_tokens), SUM(cache_read_tokens),
+			SUM(reasoning_output_tokens), SUM(total_tokens), SUM(cost_usd)
+		FROM time_usage
+		WHERE session_id = ?
+		GROUP BY model
+		ORDER BY SUM(total_tokens) DESC
+	`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.SessionModelRow
+	for rows.Next() {
+		var r model.SessionModelRow
+		if err := rows.Scan(&r.Model,
+			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens,
+			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	log.Printf("[db] QuerySessionModelBreakdown session=%s models=%d elapsed=%v", truncateID(sessionID), len(results), time.Since(start))
+	return results, rows.Err()
+}

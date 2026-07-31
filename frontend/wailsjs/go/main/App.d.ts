@@ -24,6 +24,10 @@ export function GetDashboardData():Promise<model.DashboardData>;
 
 export function GetProviderSchemas():Promise<Array<model.ProviderSchema>>;
 
+export function GetSessionModelBreakdown(arg1:string):Promise<Array<model.SessionModelRow>>;
+
+export function GetSessionsData():Promise<Array<model.SessionAgg>>;
+
 export function GetSettings():Promise<model.AppConfig>;
 
 export function GetTimeSeriesData(arg1:number):Promise<model.TimeSeriesData>;

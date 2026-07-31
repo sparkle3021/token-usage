@@ -12,8 +12,8 @@ export function useDashboardData() {
   const [loadError, setLoadError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const setData = useCallback((data, tsData) => {
-    setRaw({ ...data, daily: data.daily || [], today: daysAgo(0), time: tsData.time || [], hour: tsData.hour || [] });
+  const setData = useCallback((data, tsData, sessionAgg) => {
+    setRaw({ ...data, daily: data.daily || [], today: daysAgo(0), time: tsData.time || [], hour: tsData.hour || [], sessionAgg: sessionAgg || [] });
     setLoadError(null);
   }, []);
 
@@ -21,9 +21,10 @@ export function useDashboardData() {
     if (!silent) setRefreshing(true);
     return Promise.all([
       api.getDashboardData(),
-      api.getTimeSeriesData(days === undefined ? 90 : days)
+      api.getTimeSeriesData(days === undefined ? 90 : days),
+      api.getSessionsData(),
     ])
-      .then(([data, tsData]) => setData(data, tsData))
+      .then(([data, tsData, sessionAgg]) => setData(data, tsData, sessionAgg))
       .catch(err => setLoadError(String(err)))
       .finally(() => { if (!silent) setRefreshing(false); });
   }, [setData]);

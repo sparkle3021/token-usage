@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"token-dashboard/internal/database"
@@ -28,11 +29,23 @@ type DashboardService struct {
 	db      *database.Manager
 	pricing *pricing.Engine
 	dataDir string // 数据目录，用于读写定价配置文件
+
+	// 会话聚合缓存：GetSessionsData 首次计算后缓存，采集完成时失效。
+	// time_usage 全表聚合较慢（~2.5s），缓存避免每次拉取都重算。
+	sessionsCache    []model.SessionAgg
+	sessionsCacheMu  sync.Mutex
 }
 
 // NewDashboardService 创建仪表盘服务实例。
 func NewDashboardService(db *database.Manager, pr *pricing.Engine, dataDir string) *DashboardService {
 	return &DashboardService{db: db, pricing: pr, dataDir: dataDir}
+}
+
+// InvalidateSessionsCache 清空会话聚合缓存，采集完成后由 App 调用。
+func (s *DashboardService) InvalidateSessionsCache() {
+	s.sessionsCacheMu.Lock()
+	defer s.sessionsCacheMu.Unlock()
+	s.sessionsCache = nil
 }
 
 // GetDashboardData 获取仪表盘汇总数据，包含日用量、会话和采集运行记录。
@@ -90,6 +103,39 @@ func (s *DashboardService) GetDashboardData() *model.DashboardData {
 		Sessions: sessions,
 		Runs:     runs,
 	}
+}
+
+// GetSessionsData 按 session_id 聚合 time_usage 返回会话明细，作为会话 Tab 数据源。
+// 结果缓存于内存，首次计算后复用，采集完成后由 InvalidateSessionsCache 失效。
+func (s *DashboardService) GetSessionsData() []model.SessionAgg {
+	if s.db == nil {
+		return nil
+	}
+	s.sessionsCacheMu.Lock()
+	defer s.sessionsCacheMu.Unlock()
+	if s.sessionsCache != nil {
+		return s.sessionsCache
+	}
+	sessions, err := s.db.QuerySessionsFromTimeUsage()
+	if err != nil {
+		log.Printf("[service] GetSessionsData QuerySessionsFromTimeUsage err=%v", err)
+		return nil
+	}
+	s.sessionsCache = sessions
+	return sessions
+}
+
+// GetSessionModelBreakdown 按 session_id 返回该会话的模型拆分明细。
+func (s *DashboardService) GetSessionModelBreakdown(sessionID string) []model.SessionModelRow {
+	if s.db == nil || sessionID == "" {
+		return nil
+	}
+	rows, err := s.db.QuerySessionModelBreakdown(sessionID)
+	if err != nil {
+		log.Printf("[service] GetSessionModelBreakdown err=%v", err)
+		return nil
+	}
+	return rows
 }
 
 // GetTimeSeriesData 获取时间序列数据，包含原始事件和小时聚合两层的用量。

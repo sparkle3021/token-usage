@@ -385,6 +385,72 @@ export namespace model {
 		}
 	}
 	
+	export class SessionAgg {
+	    device: string;
+	    source: string;
+	    sessionId: string;
+	    projectPath: string;
+	    models: string[];
+	    eventCount: number;
+	    firstTs: string;
+	    lastTs: string;
+	    inputTokens: number;
+	    outputTokens: number;
+	    cacheCreationTokens: number;
+	    cacheReadTokens: number;
+	    reasoningOutputTokens: number;
+	    totalTokens: number;
+	    costUSD: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionAgg(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.device = source["device"];
+	        this.source = source["source"];
+	        this.sessionId = source["sessionId"];
+	        this.projectPath = source["projectPath"];
+	        this.models = source["models"];
+	        this.eventCount = source["eventCount"];
+	        this.firstTs = source["firstTs"];
+	        this.lastTs = source["lastTs"];
+	        this.inputTokens = source["inputTokens"];
+	        this.outputTokens = source["outputTokens"];
+	        this.cacheCreationTokens = source["cacheCreationTokens"];
+	        this.cacheReadTokens = source["cacheReadTokens"];
+	        this.reasoningOutputTokens = source["reasoningOutputTokens"];
+	        this.totalTokens = source["totalTokens"];
+	        this.costUSD = source["costUSD"];
+	    }
+	}
+	export class SessionModelRow {
+	    model: string;
+	    inputTokens: number;
+	    outputTokens: number;
+	    cacheCreationTokens: number;
+	    cacheReadTokens: number;
+	    reasoningOutputTokens: number;
+	    totalTokens: number;
+	    costUSD: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionModelRow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.model = source["model"];
+	        this.inputTokens = source["inputTokens"];
+	        this.outputTokens = source["outputTokens"];
+	        this.cacheCreationTokens = source["cacheCreationTokens"];
+	        this.cacheReadTokens = source["cacheReadTokens"];
+	        this.reasoningOutputTokens = source["reasoningOutputTokens"];
+	        this.totalTokens = source["totalTokens"];
+	        this.costUSD = source["costUSD"];
+	    }
+	}
 	
 	export class TimeUsage {
 	    device: string;

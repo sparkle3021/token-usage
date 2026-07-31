@@ -46,6 +46,14 @@ export function GetProviderSchemas() {
   return window['go']['main']['App']['GetProviderSchemas']();
 }
 
+export function GetSessionModelBreakdown(arg1) {
+  return window['go']['main']['App']['GetSessionModelBreakdown'](arg1);
+}
+
+export function GetSessionsData() {
+  return window['go']['main']['App']['GetSessionsData']();
+}
+
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
