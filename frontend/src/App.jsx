@@ -3,7 +3,7 @@
  * 使用 FilterProvider 包裹全局过滤器，DashboardPage 与 TablePage 共享同一数据源。
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useDashboardData } from './hooks/useDashboardData.js';
 import { useCollection } from './hooks/useCollection.js';
 import { useSettings } from './hooks/useSettings.js';
@@ -14,9 +14,24 @@ import Header from './components/layout/Header.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import TablePage from './pages/TablePage.jsx';
 import QuotaPage from './pages/QuotaPage.jsx';
+import { WindowSetDarkTheme, WindowSetLightTheme, WindowSetBackgroundColour } from '../wailsjs/runtime/runtime.js';
+
+const THEME_KEY = 'app-theme';
 
 function AppContent() {
   const [page, setPage] = useState('dashboard');
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem(THEME_KEY) === 'dark'; } catch { return false; }
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch { /* ignore */ }
+    // 同步 Wails 窗口标题栏主题与背景色（#f3f3f3 亮 / #202020 暗）
+    try {
+      if (dark) WindowSetDarkTheme(); else WindowSetLightTheme();
+      WindowSetBackgroundColour(dark ? 32 : 243, dark ? 32 : 243, dark ? 32 : 243, 1);
+    } catch { /* ignore */ }
+  }, [dark]);
   const { M, loadError, refreshing, fetchData, allSources, allModels, heatmapData } = useDashboardData();
   const { collecting, runCollect } = useCollection(fetchData);
   const { handleSettingsChange } = useSettings(fetchData);
@@ -53,6 +68,8 @@ function AppContent() {
         onRefresh={fetchData}
         onClearData={onClearData}
         onSettingsChange={handleSettingsChange}
+        dark={dark}
+        onToggleDark={() => setDark(d => !d)}
       />
       {page === 'dashboard' ? (
         <DashboardPage
