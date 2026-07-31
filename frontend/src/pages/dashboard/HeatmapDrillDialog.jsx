@@ -4,65 +4,91 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../componen
 import { Card, CardContent } from '../../components/ui/card.jsx';
 import * as U from '../../lib/utils.js';
 
+const OTHER_KEY = '__other__';
+const TOP_N = 6;
+
 export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, onClose }) {
   const dayDaily = useMemo(() => {
     if (!daily || !date) return [];
     return daily.filter(r => r.usageDate === date);
   }, [daily, date]);
 
-  const daySources = useMemo(() => {
-    return [...new Set(dayDaily.map(r => r.source))];
+  // ── 头部：来源维度 + 当日总量 ──
+  const daySources = useMemo(() => [...new Set(dayDaily.map(r => r.source))], [dayDaily]);
+
+  const topSource = useMemo(() => {
+    const m = new Map();
+    for (const r of dayDaily) m.set(r.source, (m.get(r.source) || 0) + (r.totalTokens || 0));
+    let best = null;
+    for (const [source, tokens] of m) {
+      if (!best || tokens > best.tokens) best = { source, tokens };
+    }
+    return best;
   }, [dayDaily]);
 
-  // Top model for the day (just name, not full list)
-  const topModel = useMemo(() => {
+  const dayTotal = useMemo(() => dayDaily.reduce((s, r) => s + (r.totalTokens || 0), 0), [dayDaily]);
+
+  // ── 图表：模型维度 + top-N 归并 ──
+  const seriesModels = useMemo(() => {
     const m = new Map();
     for (const r of dayDaily) {
-      if (!r.model) continue;
-      m.set(r.model, (m.get(r.model) || 0) + (r.totalTokens || 0));
+      const model = r.model || '未知';
+      m.set(model, (m.get(model) || 0) + (r.totalTokens || 0));
     }
     const sorted = [...m.entries()].sort((a, b) => b[1] - a[1]);
-    return sorted.length > 0 ? { name: sorted[0][0], tokens: sorted[0][1], count: sorted.length } : null;
+    if (sorted.length === 0) return [];
+    if (sorted.length <= TOP_N) return sorted.map(([model]) => ({ key: model, label: model }));
+    return [
+      ...sorted.slice(0, TOP_N).map(([model]) => ({ key: model, label: model })),
+      { key: OTHER_KEY, label: '其他' },
+    ];
   }, [dayDaily]);
 
-  // Hourly data from timeRows + hourRows + daily fallback
   const hourlyData = useMemo(() => {
     if (!date) return [];
-    const byHour = new Map();
+    const hourModelMap = new Map();
+    const add = (h, model, tokens) => {
+      let mm = hourModelMap.get(h);
+      if (!mm) { mm = new Map(); hourModelMap.set(h, mm); }
+      mm.set(model, (mm.get(model) || 0) + tokens);
+    };
 
+    const covered = new Set();
     for (const r of timeRows || []) {
       if (r.usageDate !== date) continue;
+      covered.add(r.source);
       const d = new Date(r.eventTime);
       if (isNaN(d.getTime())) continue;
-      const hour = String(d.getHours()).padStart(2, '0');
-      byHour.set(`${hour}::${r.source}`, (byHour.get(`${hour}::${r.source}`) || 0) + r.totalTokens);
+      add(d.getHours(), r.model, r.totalTokens || 0);
     }
-
     for (const r of hourRows || []) {
-      if (r.usageDate !== date) continue;
-      const hour = String(r.hour).padStart(2, '0');
-      const key = `${hour}::${r.source}`;
-      if (byHour.has(key)) continue;
-      byHour.set(key, (byHour.get(key) || 0) + r.totalTokens);
+      if (r.usageDate !== date || covered.has(r.source)) continue;
+      add(r.hour, r.model, r.totalTokens || 0);
+    }
+    const currentHour = new Date().getHours();
+    for (const r of dayDaily) {
+      if (covered.has(r.source)) continue;
+      add(currentHour, r.model, r.totalTokens || 0);
     }
 
-    const currentHour = String(new Date().getHours()).padStart(2, '0');
-    for (const r of dayDaily) {
-      const key = `${currentHour}::${r.source}`;
-      if (byHour.has(key)) continue;
-      byHour.set(key, (byHour.get(key) || 0) + r.totalTokens);
-    }
+    const topSet = new Set(seriesModels.filter(m => m.key !== OTHER_KEY).map(m => m.key));
+    const hasOther = seriesModels.some(m => m.key === OTHER_KEY);
 
     return Array.from({ length: 24 }, (_, h) => {
       const hourStr = String(h).padStart(2, '0');
       const pt = { hour: `${hourStr}:00` };
-      for (const s of daySources) pt[s] = byHour.get(`${hourStr}::${s}`) || 0;
+      let other = 0;
+      for (const [model, tokens] of hourModelMap.get(h) || []) {
+        if (topSet.has(model)) pt[model] = (pt[model] || 0) + tokens;
+        else other += tokens;
+      }
+      if (hasOther && other > 0) pt[OTHER_KEY] = other;
       return pt;
     });
-  }, [timeRows, hourRows, date, daySources, dayDaily]);
+  }, [timeRows, hourRows, date, seriesModels, dayDaily]);
 
-  const palette = daySources.map(s => U.getSourceColor(s));
-  const hasHourly = hourlyData.some(pt => daySources.some(s => pt[s] > 0));
+  const palette = seriesModels.map(m => U.getSourceColor(m.key));
+  const hasHourly = hourlyData.some(pt => seriesModels.some(m => (pt[m.key] || 0) > 0));
 
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
@@ -71,11 +97,11 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
           <DialogTitle>{date} 用量详情</DialogTitle>
         </DialogHeader>
 
-        {topModel && (
-          <div className="text-xs text-muted-foreground mb-2">
-            模型数 <strong className="text-foreground">{topModel.count}</strong> · 峰值 <strong className="text-foreground">{topModel.name}</strong>（{U.compactCN(topModel.tokens)}）
-          </div>
-        )}
+        <div className="text-xs text-muted-foreground mb-2">
+          来源数 <strong className="text-foreground">{daySources.length}</strong>
+          {topSource && <> · 峰值 <strong className="text-foreground">{topSource.source}</strong>（{U.compactCN(topSource.tokens)}）</>}
+          · 总量 <strong className="text-foreground">{U.compactCN(dayTotal)}</strong>
+        </div>
 
         <Card>
           <CardContent className="pt-4">
@@ -91,8 +117,8 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
                       formatter={(v, name) => [U.compactCN(v), name]}
                       labelFormatter={label => `${date} ${label}`}
                     />
-                    {daySources.map((s, i) => (
-                      <Bar key={s} dataKey={s} stackId="a" fill={palette[i % palette.length]} radius={[2, 2, 0, 0]} />
+                    {seriesModels.map((m, i) => (
+                      <Bar key={m.key} name={m.label} dataKey={m.key} stackId="a" fill={palette[i % palette.length]} radius={[2, 2, 0, 0]} />
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
