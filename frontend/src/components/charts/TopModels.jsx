@@ -2,27 +2,32 @@ import React, { useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card.jsx';
 import * as U from '../../lib/utils.js';
 
-export default function TopModels({ rows, onDrillModel }) {
+export default function TopModels({ rows, onDrillModel, allDaily = [] }) {
   const list = useMemo(() => {
     const m = new Map();
     for (const r of rows) {
       if (!r.model) continue;
-      if (!m.has(r.model)) m.set(r.model, { model: r.model, source: r.source, sources: new Map(), days: new Set(), total: 0, cost: 0 });
+      if (!m.has(r.model)) m.set(r.model, { model: r.model, source: r.source, sources: new Map(), total: 0, cost: 0 });
       const x = m.get(r.model);
       x.total += r.totalTokens || 0; x.cost += r.costUSD || 0;
-      if (r.usageDate) x.days.add(r.usageDate);
       x.sources.set(r.source, (x.sources.get(r.source) || 0) + (r.totalTokens || 0));
+    }
+    // 活跃天数按全量 daily 统计（模型的固有属性，不随筛选范围变化）
+    const allDays = new Map();
+    for (const r of (allDaily || [])) {
+      if (!r.model || !r.usageDate) continue;
+      if (!allDays.has(r.model)) allDays.set(r.model, new Set());
+      allDays.get(r.model).add(r.usageDate);
     }
     return [...m.values()]
       .map(x => {
         const srcArr = [...x.sources.entries()]
           .map(([source, total]) => ({ source, total }))
           .sort((a, b) => b.total - a.total);
-        const { days, ...rest } = x;
-        return { ...rest, dayCount: days.size, source: srcArr[0]?.source || x.source, sources: srcArr };
+        return { ...x, dayCount: allDays.get(x.model)?.size || 0, source: srcArr[0]?.source || x.source, sources: srcArr };
       })
       .sort((a, b) => b.total - a.total).slice(0, 8);
-  }, [rows]);
+  }, [rows, allDaily]);
 
   const max = list[0]?.total || 1;
 

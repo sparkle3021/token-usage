@@ -153,7 +153,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
         </div>
         <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-0 lg:relative">
           <div className="flex flex-col min-h-0 max-lg:h-auto lg:absolute lg:inset-0">
-            <TopModels rows={filtered} onDrillModel={r => setTopModelDrill(r)} />
+            <TopModels rows={filtered} onDrillModel={r => setTopModelDrill(r)} allDaily={M?.daily} />
           </div>
         </div>
       </div>
@@ -181,18 +181,22 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
             {topModelDrill.sources?.length > 0 && (
               <div className="space-y-1.5">
                 {topModelDrill.sources.map(s => {
-                  const pct = (s.total / topModelDrill.total * 100).toFixed(1);
+                  const pct = (s.total / topModelDrill.total * 100);
                   return (
-                    <div key={s.source} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0 max-w-[10rem]">
-                        <SourceIcon name={s.source} className="w-3 h-3 shrink-0" />
-                        <span className="text-xs font-medium truncate">{s.source}</span>
+                    <div key={s.source} className="grid grid-cols-[1fr_auto] items-center gap-3 px-1.5 py-1.5">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <SourceIcon name={s.source} className="w-3.5 h-3.5 shrink-0" />
+                          <span className="text-xs font-medium truncate">{s.source}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">
+                          <div className="h-full" style={{ width: `${pct}%`, background: U.getSourceColor(s.source) }} />
+                        </div>
                       </div>
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden min-w-0">
-                        <div className="h-full" style={{ width: `${pct}%`, background: U.getSourceColor(s.source) }} />
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-semibold tabular-nums">{U.compactCN(s.total)}</div>
+                        <div className="text-[10px] text-muted-foreground tabular-nums">{pct.toFixed(1)}%</div>
                       </div>
-                      <span className="text-xs font-semibold tabular-nums w-16 text-right">{U.compactCN(s.total)}</span>
-                      <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">{pct}%</span>
                     </div>
                   );
                 })}

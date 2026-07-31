@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog.jsx';
 import TablePanel from '../components/tables/TablePanel.jsx';
 import SourceBadge from '../components/SourceBadge.jsx';
+import SourceIcon from '../components/SourceIcon.jsx';
 import DataTable from '../components/common/DataTable.jsx';
 import MultiSelect from '../components/MultiSelect.jsx';
 import * as U from '../lib/utils.js';
@@ -36,7 +37,7 @@ export default function TablePage({ M, onRefresh }) {
   return (
     <div className="flex flex-col min-h-0 flex-1 space-y-4">
       {/* Filter Bar */}
-      <Card className="p-3 shrink-0">
+      <Card className="p-3 shrink-0 overflow-visible">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-1">时间</span>
           <Tabs value={f.rangeId} onValueChange={setRange}>
@@ -56,12 +57,12 @@ export default function TablePage({ M, onRefresh }) {
 
       {/* Table */}
       <div className="flex flex-col flex-1 min-h-0">
-        <TablePanel daily={filtered} sessions={M.sessions} onDrill={setDrill} fullHeight />
+        <TablePanel daily={filtered} sessions={M.sessions} onDrill={setDrill} fullHeight allDaily={M.daily} />
       </div>
 
-      {/* 来源详情弹窗 */}
-      {drill?.kind === 'source' && (
-        <SourceDrillDialog drill={drill} daily={filtered} sessions={M.sessions} onClose={closeDrill} />
+      {/* 来源模型分布弹窗 */}
+      {drill?.kind === 'source-model' && (
+        <SourceDrillDialog drill={drill} daily={filtered} allDaily={M.daily} onClose={closeDrill} />
       )}
 
       {/* 模型详情弹窗（内联） */}
@@ -83,14 +84,28 @@ export default function TablePage({ M, onRefresh }) {
             </div>
 
             {drill.row.sources?.length > 0 && (
-              <DataTable rows={drill.row.sources.map(s => ({
-                ...s,
-                pct: (s.total / drill.row.total * 100).toFixed(1),
-              }))} cols={[
-                { label: '来源', field: 'source', render: v => <SourceBadge source={v} /> },
-                { label: 'Token', field: 'total', right: true, render: v => U.compactCN(v) },
-                { label: '占比', right: true, render: (_, r) => `${r.pct || '—'}%` },
-              ]} />
+              <div className="space-y-1.5">
+                {drill.row.sources.map(s => {
+                  const pct = (s.total / drill.row.total * 100);
+                  return (
+                    <div key={s.source} className="grid grid-cols-[1fr_auto] items-center gap-3 px-1.5 py-1.5">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <SourceIcon name={s.source} className="w-3.5 h-3.5 shrink-0" />
+                          <span className="text-xs font-medium truncate">{s.source}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">
+                          <div className="h-full" style={{ width: `${pct}%`, background: U.getSourceColor(s.source) }} />
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-semibold tabular-nums">{U.compactCN(s.total)}</div>
+                        <div className="text-[10px] text-muted-foreground tabular-nums">{pct.toFixed(1)}%</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </DialogContent>
         </Dialog>
@@ -129,7 +144,7 @@ export default function TablePage({ M, onRefresh }) {
               <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 flex-wrap">
                 <span>总 Token <strong className="text-foreground">{U.compactCN(totals.totalTokens)}</strong></span>
                 <span>费用 <strong className="text-foreground">${(totals.costUSD || 0).toFixed(2)}</strong></span>
-                <span>缓存率 <strong className="text-foreground">{totals.cacheHitRate.toFixed(1)}%</strong></span>
+                <span>缓存命中率 <strong className="text-foreground">{totals.cacheHitRate.toFixed(1)}%</strong></span>
                 <span>会话数 <strong className="text-foreground">{drill.row.sessionCount || 1}</strong></span>
               </div>
 

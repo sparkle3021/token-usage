@@ -6,7 +6,7 @@ import * as U from '../../lib/utils.js';
 import { Button } from '../ui/button.jsx';
 import SourceBadge from '../SourceBadge.jsx';
 
-export default function TablePanel({ daily = [], sessions = [], onDrill, fullHeight = false }) {
+export default function TablePanel({ daily = [], sessions = [], onDrill, fullHeight = false, allDaily = [] }) {
   const [tab, setTab] = useState('sources');
   const [search, setSearch] = useState('');
 
@@ -30,14 +30,20 @@ export default function TablePanel({ daily = [], sessions = [], onDrill, fullHei
       if (!m.has(r.model)) m.set(r.model, { model: r.model, total: 0, input: 0, output: 0, cache: 0, cost: 0, days: new Set(), sources: new Map() });
       const x = m.get(r.model);
       x.total += r.totalTokens || 0; x.input += r.inputTokens || 0; x.output += r.outputTokens || 0; x.cache += r.cacheReadTokens || 0; x.cost += r.costUSD || 0;
-      if (r.usageDate) x.days.add(r.usageDate);
       if (r.source) x.sources.set(r.source, (x.sources.get(r.source) || 0) + (r.totalTokens || 0));
+    }
+    // 活跃天数按全量 daily 统计（模型的固有属性，不随筛选范围变化）
+    const allDays = new Map();
+    for (const r of (allDaily || [])) {
+      if (!r.model || !r.usageDate) continue;
+      if (!allDays.has(r.model)) allDays.set(r.model, new Set());
+      allDays.get(r.model).add(r.usageDate);
     }
     return [...m.values()].map(x => {
       const srcArr = [...x.sources.entries()].map(([source, total]) => ({ source, total })).sort((a, b) => b.total - a.total);
-      return { ...x, sources: srcArr, source: srcArr[0]?.source || '', dayCount: x.days.size };
+      return { ...x, sources: srcArr, source: srcArr[0]?.source || '', dayCount: allDays.get(x.model)?.size || 0 };
     });
-  }, [daily]);
+  }, [daily, allDaily]);
 
   const tabs = [
     { id: 'sources', label: '来源', count: bySource.length },
@@ -67,7 +73,7 @@ export default function TablePanel({ daily = [], sessions = [], onDrill, fullHei
 
 // ── Data table wrapper ────────────────────────────────────────
 
-function DTable({ rows, columns, sortField = 'total', search, fullHeight, onDrill }) {
+function DTable({ rows, columns, sortField = 'total', search, fullHeight, onDrill, actionLabel = '详情' }) {
   const [sortBy, setSortBy] = useState({ field: sortField, dir: 'desc' });
   const filtered = useMemo(() => {
     if (!search) return rows;
@@ -94,7 +100,7 @@ function DTable({ rows, columns, sortField = 'total', search, fullHeight, onDril
                 {c.label}
               </TableHead>
             ))}
-              <TableHead className="w-8" />
+              <TableHead className="w-20" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -104,8 +110,8 @@ function DTable({ rows, columns, sortField = 'total', search, fullHeight, onDril
                 {columns.map(c => <TableCell key={c.field || c.label} className="text-xs tabular-nums" style={{ textAlign: c.right ? 'right' : 'left' }}>
                   {c.render ? c.render(r) : (typeof c.val === 'function' ? c.val(r) : r?.[c.field])}
                 </TableCell>)}
-                <TableCell className="w-14 p-0">
-                  <Button size="xs" variant="link" className="w-full h-full min-h-[32px] text-xs" onClick={() => onDrill?.(r)}>详情</Button>
+                <TableCell className="w-20 p-0">
+                  <Button size="xs" variant="link" className="w-full h-full min-h-[32px] text-xs" onClick={() => onDrill?.(r)}>{actionLabel}</Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -129,7 +135,7 @@ function SourceTable({ rows, search, onDrill, fullHeight }) {
     { field: 'cache', label: 'Cache', right: true, render: r => U.compact(r.cache) },
     { field: 'cost', label: '费用', right: true, render: r => (r.cost || 0) > 0 ? <span className="text-amber-600">${(r.cost || 0).toFixed(2)}</span> : '—' },
   ];
-  return <DTable rows={rows} columns={cols} search={search} sortField="total" fullHeight={fullHeight} onDrill={r => onDrill?.({ kind: 'source', row: r })} />;
+  return <DTable rows={rows} columns={cols} search={search} sortField="total" fullHeight={fullHeight} actionLabel="模型分布" onDrill={r => onDrill?.({ kind: 'source-model', row: r })} />;
 }
 
 function ModelTable({ rows, search, onDrill, fullHeight }) {
