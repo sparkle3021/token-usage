@@ -255,6 +255,7 @@ func hostname() string {
 
 // CollectJSONLFiles recursively finds all .jsonl files under a directory.
 func CollectJSONLFiles(dir string) []string {
+	start := time.Now()
 	var results []string
 	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -266,7 +267,7 @@ func CollectJSONLFiles(dir string) []string {
 		return nil
 	})
 	if len(results) > 0 {
-		log.Printf("[collector] CollectJSONLFiles dir=%s files=%d", dir, len(results))
+		log.Printf("[perf] CollectJSONLFiles dir=%s files=%d elapsed=%v", dir, len(results), time.Since(start))
 	}
 	return results
 }
@@ -341,6 +342,21 @@ type PersistHandler interface {
 	LoadParseCache(source, filePath string) (fingerprint string, lastOffset int64, ok bool)
 	SaveParseCache(source, filePath, fingerprint string, lastOffset int64) error
 	DeleteParseCacheBySource(source string) error
+}
+
+// BatchPersistHandler 可选：支持批量持久化的后端。ParseCache 检测到实现此接口
+// 时用单事务批量提交，替代逐条 SaveParseCache。
+type BatchPersistHandler interface {
+	PersistHandler
+	SaveParseCacheBatch(entries []PersistEntry) error
+}
+
+// PersistEntry 批量持久化的单条指纹。
+type PersistEntry struct {
+	Source     string
+	FilePath   string
+	Fingerprint string
+	LastOffset int64
 }
 
 type ParseState int
@@ -431,6 +447,24 @@ func (c *ParseCache) AllCached(paths []string) bool {
 	return true
 }
 
+// FileUnchanged returns true when the file's current fingerprint matches the
+// cached entry, regardless of whether parsed records are held in memory.
+// This is the file-level incremental gate: collectors can skip re-reading,
+// re-parsing and re-aggregating files that have not changed since last commit.
+func (c *ParseCache) FileUnchanged(filePath string) bool {
+	fp := FileFingerprint(filePath)
+	if fp == "" {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.store[filePath]
+	if !ok {
+		return false
+	}
+	return entry.Fingerprint == fp
+}
+
 // NewCount returns the number of newly cached entries since the last reset.
 func (c *ParseCache) NewCount() int {
 	c.mu.Lock()
@@ -508,6 +542,7 @@ func (c *ParseCache) SetWithOffset(filePath string, records interface{}, fileSiz
 
 // PersistPending persists all pending fingerprints to the backend.
 // Should be called after data has been successfully written to the database.
+// 若后端实现 BatchPersistHandler，则单事务批量提交；否则逐条回退。
 func (c *ParseCache) PersistPending() error {
 	c.mu.Lock()
 	pending := c.pending
@@ -528,6 +563,26 @@ func (c *ParseCache) PersistPending() error {
 	c.mu.Unlock()
 
 	if persister == nil || len(persistData) == 0 {
+		return nil
+	}
+
+	// 批量路径：一次事务提交所有指纹，替代逐条 upsert。
+	if bp, ok := persister.(BatchPersistHandler); ok {
+		entries := make([]PersistEntry, 0, len(persistData))
+		for _, d := range persistData {
+			fp := FileFingerprint(d.path)
+			if fp == "" {
+				continue
+			}
+			entries = append(entries, PersistEntry{
+				Source: source, FilePath: d.path, Fingerprint: fp, LastOffset: d.offset,
+			})
+		}
+		if err := bp.SaveParseCacheBatch(entries); err != nil {
+			log.Printf("[cache] PersistPending batch error source=%s count=%d err=%v", source, len(entries), err)
+			return err
+		}
+		log.Printf("[cache] PersistPending batch ok source=%s count=%d", source, len(entries))
 		return nil
 	}
 
@@ -552,6 +607,9 @@ func (c *ParseCache) PersistPending() error {
 // Use after a failed write to ensure files will be re-parsed on next run.
 func (c *ParseCache) DiscardPending() {
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, path := range c.pending {
+		delete(c.store, path)
+	}
 	c.pending = nil
-	c.mu.Unlock()
 }

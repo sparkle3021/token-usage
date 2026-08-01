@@ -8,32 +8,41 @@ import (
 	"time"
 )
 
-const bulkBatchSize = 500
-
-type execer interface {
-	Exec(query string, args ...any) (sql.Result, error)
-}
-
 type querier interface {
 	Query(query string, args ...any) (*sql.Rows, error)
 }
 
+// preparedExecer 支持 Prepare + Exec，*sql.DB 与 *sql.Tx 均满足。
+type preparedExecer interface {
+	Prepare(query string) (*sql.Stmt, error)
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
 type batchExecer interface {
-	execer
+	preparedExecer
 	querier
 }
 
-func bulkExec[T any](ex execer, rows []T, batchSize int, build func([]T) (string, []interface{})) error {
-	for i := 0; i < len(rows); i += batchSize {
-		end := i + batchSize
-		if end > len(rows) {
-			end = len(rows)
-		}
-		sql, args := build(rows[i:end])
-		if _, err := ex.Exec(sql, args...); err != nil {
-			return fmt.Errorf("bulk batch %d: %w", i/batchSize, err)
+// bulkExecPrepared 复用单行 prepared statement 逐行写入。
+// 相比旧的巨型多行 SQL（每次 Exec 重新 prepare 数千占位符），
+// 此实现只 prepare 一次单行语句，大幅降低大批量写入开销。
+// 实测 multi-row 批处理在 modernc.org/sqlite 上反而不如逐行快，故保留逐行。
+func bulkExecPrepared[T any](ex preparedExecer, rows []T, sqlTemplate string, rowArgs func(T) []interface{}) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	start := time.Now()
+	stmt, err := ex.Prepare(sqlTemplate)
+	if err != nil {
+		return fmt.Errorf("prepare: %w", err)
+	}
+	defer stmt.Close()
+	for i := range rows {
+		if _, err := stmt.Exec(rowArgs(rows[i])...); err != nil {
+			return fmt.Errorf("row %d: %w", i, err)
 		}
 	}
+	log.Printf("[perf] db bulkExecPrepared rows=%d elapsed=%v", len(rows), time.Since(start))
 	return nil
 }
 

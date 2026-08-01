@@ -32,6 +32,9 @@ func New(dbPath string) (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
+	// SQLite 单写者：限制连接池为 1，避免并发写触发 database is locked。
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	pragmas := []string{
 		"PRAGMA busy_timeout = 10000",

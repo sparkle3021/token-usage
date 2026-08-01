@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const codexCacheVersion = 1
@@ -46,22 +47,32 @@ func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*Colle
 	}
 
 	// Pre-load cache from DB and check if unchanged
+	loadStart := time.Now()
 	c.cache.LoadFromDB(c.Source(), allFiles)
+	log.Printf("[perf] Codex LoadFromDB files=%d elapsed=%v", len(allFiles), time.Since(loadStart))
+	checkStart := time.Now()
 	if c.cache.AllCached(allFiles) {
+		log.Printf("[perf] Codex AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] Codex all files cached, skipping")
 		return &CollectResult{Device: hostname(), Source: "Codex CLI", Cached: true}, nil
 	}
+	log.Printf("[perf] Codex AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
 	var events []EventRow
 	totalFiles := 0
 	totalRecords := 0
+	skippedFiles := 0
+	parseStart := time.Now()
 	for _, root := range roots {
 		files := CollectJSONLFiles(root)
 		totalFiles += len(files)
-		totalFiles += len(files)
 		for _, fp := range files {
+			if c.cache.FileUnchanged(fp) {
+				skippedFiles++
+				continue
+			}
 			records := c.parseSessionFile(fp)
 			totalRecords += len(records)
 			sessionID := strings.TrimSuffix(filepath.Base(fp), ".jsonl")
@@ -101,6 +112,7 @@ func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*Colle
 		}
 	}
 
+	log.Printf("[perf] Codex parse files=%d skipped=%d records=%d elapsed=%v", totalFiles, skippedFiles, totalRecords, time.Since(parseStart))
 	log.Printf("[collector] Codex done files=%d records=%d daily=%d sessions=%d events=%d",
 		totalFiles, totalRecords, len(dailyMap), len(sessionMap), len(events))
 

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"token-dashboard/internal/model"
@@ -19,26 +18,16 @@ func (m *Manager) BulkUpsertHourUsageTx(tx *sql.Tx, rows []model.HourUsage) erro
 	return m.bulkUpsertHourUsageExec(tx, rows)
 }
 
-func (m *Manager) bulkUpsertHourUsageExec(ex execer, rows []model.HourUsage) error {
+func (m *Manager) bulkUpsertHourUsageExec(ex preparedExecer, rows []model.HourUsage) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	return bulkExec(ex, rows, bulkBatchSize, func(batch []model.HourUsage) (string, []interface{}) {
-		var sqlBuf strings.Builder
-		sqlBuf.WriteString(`INSERT INTO hour_usage (device,source,usage_date,hour,model,
+	return bulkExecPrepared(ex, rows, `
+		INSERT INTO hour_usage (device,source,usage_date,hour,model,
 			input_tokens,output_tokens,cache_creation_tokens,cache_read_tokens,
-			reasoning_output_tokens,total_tokens,cost_usd,updated_at) VALUES `)
-		var args []interface{}
-		for i, r := range batch {
-			if i > 0 {
-				sqlBuf.WriteString(", ")
-			}
-			sqlBuf.WriteString("(?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))")
-			args = append(args, r.Device, r.Source, r.UsageDate, r.Hour, r.Model,
-				r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens,
-				r.ReasoningOutputTokens, r.TotalTokens, r.CostUSD)
-		}
-		sqlBuf.WriteString(` ON CONFLICT(device,source,usage_date,hour,model) DO UPDATE SET
+			reasoning_output_tokens,total_tokens,cost_usd,updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))
+		ON CONFLICT(device,source,usage_date,hour,model) DO UPDATE SET
 			input_tokens=MAX(excluded.input_tokens,hour_usage.input_tokens),
 			output_tokens=MAX(excluded.output_tokens,hour_usage.output_tokens),
 			cache_creation_tokens=MAX(excluded.cache_creation_tokens,hour_usage.cache_creation_tokens),
@@ -46,9 +35,12 @@ func (m *Manager) bulkUpsertHourUsageExec(ex execer, rows []model.HourUsage) err
 			reasoning_output_tokens=MAX(excluded.reasoning_output_tokens,hour_usage.reasoning_output_tokens),
 			total_tokens=MAX(excluded.total_tokens,hour_usage.total_tokens),
 			cost_usd=MAX(excluded.cost_usd,hour_usage.cost_usd),
-			updated_at=datetime('now','localtime')`)
-		return sqlBuf.String(), args
-	})
+			updated_at=datetime('now','localtime')`,
+		func(r model.HourUsage) []interface{} {
+			return []interface{}{r.Device, r.Source, r.UsageDate, r.Hour, r.Model,
+				r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens,
+				r.ReasoningOutputTokens, r.TotalTokens, r.CostUSD}
+		})
 }
 
 func (m *Manager) BuildHourUsageFromTimeUsage(device, source, date string) error {
