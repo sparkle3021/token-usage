@@ -7,7 +7,7 @@ import { Card } from 'antd';
 /** 环比变化标，绿色 ↑（增长）、红色 ↓（下降）、灰色 ·（持平） */
 function DeltaBadge({ value }) {
   return (
-    <span className={`inline-flex items-center gap-0.5 font-semibold text-[11px] px-1 rounded ${value > 0.05 ? 'text-green-600 bg-green-50' : value < -0.05 ? 'text-red-500 bg-red-50' : 'text-muted-foreground bg-muted'}`}>
+    <span className={`inline-flex items-center gap-0.5 font-semibold text-[11px] px-1 rounded ${value > 0.05 ? 'text-green-700 bg-green-100 dark:text-green-400 dark:bg-green-950/60' : value < -0.05 ? 'text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-950/60' : 'text-muted-foreground bg-muted'}`}>
       {`${value > 0.05 ? '↑' : value < -0.05 ? '↓' : '·'} ${Math.abs(value).toFixed(1)}%`}
     </span>
   );
