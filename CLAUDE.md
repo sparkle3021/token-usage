@@ -31,7 +31,7 @@ npx oxlint@latest --fix  # Auto-fix lint issues
 - **Backend**: Go 1.23+, Wails v2.12+
 - **Database**: modernc.org/sqlite (pure Go SQLite, no CGO)
 - **Frontend**: React 19, Vite 8, Tailwind CSS v4
-- **UI**: shadcn/ui (based on @base-ui/react)
+- **UI**: antd v6（ConfigProvider 驱动明暗主题，`App.useApp()` 提供 message）
 - **Charts**: Recharts
 - **Linter**: oxlint
 - **Font**: Geist Variable
@@ -93,27 +93,31 @@ src/pages/                         → 页面壳: DashboardPage/TablePage/QuotaP
 - **文件组织**: 单文件不承载多类职责（>400 行且多职责须拆分）；工具函数不跨包重复实现；quota 相关代码必须位于 `internal/quota`
 - **import 路径**: 前端统一 `@/` alias（vite 配置），禁止相对路径跨目录引用
 
-### Database Schema (5 tables in SQLite)
+### Database Schema (8 tables in SQLite)
 
 | Table | PK | Purpose |
 |---|---|---|
 | `time_usage` | `(device, source, event_key)` | Per-request events from JSONL files |
-| `hour_usage` | `(device, source, usage_date, hour, model)` | Hourly aggregates (MAX semantics for merge) |
-| `daily_usage` | `(device, source, usage_date, model)` | Daily totals (cost locked for past dates) |
+| `hour_usage` | `(device, source, usage_date, hour, model)` | Hourly aggregates — **权威聚合层**（time_usage 汇总 + CC-Switch 直接写入） |
+| `daily_usage` | `(device, source, usage_date, model)` | Daily totals, rebuilt from hour_usage after each collection |
 | `session_usage` | `(device, source, session_id)` | Per-session rollups |
 | `collection_runs` | `id` (auto-increment) | Sync history with status/message |
-| `app_config` | `key` | Key-value config (CCSwitch checkpoints, DB path) |
-| `parse_cache` | `(source, file_path)` | File fingerprint cache (`mtime:size`) |
+| `app_config` | `key` | Key-value config (CCSwitch checkpoints, DB path, auto-sync interval) |
+| `parse_cache` | `(source, file_path)` | File fingerprint cache (`mtime:size` + last_parsed_offset) |
+| `quota_configs` | `id` | 用量查询配置（provider/plan/display_name/seq/config_json） |
 
 ### Communication Pattern
 
-Frontend calls Go backend via Wails runtime bindings:
-- `window.go.main.App.GetDashboardData(filter)` → returns `DashboardData`
-- `window.go.main.App.GetTimeSeriesData(filter)` → returns `TimeSeriesData`
-- `window.go.main.App.StartCollection()` → triggers async collection (all 7 collectors)
-- `window.go.main.App.CollectStatus()` → polls collection progress
-- `window.go.main.App.ImportCCSwitchDB()` → manual CCSwitch full re-import
-- `window.go.main.App.SetAutoSyncInterval(minutes)` → periodic auto-sync
+Frontend calls Go backend via Wails runtime bindings (唯一出口 `frontend/src/api/client.js`):
+- `window.go.main.App.GetDashboardData()` → returns `DashboardData`（daily + sessions + runs 全量）
+- `window.go.main.App.GetTimeSeriesData(days)` → returns `TimeSeriesData`（days==1 时含 time_usage，否则仅 hour）
+- `window.go.main.App.GetSessionsData()` → sessions tab 数据源（time_usage 按 session 聚合）
+- `window.go.main.App.StartCollection()` / `StartFullCollection()` → 增量/全量采集
+- `window.go.main.App.CollectStatus()` → 轮询采集进度
+- `window.go.main.App.CurrentOp()` → 当前操作名（"" 空闲）
+- `window.go.main.App.GetSettings()` / `SaveSettings(cfg)` → 设置读写
+- `window.go.main.App.UpdatePricing()` → 从 LiteLLM 拉取定价并重载
+- `window.go.main.App.ListQuotaConfigs()` 等 7 个 → 用量查询配置 CRUD + 余额拉取
 
 No HTTP API — Wails handles IPC bridge between WebView2 JS context and Go.
 
@@ -124,6 +128,7 @@ No HTTP API — Wails handles IPC bridge between WebView2 JS context and Go.
 3. **Storage**: Results upserted into SQLite — JSONL goes `time_usage → hour_usage`, CCSwitch writes `hour_usage` directly
 4. **Rebuild**: `BuildDailyFromHourUsage()` runs after all collectors, summarizing `hour_usage → daily_usage`
 5. **Presentation**: Frontend calls `GetDashboardData` → filters by date/source/model → renders charts + tables
+6. **权威聚合**: `hour_usage` 是权威层（time_usage 汇总 + CC-Switch 直接写入），`daily_usage` 由它重建；图表渲染 hour 优先、time 兜底（`TrendChart byKey` / `DashboardPage hourlySpark` 均此逻辑）
 
 ### Collection Architecture
 
@@ -131,7 +136,15 @@ No HTTP API — Wails handles IPC bridge between WebView2 JS context and Go.
 - **SQLite-based collectors** (Hermes, OpenCode): read from their own SQLite databases directly
 - **CC-Switch collector**: reads from external `cc-switch.db`, uses checkpoint-based incremental sync (`cc_switch_cursor_proxy_request_logs`, `cc_switch_rollup_max_date`)
 - **Transaction protection**: each collector's writes are wrapped in a per-collector transaction; cache fingerprints are persisted only after successful write commit
-- **Auto-sync**: configurable interval ticker in `app.go`, calls `StartCollection()` on each tick
+- **Auto-sync**: configurable interval ticker in `CollectionService`, calls `StartCollection()` on each tick
+
+### Frontend Conventions (关键行为约定)
+
+- **明暗主题**: `html.dark` class 单点驱动（App.jsx），antd ConfigProvider algorithm + Tailwind `dark:` variant + 热力图 MutationObserver 均跟随
+- **热力图**: 全量数据有意设计（不随过滤器变化）；窗口 = 最近一年（52 周，`DEFAULT_WEEKS`）；月份标签跳过末尾单列（GitHub 风格「最右为上月」）
+- **弹窗**: antd Modal 统一；`centered` + 响应式宽度 + body flex 布局（标题固定、内容区 `.flex-dialog-body` 滚动）；body 有滚动条时 ScrollLocker 注入宽度补偿——页面滚动承载在内容容器（`overflow-y-auto scrollbar-none`）
+- **message**: 必须经 `AntdApp.useApp()` 上下文获取（`lib/message.js` 单例注入），静态 `message.xxx` 不继承主题
+- **请求竞态**: `fetchIdRef` 序号池丢弃过期响应（useDashboardData）
 
 ### Key Config
 
@@ -140,3 +153,5 @@ No HTTP API — Wails handles IPC bridge between WebView2 JS context and Go.
 - `frontend/.oxlintrc.json` — oxlint config (React hooks + export rules)
 - `frontend/vite.config.js` — `@/` path alias → `src/`, strictPort: false (auto-fallback), Tailwind CSS v4 plugin
 - Env var `COLLECTOR_PARALLELISM` — controls collector goroutine pool size (default 4, max 16)
+- Env var `DEBUG_PERF=1` — enables `[perf]` probe logs (off by default)
+- Env var `DATA_DIR` — data directory override (default `~/.token-usage`)
