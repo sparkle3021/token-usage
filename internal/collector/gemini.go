@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+
+	"token-dashboard/internal/debuglog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,14 +76,14 @@ func (c *GeminiCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 	// Pre-load cache from DB and check if unchanged
 	loadStart := time.Now()
 	c.cache.LoadFromDB(c.Source(), allFiles)
-	log.Printf("[perf] Gemini LoadFromDB files=%d elapsed=%v", len(allFiles), time.Since(loadStart))
+	debuglog.Perf("Gemini LoadFromDB files=%d elapsed=%v", len(allFiles), time.Since(loadStart))
 	checkStart := time.Now()
 	if c.cache.AllCached(allFiles) {
-		log.Printf("[perf] Gemini AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
+		debuglog.Perf("Gemini AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] Gemini all files cached, skipping")
 		return &CollectResult{Device: hostname(), Source: "Gemini CLI", Cached: true}, nil
 	}
-	log.Printf("[perf] Gemini AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
+	debuglog.Perf("Gemini AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
@@ -99,7 +101,7 @@ func (c *GeminiCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 		c.collectFile(fp, dailyMap, sessionMap, &events, pricing)
 	}
 
-	log.Printf("[perf] Gemini parse files=%d skipped=%d elapsed=%v", fileCount, skippedFiles, time.Since(parseStart))
+	debuglog.Perf("Gemini parse files=%d skipped=%d elapsed=%v", fileCount, skippedFiles, time.Since(parseStart))
 
 	log.Printf("[collector] Gemini done files=%d daily=%d sessions=%d events=%d",
 		fileCount, len(dailyMap), len(sessionMap), len(events))

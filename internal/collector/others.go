@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+
+	"token-dashboard/internal/debuglog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -79,7 +81,7 @@ func (c *HermesCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 		}
 	}
 
-	log.Printf("[perf] Hermes collect dbPath=%s daily=%d elapsed=%v", dbPath, len(dailyMap), time.Since(start))
+	debuglog.Perf("Hermes collect dbPath=%s daily=%d elapsed=%v", dbPath, len(dailyMap), time.Since(start))
 	log.Printf("[collector] Hermes done daily=%d", len(dailyMap))
 
 	return buildResult("hermes", "Hermes Agent", dailyMap, sessionMap, nil), nil
@@ -210,7 +212,7 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 		}
 	}
 
-	log.Printf("[perf] OpenCode collect scanned=%d events=%d elapsed=%v", scanned, len(events), time.Since(start))
+	debuglog.Perf("OpenCode collect scanned=%d events=%d elapsed=%v", scanned, len(events), time.Since(start))
 	log.Printf("[collector] OpenCode done scanned=%d events=%d parseFailed=%d zeroTokens=%d noModelID=%d daily=%d dateRange=[%s..%s]",
 		scanned, len(events), parseFailed, zeroTokens, noModelID, len(dailyMap),
 		time.UnixMilli(minCreated).Format("2006-01-02"),
@@ -260,14 +262,14 @@ func (c *OpenClawCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	// Pre-load cache from DB and check if unchanged
 	loadStart := time.Now()
 	c.cache.LoadFromDB(c.Source(), allFiles)
-	log.Printf("[perf] OpenClaw LoadFromDB files=%d elapsed=%v", len(allFiles), time.Since(loadStart))
+	debuglog.Perf("OpenClaw LoadFromDB files=%d elapsed=%v", len(allFiles), time.Since(loadStart))
 	checkStart := time.Now()
 	if c.cache.AllCached(allFiles) {
-		log.Printf("[perf] OpenClaw AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
+		debuglog.Perf("OpenClaw AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] OpenClaw all files cached, skipping")
 		return &CollectResult{Device: hostname(), Source: "OpenClaw", Cached: true}, nil
 	}
-	log.Printf("[perf] OpenClaw AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
+	debuglog.Perf("OpenClaw AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
@@ -310,7 +312,7 @@ func (c *OpenClawCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 		}
 	}
 
-	log.Printf("[perf] OpenClaw parse files=%d skipped=%d records=%d elapsed=%v", totalFiles, skippedFiles, totalRecords, time.Since(parseStart))
+	debuglog.Perf("OpenClaw parse files=%d skipped=%d records=%d elapsed=%v", totalFiles, skippedFiles, totalRecords, time.Since(parseStart))
 	log.Printf("[collector] OpenClaw done files=%d records=%d daily=%d sessions=%d events=%d",
 		totalFiles, totalRecords, len(dailyMap), len(sessionMap), len(events))
 

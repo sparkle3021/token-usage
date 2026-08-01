@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as api from '../api/client.js';
 import { daysAgo } from '../lib/formatters.js';
-import { LogPrint } from '../../wailsjs/runtime/runtime.js';
 
 /**
  * 仪表盘数据获取 Hook。
@@ -31,19 +30,6 @@ export function useDashboardData() {
     setRuns(data.runs || []);
     setLoaded(true);
     setLoadError(null);
-    // [data-log] 数据加载摘要：daily/time/hour 行数 + 今天/昨天总量 + 时间范围
-    try {
-      const daily = data.daily || [];
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const yStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-      const today = daily.filter(r => r.usageDate === todayStr).reduce((s, r) => s + (r.totalTokens || 0), 0);
-      const yesterday = daily.filter(r => r.usageDate === yStr).reduce((s, r) => s + (r.totalTokens || 0), 0);
-      const dates = daily.map(r => r.usageDate).filter(Boolean);
-      const time = tsData.time || [];
-      const hour = tsData.hour || [];
-      const timeToday = time.filter(r => (r.usageDate || '').slice(0, 10) === todayStr).length;
-      LogPrint(`[data-log] daily=${daily.length} time=${time.length} hour=${hour.length} sessions=${(sessionAggData || []).length} | 今天=${today} 昨天=${yesterday} | daily范围=${dates.length ? dates[dates.length - 1] + '~' + dates[0] : '空'} | time今天=${timeToday}行`);
-    } catch (e) { LogPrint(`[data-log] 摘要计算异常: ${e}`); }
   }, []);
 
   const fetchData = useCallback((silent, days) => {

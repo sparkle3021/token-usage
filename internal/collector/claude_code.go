@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+
+	"token-dashboard/internal/debuglog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -65,14 +67,14 @@ func (c *ClaudeCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*
 	// Pre-load cache from DB and check if unchanged
 	loadStart := time.Now()
 	c.cache.LoadFromDB(c.Source(), allFiles)
-	log.Printf("[perf] ClaudeCode LoadFromDB files=%d elapsed=%v", len(allFiles), time.Since(loadStart))
+	debuglog.Perf("ClaudeCode LoadFromDB files=%d elapsed=%v", len(allFiles), time.Since(loadStart))
 	checkStart := time.Now()
 	if c.cache.AllCached(allFiles) {
-		log.Printf("[perf] ClaudeCode AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
+		debuglog.Perf("ClaudeCode AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] ClaudeCode all files cached, skipping")
 		return &CollectResult{Device: hostname(), Source: claudeSourceLabel, Cached: true}, nil
 	}
-	log.Printf("[perf] ClaudeCode AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
+	debuglog.Perf("ClaudeCode AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
@@ -169,7 +171,7 @@ func (c *ClaudeCodeCollector) scanAndParse(dir string,
 			sessionMap[sk].add(rec.input, rec.output, rec.cacheRead, rec.cacheWrite, rec.reasoning, cost)
 		}
 	}
-		log.Printf("[perf] ClaudeCode scanAndParse dir=%s files=%d skipped=%d records=%d elapsed=%v", dir, len(files), skippedFiles, recordCount, time.Since(parseStart))
+		debuglog.Perf("ClaudeCode scanAndParse dir=%s files=%d skipped=%d records=%d elapsed=%v", dir, len(files), skippedFiles, recordCount, time.Since(parseStart))
 }
 
 func (c *ClaudeCodeCollector) parseFile(filePath string) []claudeRecord {

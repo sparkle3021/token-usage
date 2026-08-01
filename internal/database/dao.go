@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+
+	"token-dashboard/internal/debuglog"
 	"time"
 )
 
@@ -42,7 +44,7 @@ func bulkExecPrepared[T any](ex preparedExecer, rows []T, sqlTemplate string, ro
 			return fmt.Errorf("row %d: %w", i, err)
 		}
 	}
-	log.Printf("[perf] db bulkExecPrepared rows=%d elapsed=%v", len(rows), time.Since(start))
+	debuglog.Perf("db bulkExecPrepared rows=%d elapsed=%v", len(rows), time.Since(start))
 	return nil
 }
 

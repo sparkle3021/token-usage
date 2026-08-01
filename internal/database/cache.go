@@ -3,8 +3,9 @@ package database
 
 import (
 	"fmt"
-	"log"
 	"time"
+
+	"token-dashboard/internal/debuglog"
 )
 
 func (m *Manager) UpsertParseCache(source, filePath, fingerprint string, records []byte) error {
@@ -67,7 +68,7 @@ func (m *Manager) BulkUpsertParseCache(entries []ParseCacheEntry) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
-	log.Printf("[perf] db BulkUpsertParseCache rows=%d elapsed=%v", len(entries), time.Since(start))
+	debuglog.Perf("db BulkUpsertParseCache rows=%d elapsed=%v", len(entries), time.Since(start))
 	return nil
 }
 

@@ -2,6 +2,8 @@ package collector
 
 import (
 	"log"
+
+	"token-dashboard/internal/debuglog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -267,7 +269,7 @@ func CollectJSONLFiles(dir string) []string {
 		return nil
 	})
 	if len(results) > 0 {
-		log.Printf("[perf] CollectJSONLFiles dir=%s files=%d elapsed=%v", dir, len(results), time.Since(start))
+		debuglog.Perf("CollectJSONLFiles dir=%s files=%d elapsed=%v", dir, len(results), time.Since(start))
 	}
 	return results
 }

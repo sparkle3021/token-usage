@@ -13,6 +13,7 @@ import (
 
 	"token-dashboard/internal/collector"
 	"token-dashboard/internal/database"
+	"token-dashboard/internal/debuglog"
 	"token-dashboard/internal/model"
 	"token-dashboard/internal/pricing"
 )
@@ -282,7 +283,7 @@ func (e *Engine) runCollection() {
 
 			collectStart := time.Now()
 			result, err := c.Collect(context.Background(), &pricingEngine{e.pricing})
-			log.Printf("[perf] collect source=%s elapsed=%v", c.Source(), time.Since(collectStart))
+			debuglog.Perf("collect source=%s elapsed=%v", c.Source(), time.Since(collectStart))
 			results[idx] = &collectorResult{col: c, result: result, err: err}
 		}(i, col)
 	}
@@ -323,7 +324,7 @@ func (e *Engine) runCollection() {
 		stderr += "[engine] BuildDailyFromHourUsage: " + err.Error() + "\n"
 		log.Printf("[engine] BuildDailyFromHourUsage error: %v", err)
 	}
-	log.Printf("[perf] rebuild daily_usage elapsed=%v", time.Since(rebuildStart))
+	debuglog.Perf("rebuild daily_usage elapsed=%v", time.Since(rebuildStart))
 
 	e.mu.Lock()
 	finishedAt := time.Now().Format(time.RFC3339)
@@ -346,7 +347,7 @@ func (e *Engine) runCollection() {
 	e.emit("collection:done", map[string]string{"status": status, "message": msg})
 
 	elapsed := time.Now().Sub(mustParseRFC3339(startedAt))
-	log.Printf("[perf] runCollection total status=%s elapsed=%v", status, elapsed)
+	debuglog.Perf("runCollection total status=%s elapsed=%v", status, elapsed)
 	log.Printf("[engine] runCollection complete status=%s elapsed=%v", status, elapsed)
 }
 
@@ -409,7 +410,7 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 				fmt.Sprintf("[%s] bulk time: %v", col.Source(), err), "go-collector:"+col.ID())
 			return false
 		}
-		log.Printf("[perf] write source=%s sub=bulk_time rows=%d elapsed=%v", col.Source(), len(filteredEvents), time.Since(writeStart))
+		debuglog.Perf("write source=%s sub=bulk_time rows=%d elapsed=%v", col.Source(), len(filteredEvents), time.Since(writeStart))
 		// Build hour_usage from time_usage for affected dates
 		dateSeen := make(map[string]bool)
 		for _, r := range result.Daily {
@@ -420,7 +421,7 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 					log.Printf("[engine] BuildHourUsageFromTimeUsage error source=%s date=%s err=%v",
 						col.Source(), r.UsageDate, err)
 				}
-				log.Printf("[perf] write source=%s sub=build_hour date=%s elapsed=%v", col.Source(), r.UsageDate, time.Since(hourStart))
+				debuglog.Perf("write source=%s sub=build_hour date=%s elapsed=%v", col.Source(), r.UsageDate, time.Since(hourStart))
 			}
 		}
 	} else if len(filteredDaily) > 0 {
@@ -431,7 +432,7 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 				fmt.Sprintf("[%s] bulk daily: %v", col.Source(), err), "go-collector:"+col.ID())
 			return false
 		}
-		log.Printf("[perf] write source=%s sub=bulk_daily rows=%d elapsed=%v", col.Source(), len(filteredDaily), time.Since(writeStart))
+		debuglog.Perf("write source=%s sub=bulk_daily rows=%d elapsed=%v", col.Source(), len(filteredDaily), time.Since(writeStart))
 	}
 
 	// CC-Switch hour-level data: write directly to hour_usage within the transaction
@@ -442,7 +443,7 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 				fmt.Sprintf("[%s] bulk hour: %v", col.Source(), err), "go-collector:"+col.ID())
 			return false
 		}
-		log.Printf("[perf] write source=%s sub=bulk_hour rows=%d elapsed=%v", col.Source(), len(result.HourRows), time.Since(writeStart))
+		debuglog.Perf("write source=%s sub=bulk_hour rows=%d elapsed=%v", col.Source(), len(result.HourRows), time.Since(writeStart))
 	}
 
 	// Commit the transaction — if this fails, the rollback happens automatically
@@ -453,14 +454,14 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 		return false
 	}
 	rollback = false
-	log.Printf("[perf] write source=%s sub=commit rows_daily=%d rows_events=%d rows_hour=%d elapsed=%v", col.Source(), len(filteredDaily), len(filteredEvents), len(result.HourRows), time.Since(writeStart))
+	debuglog.Perf("write source=%s sub=commit rows_daily=%d rows_events=%d rows_hour=%d elapsed=%v", col.Source(), len(filteredDaily), len(filteredEvents), len(result.HourRows), time.Since(writeStart))
 
 	// Persist cache fingerprints after data is safely committed
 	cacheStart := time.Now()
 	if err := e.persistCollectorCache(col); err != nil {
 		log.Printf("[engine] PersistCache error source=%s err=%v", col.Source(), err)
 	}
-	log.Printf("[perf] cache-persist source=%s elapsed=%v", col.Source(), time.Since(cacheStart))
+	debuglog.Perf("cache-persist source=%s elapsed=%v", col.Source(), time.Since(cacheStart))
 
 	summary := fmt.Sprintf("daily=%d, time=%d, workspace_model=%d", len(result.Daily), len(result.Events), len(result.Session))
 	e.db.RecordRun(result.Device, col.Source(), "ok", summary, "go-collector:"+col.ID())

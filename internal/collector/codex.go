@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+
+	"token-dashboard/internal/debuglog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,14 +51,14 @@ func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*Colle
 	// Pre-load cache from DB and check if unchanged
 	loadStart := time.Now()
 	c.cache.LoadFromDB(c.Source(), allFiles)
-	log.Printf("[perf] Codex LoadFromDB files=%d elapsed=%v", len(allFiles), time.Since(loadStart))
+	debuglog.Perf("Codex LoadFromDB files=%d elapsed=%v", len(allFiles), time.Since(loadStart))
 	checkStart := time.Now()
 	if c.cache.AllCached(allFiles) {
-		log.Printf("[perf] Codex AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
+		debuglog.Perf("Codex AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] Codex all files cached, skipping")
 		return &CollectResult{Device: hostname(), Source: "Codex CLI", Cached: true}, nil
 	}
-	log.Printf("[perf] Codex AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
+	debuglog.Perf("Codex AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
@@ -112,7 +114,7 @@ func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*Colle
 		}
 	}
 
-	log.Printf("[perf] Codex parse files=%d skipped=%d records=%d elapsed=%v", totalFiles, skippedFiles, totalRecords, time.Since(parseStart))
+	debuglog.Perf("Codex parse files=%d skipped=%d records=%d elapsed=%v", totalFiles, skippedFiles, totalRecords, time.Since(parseStart))
 	log.Printf("[collector] Codex done files=%d records=%d daily=%d sessions=%d events=%d",
 		totalFiles, totalRecords, len(dailyMap), len(sessionMap), len(events))
 

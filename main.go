@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -22,13 +23,27 @@ func setupLogging() {
 	cfg := config.Load()
 	logDir := filepath.Join(cfg.DataDir, "logs")
 	os.MkdirAll(logDir, 0755)
-	f, err := os.OpenFile(filepath.Join(logDir, "app.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logPath := filepath.Join(logDir, "app.log")
+	rotateLog(logPath, 5<<20, 3) // 5MB 大小轮转，保留 3 份
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		log.Printf("[main] setupLogging open file error: %v", err)
 		return
 	}
 	log.SetOutput(io.MultiWriter(os.Stderr, f))
 	log.Printf("[main] logging initialized dir=%s", logDir)
+}
+
+// rotateLog 按大小轮转日志：超过 maxSize 字节时归档为 .1/.2，保留 keep 份。
+func rotateLog(path string, maxSize int64, keep int) {
+	fi, err := os.Stat(path)
+	if err != nil || fi.Size() < maxSize {
+		return
+	}
+	for i := keep - 1; i >= 1; i-- {
+		os.Rename(fmt.Sprintf("%s.%d", path, i), fmt.Sprintf("%s.%d", path, i+1))
+	}
+	os.Rename(path, path+".1")
 }
 
 func main() {
