@@ -102,19 +102,6 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
   const palette = activeSources.map(s => U.getSourceColor(s));
   const dataKey = chartData[0]?.hour != null ? 'hour' : chartData[0]?.week != null ? 'week' : chartData[0]?.month != null ? 'month' : chartData[0]?.year != null ? 'year' : 'date';
 
-  // Activity Strip
-  const stripData = useMemo(() => {
-    if (!aggBuckets) {
-      // daily strip from byKey
-      return dates.map(d => byKey.get(`${d}::${sources[0]}`) || 0);
-    }
-    return [...aggBuckets.entries()].map(([, sourceMap]) => {
-      let total = 0;
-      for (const s of sources) total += sourceMap.get(s) || 0;
-      return total;
-    });
-  }, [aggBuckets, dates, byKey, sources]);
-
   const descParts = [
     totals?.totalTokens != null ? `${U.compactCN(totals.totalTokens)} tokens` : '',
     hasHourly ? '24 小时' : `${aggCount} ${aggUnit}`,
@@ -181,23 +168,6 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
             )}
           </ResponsiveContainer>
         </div>
-        )}
-        {/* Activity Strip */}
-        {stripData.length > 1 && (
-          <div className="mt-3">
-            <svg width="100%" height="16" style={{ display: 'block' }}>
-              {stripData.map((v, i) => {
-                const w = 100 / stripData.length;
-                return (
-                  <rect key={i} x={`${(i / stripData.length) * 100}%`} y="0"
-                    width={`${w}%`} height="16" rx="1.5" ry="1.5"
-                    fill={v > 0 ? palette[0] || '#888' : 'oklch(0.9 0.005 80)'}
-                    opacity={v > 0 ? 0.7 : 0.3}
-                  />
-                );
-              })}
-            </svg>
-          </div>
         )}
       </CardContent>
     </Card>
