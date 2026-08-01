@@ -1,5 +1,5 @@
-// Package collector 的子文件，DeepSeek API 余额查询 Provider 实现。
-package collector
+// Package quota 的子文件，DeepSeek API 余额查询 Provider 实现。
+package quota
 
 import (
 	"encoding/json"

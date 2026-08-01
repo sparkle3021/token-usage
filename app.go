@@ -11,6 +11,7 @@ import (
 	"token-dashboard/internal/database"
 	"token-dashboard/internal/model"
 	"token-dashboard/internal/pricing"
+	"token-dashboard/internal/quota"
 	"token-dashboard/internal/service"
 )
 
@@ -22,7 +23,7 @@ type App struct {
 	collectionSvc *service.CollectionService
 	importSvc     *service.ImportService
 	settingSvc    *service.SettingService
-	quotaSvc      *service.QuotaService
+	quotaSvc      *quota.Service
 	pricingSvc    *service.PricingService
 	dataDir       string
 }
@@ -54,7 +55,7 @@ func NewApp() *App {
 	collectionSvc := service.NewCollectionService(db, eng)
 	importSvc := service.NewImportService()
 	settingSvc := service.NewSettingService(db, collectionSvc)
-	quotaSvc := service.NewQuotaService(db)
+	quotaSvc := quota.NewService(db)
 	pricingSvc := service.NewPricingService(pr, cfg.DataDir)
 
 	return &App{
@@ -170,7 +171,7 @@ func (a *App) UpdatePricing() model.PricingUpdateResult {
 // ---------------------------------------------------------------------------
 
 func (a *App) ListQuotaConfigs() []model.QuotaConfig {
-	return a.quotaSvc.ListConfigs()
+	return a.quotaSvc.List()
 }
 
 func (a *App) GetProviderSchemas() []model.ProviderSchema {
@@ -178,7 +179,7 @@ func (a *App) GetProviderSchemas() []model.ProviderSchema {
 }
 
 func (a *App) CreateQuotaConfig(cfg model.QuotaConfig) model.QuotaConfig {
-	created, err := a.quotaSvc.CreateConfig(cfg)
+	created, err := a.quotaSvc.Create(cfg)
 	if err != nil {
 		return model.QuotaConfig{ConfigJSON: err.Error()}
 	}
@@ -186,19 +187,19 @@ func (a *App) CreateQuotaConfig(cfg model.QuotaConfig) model.QuotaConfig {
 }
 
 func (a *App) UpdateQuotaConfig(cfg model.QuotaConfig) error {
-	return a.quotaSvc.UpdateConfig(cfg)
+	return a.quotaSvc.Update(cfg)
 }
 
 func (a *App) DeleteQuotaConfig(id int64) error {
-	return a.quotaSvc.DeleteConfig(id)
+	return a.quotaSvc.Delete(id)
 }
 
 func (a *App) FetchQuota(id int64) *model.QuotaData {
-	return a.quotaSvc.FetchQuota(id)
+	return a.quotaSvc.Fetch(id)
 }
 
 func (a *App) FetchAllQuota() []model.QuotaData {
-	return a.quotaSvc.FetchAllQuota()
+	return a.quotaSvc.FetchAll()
 }
 
 // ---------------------------------------------------------------------------

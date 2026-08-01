@@ -1,5 +1,5 @@
-// Package collector 的子文件，用量查询供应商接口与注册机制。
-package collector
+// Package quota 的子文件，用量查询供应商接口与注册机制。
+package quota
 
 import "token-dashboard/internal/model"
 

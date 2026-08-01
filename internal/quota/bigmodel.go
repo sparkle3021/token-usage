@@ -1,5 +1,5 @@
-// Package collector 的子文件，BigModel（智谱 AI）用量查询 Provider 实现。
-package collector
+// Package quota 的子文件，BigModel（智谱 AI）用量查询 Provider 实现。
+package quota
 
 import (
 	"encoding/json"
