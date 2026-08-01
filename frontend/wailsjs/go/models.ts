@@ -14,6 +14,24 @@ export namespace model {
 	        this.ccSwitchDBPath = source["ccSwitchDBPath"];
 	    }
 	}
+	export class BalanceDetail {
+	    currency: string;
+	    total: number;
+	    granted?: number;
+	    toppedUp?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new BalanceDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.currency = source["currency"];
+	        this.total = source["total"];
+	        this.granted = source["granted"];
+	        this.toppedUp = source["toppedUp"];
+	    }
+	}
 	export class CollectStatus {
 	    status: string;
 	    message: string;
@@ -327,6 +345,7 @@ export namespace model {
 	    name: string;
 	    slots?: QuotaSlot[];
 	    balance?: number;
+	    balanceDetails?: BalanceDetail[];
 	    error?: string;
 	    fetchedAt: string;
 	
@@ -342,6 +361,7 @@ export namespace model {
 	        this.name = source["name"];
 	        this.slots = this.convertValues(source["slots"], QuotaSlot);
 	        this.balance = source["balance"];
+	        this.balanceDetails = this.convertValues(source["balanceDetails"], BalanceDetail);
 	        this.error = source["error"];
 	        this.fetchedAt = source["fetchedAt"];
 	    }

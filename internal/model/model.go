@@ -153,14 +153,23 @@ type QuotaConfig struct {
 
 // QuotaData 单次拉取的用量数据。
 type QuotaData struct {
-	ConfigID int64       `json:"configId"`
-	Provider string      `json:"provider"`
-	Plan     string      `json:"plan"`
-	Name     string      `json:"name"`
-	Slots    []QuotaSlot `json:"slots,omitempty"`
-	Balance  *float64    `json:"balance,omitempty"`
-	Error    string      `json:"error,omitempty"`
-	FetchedAt string     `json:"fetchedAt"`
+	ConfigID       int64           `json:"configId"`
+	Provider       string          `json:"provider"`
+	Plan           string          `json:"plan"`
+	Name           string          `json:"name"`
+	Slots          []QuotaSlot     `json:"slots,omitempty"`
+	Balance        *float64        `json:"balance,omitempty"`
+	BalanceDetails []BalanceDetail `json:"balanceDetails,omitempty"`
+	Error          string          `json:"error,omitempty"`
+	FetchedAt      string          `json:"fetchedAt"`
+}
+
+// BalanceDetail 余额明细（多币种/多类型拆分，如 DeepSeek 的充值/赠送余额）。
+type BalanceDetail struct {
+	Currency string  `json:"currency"`
+	Total    float64 `json:"total"`
+	Granted  float64 `json:"granted,omitempty"`
+	ToppedUp float64 `json:"toppedUp,omitempty"`
 }
 
 // QuotaSlot 单个用量槽（quota 类型）。

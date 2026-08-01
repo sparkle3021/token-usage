@@ -177,9 +177,22 @@ export default function QuotaCard({ cfg, data, displayType, slotsLabels, balance
             <p>
               <span className="text-muted-foreground">可用余额：</span>
               <span className="font-bold tabular-nums">
-                                {localData && typeof localData.balance === 'number' ? localData.balance.toFixed(2) : '—'}
+                {localData && typeof localData.balance === 'number' ? localData.balance.toFixed(2) : '—'}
+                {localData?.balanceDetails?.[0]?.currency ? ` ${localData.balanceDetails[0].currency}` : ''}
               </span>
             </p>
+            {localData?.balanceDetails?.[0] && (
+              <div className="text-xs tabular-nums space-y-0.5">
+                <p className="flex items-center justify-center gap-2">
+                  <span className="w-16 text-right text-muted-foreground">充值余额：</span>
+                  <span className="w-16 text-left font-medium text-foreground">{(localData.balanceDetails[0].toppedUp ?? 0).toFixed(2)}</span>
+                </p>
+                <p className="flex items-center justify-center gap-2">
+                  <span className="w-16 text-right text-muted-foreground">赠金余额：</span>
+                  <span className="w-16 text-left font-medium text-foreground">{(localData.balanceDetails[0].granted ?? 0).toFixed(2)}</span>
+                </p>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               查询时间：{fmtTime(localData?.fetchedAt)}
             </p>

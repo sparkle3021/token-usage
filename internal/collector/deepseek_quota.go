@@ -86,11 +86,27 @@ func (p *DeepSeekProvider) Fetch(configJSON string) (*model.QuotaData, error) {
 		return nil, fmt.Errorf("余额格式异常: %s", br.BalanceInfos[0].TotalBalance)
 	}
 
+	// 余额明细：多币种，含总/充值/赠送拆分
+	var details []model.BalanceDetail
+	for _, bi := range br.BalanceInfos {
+		var total, granted, toppedUp float64
+		fmt.Sscanf(bi.TotalBalance, "%f", &total)
+		fmt.Sscanf(bi.GrantedBalance, "%f", &granted)
+		fmt.Sscanf(bi.ToppedUpBalance, "%f", &toppedUp)
+		details = append(details, model.BalanceDetail{
+			Currency: bi.Currency,
+			Total:    total,
+			Granted:  granted,
+			ToppedUp: toppedUp,
+		})
+	}
+
 	log.Printf("[deepseek] balance=%s %s", br.BalanceInfos[0].TotalBalance, br.BalanceInfos[0].Currency)
 	return &model.QuotaData{
-		Provider: "deepseek",
-		Plan:     "API",
-		Balance:  &balance,
+		Provider:       "deepseek",
+		Plan:           "API",
+		Balance:        &balance,
+		BalanceDetails: details,
 	}, nil
 }
 
