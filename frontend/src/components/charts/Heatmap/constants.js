@@ -8,6 +8,16 @@ export const DEFAULT_THEME = {
   level5: '#0e4429',
 };
 
+/** 暗色主题：保持「由浅到深」语义（浅=用量少，深=用量多），整体色调偏暗适配暗背景 */
+export const DARK_THEME = {
+  empty: '#2a2a2a',
+  level1: '#6fbf8f',
+  level2: '#4aa06a',
+  level3: '#2f8a52',
+  level4: '#1d6e3d',
+  level5: '#0f542c',
+};
+
 export const CELL_SIZE = 14;
 export const GAP = 3;
 export const DEFAULT_WEEKS = 53;

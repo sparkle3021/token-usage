@@ -4,7 +4,7 @@ import HeatmapGrid from './HeatmapGrid.jsx';
 import HeatmapLegend from './HeatmapLegend.jsx';
 import { useHeatmap } from './hooks.js';
 import { getContributionColor } from './utils.js';
-import { DEFAULT_THEME, CELL_SIZE, GAP } from './constants.js';
+import { DEFAULT_THEME, DARK_THEME, CELL_SIZE, GAP } from './constants.js';
 
 const LABEL_WIDTH = 32;
 const MIN_CELL = 8;
@@ -23,8 +23,17 @@ export default function Heatmap({
   gap = GAP,
   onSelect,
   className = '',
-  theme = DEFAULT_THEME,
+  theme: themeProp,
 }) {
+  // 明暗主题跟随 html.dark class（App 单点驱动），避免 props 穿透
+  const [isDark, setIsDark] = useState(() => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+  useEffect(() => {
+    const el = document.documentElement;
+    const observer = new MutationObserver(() => setIsDark(el.classList.contains('dark')));
+    observer.observe(el, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  const theme = themeProp || (isDark ? DARK_THEME : DEFAULT_THEME);
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
