@@ -33,8 +33,9 @@ export default function SourceDrillDialog({ drill, daily, allDaily = [], onClose
       open
       onCancel={onClose}
       title={null}
-      width={520}
-      styles={{ body: { maxHeight: 'calc(85vh - 120px)', minHeight: 280, overflowY: 'auto' } }}
+      centered
+      width={{ xs: 520, md: 576, lg: 672, xl: 720 }}
+      styles={{ body: { maxHeight: 'calc(85vh - 120px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' } }}
       footer={null}
     >
       <h3 className="sr-only">{row.source} 模型分布</h3>
@@ -52,7 +53,7 @@ export default function SourceDrillDialog({ drill, daily, allDaily = [], onClose
         <span>缓存命中率 <strong className="text-foreground">{detail.totals.cacheHitRate.toFixed(1)}%</strong></span>
       </div>
 
-      <div className="overflow-y-auto scrollbar-subtle">
+      <div className="flex-dialog-body min-h-0 overflow-y-auto scrollbar-subtle">
         {detail.list.length > 0 ? (
           <div className="space-y-1.5">
             {detail.list.map(m => {

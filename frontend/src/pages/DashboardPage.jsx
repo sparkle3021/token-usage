@@ -138,7 +138,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 h-full min-h-0">
       <FilterBar
         f={f}
         allSources={allSources}
@@ -177,8 +177,9 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
           open
           onCancel={() => setTopModelDrill(null)}
           title={null}
-          width={520}
-          styles={{ body: { maxHeight: 'calc(85vh - 120px)', minHeight: 280, overflowY: 'auto' } }}
+          centered
+          width={{ xs: 520, md: 576, lg: 672, xl: 720 }}
+          styles={{ body: { maxHeight: 'calc(85vh - 120px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' } }}
           footer={null}
         >
           <h3 className="sr-only">{topModelDrill.model} 详情</h3>
@@ -195,7 +196,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
             <span>活跃 <strong className="text-foreground">{topModelDrill.dayCount}</strong> 天</span>
           </div>
 
-          <div className="overflow-y-auto scrollbar-subtle">
+          <div className="flex-dialog-body min-h-0 overflow-y-auto scrollbar-subtle">
           {topModelDrill.sources?.length > 0 && (
             <div className="space-y-1.5">
               {topModelDrill.sources.map(s => {

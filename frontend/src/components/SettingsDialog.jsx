@@ -19,8 +19,9 @@ function ConfirmDialog({ title, description, danger, confirmText, busyText, busy
       mask={{ closable: !busy }}
       keyboard={!busy}
       closable={!busy}
+      centered
       title={<span className={danger ? 'text-red-600' : ''}>{title}</span>}
-      width={416}
+      width={{ xs: 416, md: 448 }}
     >
       <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
     </Modal>
@@ -167,12 +168,13 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
         open={open}
         onCancel={() => setOpen(false)}
         title="设置"
+        centered
         footer={
           <div className="flex justify-end">
             <Button size="small" onClick={() => setOpen(false)}>关闭</Button>
           </div>
         }
-        width={480}
+        width={{ xs: 480, md: 520, lg: 560 }}
       >
         {!cfg ? (
           <div className="py-8 text-center text-sm text-muted-foreground">

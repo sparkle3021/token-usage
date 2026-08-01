@@ -85,7 +85,8 @@ export default function QuotaDialog({ open, onOpenChange, schemas, editCfg, onSa
       cancelText="取消"
       cancelButtonProps={{ size: 'small' }}
       title={isEdit ? '编辑用量查询' : '添加用量查询'}
-      width={448}
+      centered
+      width={{ xs: 448, md: 480, lg: 520 }}
     >
       <div className="space-y-4 py-2">
         {/* 供应商选择（编辑时不可改） */}

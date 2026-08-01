@@ -123,7 +123,7 @@ export default function QuotaPage() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 h-full min-h-0">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">用量查询</h2>
         <Button type="primary" size="small" className="h-8 text-xs" onClick={handleAdd} icon={<PlusIcon className="size-3.5" />}>

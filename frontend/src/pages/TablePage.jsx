@@ -32,7 +32,7 @@ export default function TablePage({ M, onRangeSwitch }) {
   const closeDrill = () => setDrill(null);
 
   return (
-    <div className="flex flex-col min-h-0 flex-1 gap-4">
+    <div className="flex flex-col min-h-0 flex-1 gap-4 h-full">
       {/* Filter Bar */}
       <Card className="p-3 shrink-0 overflow-visible" styles={{ body: { padding: 12 } }}>
         <div className="flex flex-wrap items-center gap-2">
@@ -76,11 +76,12 @@ export default function TablePage({ M, onRangeSwitch }) {
   );
 }
 
-// 模型详情弹窗：280px 保底 + 85vh 封顶 + 内容区内部滚动
+// 弹窗 body：flex 容器，标题/指标 shrink-0 固定，内容区 flex-dialog-body 承接滚动
 const MODAL_BODY_STYLE = {
   maxHeight: 'calc(85vh - 120px)',
-  minHeight: 280,
-  overflowY: 'auto',
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
 };
 
 function ModelDetailModal({ drill, onClose }) {
@@ -89,7 +90,8 @@ function ModelDetailModal({ drill, onClose }) {
       open
       onCancel={onClose}
       title={null}
-      width={520}
+      centered
+      width={{ xs: 520, md: 576, lg: 672, xl: 720 }}
       styles={{ body: MODAL_BODY_STYLE }}
       footer={null}
     >
@@ -107,7 +109,7 @@ function ModelDetailModal({ drill, onClose }) {
         <span>费用 <strong className="text-foreground">${(drill.row.cost || 0).toFixed(2)}</strong></span>
       </div>
 
-      <div className="overflow-y-auto scrollbar-subtle">
+      <div className="flex-dialog-body min-h-0 overflow-y-auto scrollbar-subtle">
         {drill.row.sources?.length > 0 && (
           <div className="space-y-1.5">
             {drill.row.sources.map(s => {
@@ -153,12 +155,14 @@ function SessionProjectDialog({ drill, onClose }) {
       title: '会话',
       dataIndex: 'sessionId',
       key: 'sessionId',
+      ellipsis: true,
       render: v => <span className="text-xs font-mono">{String(v).split('/').slice(-1)[0]}</span>,
     },
     {
       title: '活动',
       dataIndex: 'lastTs',
       key: 'lastTs',
+      width: 132,
       render: v => <span className="text-xs text-muted-foreground">{U.formatTs(v)}</span>,
     },
     {
@@ -166,6 +170,7 @@ function SessionProjectDialog({ drill, onClose }) {
       dataIndex: 'totalTokens',
       key: 'totalTokens',
       align: 'right',
+      width: 88,
       render: v => <span className="text-xs tabular-nums">{U.compactCN(v || 0)}</span>,
     },
     {
@@ -173,6 +178,7 @@ function SessionProjectDialog({ drill, onClose }) {
       dataIndex: 'costUSD',
       key: 'costUSD',
       align: 'right',
+      width: 84,
       render: v => <span className="text-xs tabular-nums">{(v || 0) > 0 ? `$${v.toFixed(2)}` : '—'}</span>,
     },
   ];
@@ -182,7 +188,8 @@ function SessionProjectDialog({ drill, onClose }) {
       open
       onCancel={onClose}
       title={null}
-      width={576}
+      centered
+      width={{ xs: 520, md: 576, lg: 672, xl: 720 }}
       styles={{ body: MODAL_BODY_STYLE }}
       footer={null}
     >
@@ -202,29 +209,28 @@ function SessionProjectDialog({ drill, onClose }) {
         <span>活跃 <strong className="text-foreground">{U.formatTs(row.lastTs)}</strong></span>
       </div>
 
-      <div className="overflow-y-auto scrollbar-subtle">
+      <div className="flex-dialog-body min-h-0 overflow-y-auto scrollbar-subtle">
         {sessions.length > 0 && (
-          <div>
-            <Table
-              columns={columns}
-              dataSource={visible}
-              rowKey="sessionId"
-              size="small"
-              pagination={false}
-              locale={{ emptyText: '暂无数据' }}
-            />
-            {pageCount > 1 && (
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-[11px] text-muted-foreground">共 {sessions.length} 条 · 第 {curPage}/{pageCount} 页</span>
-                <div className="flex gap-1">
-                  <Button size="small" disabled={curPage <= 1} onClick={() => setPage(curPage - 1)}>上一页</Button>
-                  <Button size="small" disabled={curPage >= pageCount} onClick={() => setPage(curPage + 1)}>下一页</Button>
-                </div>
-              </div>
-            )}
-          </div>
+          <Table
+            columns={columns}
+            dataSource={visible}
+            rowKey="sessionId"
+            size="small"
+            pagination={false}
+            sticky
+            locale={{ emptyText: '暂无数据' }}
+          />
         )}
       </div>
+      {pageCount > 1 && (
+        <div className="shrink-0 flex items-center justify-between pt-2">
+          <span className="text-[11px] text-muted-foreground">共 {sessions.length} 条 · 第 {curPage}/{pageCount} 页</span>
+          <div className="flex gap-1">
+            <Button size="small" disabled={curPage <= 1} onClick={() => setPage(curPage - 1)}>上一页</Button>
+            <Button size="small" disabled={curPage >= pageCount} onClick={() => setPage(curPage + 1)}>下一页</Button>
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -306,11 +312,6 @@ function DataTablePanel({ daily = [], sessionAgg = [], onDrill, fullHeight = fal
     return [...m.values()].map(({ sessions, ...rest }) => ({ ...rest, sessions })).sort((a, b) => b.total - a.total);
   }, [sessionAgg, dateRange]);
 
-  const sessionMinDate = useMemo(() => {
-    const dates = (sessionAgg || []).map(s => s.lastTs?.slice(0, 10)).filter(Boolean).sort();
-    return dates[0] || null;
-  }, [sessionAgg]);
-
   const tabs = [
     { key: 'sources', label: '来源', count: bySource.length },
     { key: 'models', label: '模型', count: byModel.length },
@@ -327,9 +328,6 @@ function DataTablePanel({ daily = [], sessionAgg = [], onDrill, fullHeight = fal
           items={tabs.map(t => ({ key: t.key, label: <span className="text-xs">{t.label} <span className="opacity-55 ml-1">{t.count}</span></span> }))}
         />
       </div>
-      {tab === 'sessions' && sessionMinDate && (
-        <div className="px-4 pt-1 pb-1 text-[10px] text-muted-foreground shrink-0">数据范围 {sessionMinDate} 起</div>
-      )}
       <div className={fullHeight ? 'flex flex-col flex-1 min-h-0' : ''}>
         {tab === 'sources' && (
           <SourceTable rows={bySource} onDrill={r => onDrill?.({ kind: 'source-model', row: r })} />

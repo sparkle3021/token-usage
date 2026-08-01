@@ -94,8 +94,9 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
       open
       onCancel={onClose}
       title={`${date} 用量详情`}
-      width={672}
-      styles={{ body: { maxHeight: 'calc(85vh - 120px)', minHeight: 280, overflowY: 'auto' } }}
+      centered
+      width={{ xs: 640, md: 720, lg: 800, xl: 880 }}
+      styles={{ body: { maxHeight: 'calc(85vh - 120px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' } }}
       footer={null}
     >
       <div className="text-xs text-muted-foreground mb-2 shrink-0">
@@ -104,7 +105,7 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
         · 总量 <strong className="text-foreground">{U.compactCN(dayTotal)}</strong>
       </div>
 
-      <Card styles={{ body: { padding: 16 } }}>
+      <Card className="flex-1 min-h-0" styles={{ body: { padding: 16, height: '100%' } }}>
         <h4 className="text-sm font-medium mb-3">Token 使用趋势（24 小时）</h4>
         {hasHourly ? (
           <div style={{ minHeight: 160, height: 'clamp(160px, 25vh, 250px)' }}>

@@ -50,7 +50,7 @@ function AppContent({ dark, onToggleDark }) {
   );
 
   return (
-    <div className="max-w-[1440px] mx-auto p-4 md:p-6 pb-16 space-y-4 font-sans flex flex-col min-h-screen">
+    <div className="max-w-[1440px] mx-auto p-4 md:p-6 pb-16 font-sans flex flex-col h-screen overflow-hidden">
       <Header
         page={page}
         setPage={setPage}
@@ -66,19 +66,21 @@ function AppContent({ dark, onToggleDark }) {
         dark={dark}
         onToggleDark={onToggleDark}
       />
-      {page === 'dashboard' ? (
-        <DashboardPage
-          M={M}
-          allSources={allSources}
-          allModels={allModels}
-          heatmapData={heatmapData}
-          onRangeSwitch={fetchTimeSeries}
-        />
-      ) : page === 'quota' ? (
-        <QuotaPage />
-      ) : (
-        <TablePage M={M} onRangeSwitch={fetchTimeSeries} />
-      )}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none pt-4">
+        {page === 'dashboard' ? (
+          <DashboardPage
+            M={M}
+            allSources={allSources}
+            allModels={allModels}
+            heatmapData={heatmapData}
+            onRangeSwitch={fetchTimeSeries}
+          />
+        ) : page === 'quota' ? (
+          <QuotaPage />
+        ) : (
+          <TablePage M={M} onRangeSwitch={fetchTimeSeries} />
+        )}
+      </div>
     </div>
   );
 }
