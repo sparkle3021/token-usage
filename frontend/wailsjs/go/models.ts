@@ -14,24 +14,6 @@ export namespace model {
 	        this.ccSwitchDBPath = source["ccSwitchDBPath"];
 	    }
 	}
-	export class CCSwitchImportResult {
-	    total: number;
-	    imported: number;
-	    error?: string;
-	    message?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new CCSwitchImportResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.total = source["total"];
-	        this.imported = source["imported"];
-	        this.error = source["error"];
-	        this.message = source["message"];
-	    }
-	}
 	export class CollectStatus {
 	    status: string;
 	    message: string;
@@ -240,7 +222,6 @@ export namespace model {
 	}
 	export class PricingUpdateResult {
 	    litellm: number;
-	    openrouter: number;
 	    message: string;
 	    error?: string;
 	
@@ -251,7 +232,6 @@ export namespace model {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.litellm = source["litellm"];
-	        this.openrouter = source["openrouter"];
 	        this.message = source["message"];
 	        this.error = source["error"];
 	    }

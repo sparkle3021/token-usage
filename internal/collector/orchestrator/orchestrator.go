@@ -42,7 +42,7 @@ type Engine struct {
 
 	mu         sync.Mutex
 	status     Status
-	currentOp  string // "" | "collection" | "full-collection" | "cc-import" | "clear-data"
+	currentOp  string // "" | "collection" | "full-collection" | "clear-data"
 	onEvent    EventCallback
 
 	parallelism int
@@ -218,37 +218,6 @@ func (e *Engine) StartFullCollection() bool {
 	return e.StartCollection()
 }
 
-// SyncCCSwitch runs the CC-Switch collector synchronously and returns stats.
-// Unlike StartCollection/StartFullCollection, this blocks until complete.
-func (e *Engine) SyncCCSwitch() (collector.CCSwitchStats, error) {
-	if !e.tryAcquire("cc-import") {
-		return collector.CCSwitchStats{}, fmt.Errorf("操作 %s 正在运行中，请等待完成后重试", e.CurrentOp())
-	}
-	defer e.release("cc-import")
-
-	if e.ccSwitchCol == nil {
-		return collector.CCSwitchStats{}, fmt.Errorf("cc-switch collector not initialized")
-	}
-	// Reset checkpoints to force full sync, then run synchronously
-	e.db.ResetCCSwitchCheckpoints()
-	e.ccSwitchCol.SetStore(e.db)
-	result, err := e.ccSwitchCol.Collect(context.Background(), &pricingEngine{e.pricing})
-	if err != nil {
-		return e.ccSwitchCol.Stats(), err
-	}
-	// Write data through processCollector which uses a transaction
-	if !e.processCollector(result, e.ccSwitchCol) {
-		return e.ccSwitchCol.Stats(), fmt.Errorf("sync cc-switch: process failed")
-	}
-	// Persist checkpoints only after data is safely committed
-	e.ccSwitchCol.SavePendingCheckpoints()
-	// Rebuild daily from the hour data
-	if err := e.db.BuildDailyFromHourUsage(); err != nil {
-		return e.ccSwitchCol.Stats(), fmt.Errorf("rebuild daily: %w", err)
-	}
-	return e.ccSwitchCol.Stats(), nil
-}
-
 func (e *Engine) runCollection() {
 	startedAt := time.Now().Format(time.RFC3339)
 
@@ -271,6 +240,9 @@ func (e *Engine) runCollection() {
 				s.ClearCache()
 			}
 		}
+		// 全量同步：同时重置 cc-switch 检查点，使 cc-switch 也全量重导，
+		// 而非仅增量。与"同步"（增量）形成完整全量语义。
+		e.db.ResetCCSwitchCheckpoints()
 		log.Printf("[engine] forceFull=true, cache cleared for all collectors")
 	}
 

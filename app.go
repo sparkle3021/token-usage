@@ -55,7 +55,7 @@ func NewApp() *App {
 
 	dashboardSvc := service.NewDashboardService(db, pr, cfg.DataDir)
 	collectionSvc := service.NewCollectionService(db, eng)
-	importSvc := service.NewImportService(db, eng)
+	importSvc := service.NewImportService()
 	settingSvc := service.NewSettingService(db, collectionSvc)
 	quotaSvc := service.NewQuotaService(db)
 
@@ -240,10 +240,6 @@ func (a *App) FetchAllQuota() []model.QuotaData {
 
 func (a *App) DetectCCSwitchDB() string {
 	return a.importSvc.DetectCCSwitchDB()
-}
-
-func (a *App) ImportCCSwitchDB() model.CCSwitchImportResult {
-	return a.importSvc.ImportCCSwitchDB()
 }
 
 

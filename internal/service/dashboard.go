@@ -20,8 +20,7 @@ import (
 )
 
 const (
-	pricingLiteLLMURL   = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
-	pricingOpenRouterURL = "https://openrouter.ai/api/v1/usage/rates"
+	pricingLiteLLMURL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
 )
 
 // DashboardService 仪表盘业务逻辑，聚合数据库原始数据并计算定价。
@@ -160,7 +159,7 @@ func (s *DashboardService) GetTimeSeriesData(days int) *model.TimeSeriesData {
 	return &model.TimeSeriesData{Time: timeRows, Hour: hourRows}
 }
 
-// UpdatePricing 从 LiteLLM 和 OpenRouter 拉取最新定价数据并重载定价引擎。
+// UpdatePricing 从 LiteLLM 拉取最新定价数据并重载定价引擎。
 func (s *DashboardService) UpdatePricing() model.PricingUpdateResult {
 	log.Printf("[service] UpdatePricing started")
 	priceDir := filepath.Join(s.dataDir, "config")
@@ -184,17 +183,6 @@ func (s *DashboardService) UpdatePricing() model.PricingUpdateResult {
 	json.Unmarshal(litellmData, &litellmRaw)
 	result.Litellm = len(litellmRaw)
 
-	openrouterData, err := fetchPricingJSON(pricingOpenRouterURL)
-	if err == nil {
-		if err := os.WriteFile(filepath.Join(priceDir, "pricing-openrouter.json"), openrouterData, 0644); err == nil {
-			var orRaw map[string]interface{}
-			json.Unmarshal(openrouterData, &orRaw)
-			result.OpenRouter = len(orRaw)
-		}
-	} else {
-		log.Printf("[service] UpdatePricing openrouter skipped: %v", err)
-	}
-
 	if s.pricing != nil {
 		if err := s.pricing.Reload(s.dataDir); err != nil {
 			log.Printf("[service] UpdatePricing reload error=%v", err)
@@ -203,7 +191,7 @@ func (s *DashboardService) UpdatePricing() model.PricingUpdateResult {
 		}
 	}
 
-	result.Message = fmt.Sprintf("LiteLLM %d 条, OpenRouter %d 条", result.Litellm, result.OpenRouter)
+	result.Message = fmt.Sprintf("LiteLLM %d 条", result.Litellm)
 	log.Printf("[service] UpdatePricing done %s", result.Message)
 	return result
 }

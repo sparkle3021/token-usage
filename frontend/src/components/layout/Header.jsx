@@ -1,13 +1,12 @@
 /**
- * 顶栏组件：标题、页面切换、最后同步时间、同步按钮、导入/设置对话框。
+ * 顶栏组件：标题、页面切换、最后同步时间、同步按钮、设置对话框。
  */
 
 import { Button } from '../ui/button.jsx';
-import ImportDialog from '../ImportDialog.jsx';
 import SettingsDialog from '../SettingsDialog.jsx';
 import { Sun, Moon } from 'lucide-react';
 
-export default function Header({ page, setPage, lastSync, onCollect, collecting, refreshing, onRefresh, onClearData, onSettingsChange, dark, onToggleDark }) {
+export default function Header({ page, setPage, lastSync, onCollect, collecting, refreshing, onClearData, onSettingsChange, onFullSync, fullSyncing, dark, onToggleDark }) {
   return (
     <div className="flex items-center justify-between gap-4 pb-4 border-b flex-wrap">
       <div className="flex items-center gap-3">
@@ -26,11 +25,10 @@ export default function Header({ page, setPage, lastSync, onCollect, collecting,
         <Button size="sm" variant="default" onClick={onCollect} disabled={collecting || refreshing}>
           {collecting ? '同步中' : '同步'}
         </Button>
-        <ImportDialog onRefresh={onRefresh} />
         <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={onToggleDark} title={dark ? '切换到亮色' : '切换到暗色'}>
           {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </Button>
-        <SettingsDialog onSettingsChange={onSettingsChange} onClear={onClearData} />
+        <SettingsDialog onSettingsChange={onSettingsChange} onClear={onClearData} onFullSync={onFullSync} fullSyncing={fullSyncing} />
       </div>
     </div>
   );

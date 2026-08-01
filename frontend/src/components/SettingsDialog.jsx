@@ -4,17 +4,47 @@ import {
 } from '@/components/ui/dialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
+import { toast } from '@/components/ui/sonner.jsx';
 import { SettingsIcon, TriangleAlertIcon } from 'lucide-react';
 
 const DEFAULTS = { autoSyncMinutes: 5, ccSwitchDBPath: '', ccSwitchEnabled: false, ccSwitchAutoSync: false };
 
-export default function SettingsDialog({ onSettingsChange, onClear }) {
+// 操作确认弹窗：统一交互——说明 + 取消/确认，确认后执行并 toast 反馈。
+function ConfirmDialog({ title, description, danger, confirmText, busyText, busy, onConfirm, onCancel }) {
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open && !busy) onCancel(); }}>
+      <DialogContent className="sm:max-w-sm" showCloseButton={!busy}>
+        <DialogHeader>
+          <DialogTitle className={danger ? 'text-red-600' : ''}>{title}</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button size="sm" variant="outline" onClick={onCancel} disabled={busy}>取消</Button>
+          <Button
+            size="sm"
+            onClick={onConfirm}
+            disabled={busy}
+            className={danger ? 'bg-red-500 hover:bg-red-600 text-white' : undefined}
+          >
+            {busy ? busyText : confirmText}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, fullSyncing }) {
   const [open, setOpen] = useState(false);
   const [cfg, setCfg] = useState(null);
-  const [saving, setSaving] = useState(false);
   const [loadErr, setLoadErr] = useState(null);
   const [detecting, setDetecting] = useState(false);
-  const [detectMsg, setDetectMsg] = useState(null);
+  const [savingAutoSync, setSavingAutoSync] = useState(false);
+  const [savingPath, setSavingPath] = useState(false);
+
+  // 当前待确认的操作：null | 'fullSync' | 'updatePricing' | 'clear'
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   // Load settings on open
   useEffect(() => {
@@ -29,75 +59,113 @@ export default function SettingsDialog({ onSettingsChange, onClear }) {
     }
   }, [open]);
 
-  const save = useCallback(async () => {
-    if (!cfg) return;
-    setSaving(true);
+  // 保存配置（指定改动的字段），立即持久化到 app_config 并应用运行时。
+  const persist = useCallback(async (patch) => {
+    const next = { ...cfg, ...patch };
+    setCfg(next);
     try {
-      await window.go.main.App.SaveSettings(cfg);
-      if (onSettingsChange) onSettingsChange(cfg);
-      setOpen(false);
+      await window.go.main.App.SaveSettings(next);
+      if (onSettingsChange) onSettingsChange(next);
+      return true;
     } catch (err) {
-      console.error('[settings]', err);
-    } finally {
-      setSaving(false);
+      toast.error('保存失败', { description: String(err) });
+      return false;
     }
   }, [cfg, onSettingsChange]);
 
+  // 自动同步间隔：选择即保存
+  const saveAutoSync = useCallback(async (v) => {
+    setSavingAutoSync(true);
+    await persist({ autoSyncMinutes: Number(v) });
+    setSavingAutoSync(false);
+  }, [persist]);
+
+  // CC-Switch 路径：点"保存"按钮提交
+  const savePath = useCallback(async () => {
+    setSavingPath(true);
+    const ok = await persist({});
+    if (ok) toast.success('CC-Switch 路径已保存');
+    setSavingPath(false);
+  }, [persist]);
+
   const detectDB = useCallback(async () => {
     setDetecting(true);
-    setDetectMsg(null);
     try {
       const path = await window.go.main.App.DetectCCSwitchDB();
       if (path) {
         setCfg(c => ({ ...c, ccSwitchDBPath: path }));
-        setDetectMsg({ type: 'success', text: '已自动检测到数据库路径' });
+        toast.success('已自动检测到数据库路径，点击"保存"生效');
       } else {
-        setDetectMsg({ type: 'info', text: '未找到默认路径，请手动填写' });
+        toast('未找到默认路径，请手动填写', { description: '默认路径为 ~/.cc-switch/cc-switch.db' });
       }
     } catch (err) {
-      setDetectMsg({ type: 'error', text: '检测失败：' + String(err) });
+      toast.error('检测失败', { description: String(err) });
     } finally {
       setDetecting(false);
     }
   }, []);
 
-  const [pricingUpdating, setPricingUpdating] = useState(false);
-  const [pricingMsg, setPricingMsg] = useState(null);
-  const [clearConfirm, setClearConfirm] = useState(false);
-  const [clearing, setClearing] = useState(false);
-  const [clearMsg, setClearMsg] = useState(null);
-
-  const clearAll = useCallback(async () => {
-    setClearing(true);
-    setClearMsg(null);
+  // 操作执行：确认弹窗 → 执行 → toast 反馈
+  const confirmAndRun = useCallback(async () => {
+    setBusy(true);
     try {
-      await window.go.main.App.ClearAllData();
-      setClearMsg({ type: 'success', text: '已清除所有历史数据' });
-      setClearConfirm(false);
-      if (onClear) onClear();
-    } catch (err) {
-      setClearMsg({ type: 'error', text: '清除失败：' + String(err) });
-    } finally {
-      setClearing(false);
-    }
-  }, [onClear]);
-
-  const updatePricing = useCallback(async () => {
-    setPricingUpdating(true);
-    setPricingMsg(null);
-    try {
-      const result = await window.go.main.App.UpdatePricing();
-      if (result.error) {
-        setPricingMsg({ type: 'error', text: result.error });
-      } else {
-        setPricingMsg({ type: 'success', text: '更新成功：' + result.message });
+      switch (confirmAction) {
+        case 'fullSync': {
+          await onFullSync();
+          toast.success('全量同步已启动', { description: '重读所有数据源，可在顶栏查看进度' });
+          break;
+        }
+        case 'updatePricing': {
+          const result = await window.go.main.App.UpdatePricing();
+          if (result.error) {
+            toast.error('价格更新失败', { description: result.error });
+          } else {
+            toast.success('价格更新成功', {
+              description: result.message || `LiteLLM ${result.litellm} 条`,
+            });
+          }
+          break;
+        }
+        case 'clear': {
+          await window.go.main.App.ClearAllData();
+          if (onClear) onClear();
+          toast.success('已清除所有历史数据');
+          break;
+        }
       }
+      setConfirmAction(null);
     } catch (err) {
-      setPricingMsg({ type: 'error', text: '更新失败：' + String(err) });
+      toast.error('操作失败', { description: String(err) });
     } finally {
-      setPricingUpdating(false);
+      setBusy(false);
     }
-  }, []);
+  }, [confirmAction, onFullSync, onClear]);
+
+  const operationDescs = {
+    fullSync: {
+      title: '全量同步',
+      danger: false,
+      confirmText: '开始同步',
+      busyText: '同步中…',
+      description: '将重读所有数据源（Claude Code / Codex / Gemini / OpenClaw / CC-Switch / OpenCode 等），耗时较长。确定执行？',
+    },
+    updatePricing: {
+      title: '更新价格数据',
+      danger: false,
+      confirmText: '更新',
+      busyText: '更新中…',
+      description: '将从远程源（LiteLLM）拉取最新模型定价并重载。确定执行？',
+    },
+    clear: {
+      title: '清除所有历史数据',
+      danger: true,
+      confirmText: '确认清除',
+      busyText: '清除中…',
+      description: '将清除所有用量数据、采集记录和缓存（含 CC-Switch 检查点），此操作不可撤销。确定继续？',
+    },
+  };
+
+  const confirm = operationDescs[confirmAction];
 
   return (
     <>
@@ -116,96 +184,103 @@ export default function SettingsDialog({ onSettingsChange, onClear }) {
             </div>
           ) : (
             <div className="space-y-4 py-2">
-              {/* 同步间隔 */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">自动同步间隔</label>
-                <Select value={String(cfg.autoSyncMinutes)} onValueChange={v => setCfg(c => ({ ...c, autoSyncMinutes: Number(v) }))}>
-                  <SelectTrigger className="w-full h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent side="bottom" align="start">
-                    <SelectItem value="1">每 1 分钟</SelectItem>
-                    <SelectItem value="5">每 5 分钟</SelectItem>
-                    <SelectItem value="10">每 10 分钟</SelectItem>
-                    <SelectItem value="15">每 15 分钟</SelectItem>
-                    <SelectItem value="30">每 30 分钟</SelectItem>
-                    <SelectItem value="0">不同步</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-medium text-muted-foreground mb-3">CC-Switch 集成</h4>
-
-                <div className="space-y-1.5 mb-3">
-                  <label className="text-xs font-medium text-muted-foreground">数据库路径</label>
-                  <div className="flex gap-2">
-                    <input
-                      value={cfg.ccSwitchDBPath}
-                      onChange={e => setCfg(c => ({ ...c, ccSwitchDBPath: e.target.value }))}
-                      placeholder="例: C:\Users\用户名\.cc-switch\cc-switch.db"
-                      className="flex-1 h-8 px-2 text-xs rounded-lg border border-input bg-transparent outline-none focus-visible:border-ring"
-                    />
-                    <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={detectDB} disabled={detecting}>
-                      {detecting ? '检测中…' : '检测'}
-                    </Button>
+              {/* 常规配置 */}
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground mb-3">常规配置</h4>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">自动同步间隔</label>
+                    <Select value={String(cfg.autoSyncMinutes)} onValueChange={saveAutoSync} disabled={savingAutoSync}>
+                      <SelectTrigger className="w-full h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent side="bottom" align="start">
+                        <SelectItem value="1">每 1 分钟</SelectItem>
+                        <SelectItem value="5">每 5 分钟</SelectItem>
+                        <SelectItem value="10">每 10 分钟</SelectItem>
+                        <SelectItem value="15">每 15 分钟</SelectItem>
+                        <SelectItem value="30">每 30 分钟</SelectItem>
+                        <SelectItem value="0">不同步</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {savingAutoSync && <p className="text-xs text-muted-foreground">保存中…</p>}
                   </div>
-                  {detectMsg && (
-                    <p className={`text-xs mt-1 ${detectMsg.type === 'success' ? 'text-green-600' : detectMsg.type === 'error' ? 'text-red-500' : 'text-muted-foreground'}`}>
-                      {detectMsg.text}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-medium text-muted-foreground mb-3">价格数据</h4>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={updatePricing} disabled={pricingUpdating}>
-                    {pricingUpdating ? '更新中…' : '更新价格'}
-                  </Button>
-                  {pricingUpdating && <span className="text-xs text-muted-foreground">正在从 LiteLLM 获取…</span>}
-                </div>
-                {pricingMsg && (
-                  <p className={`text-xs mt-2 ${pricingMsg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
-                    {pricingMsg.text}
-                  </p>
-                )}
-              </div>
-
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-medium text-muted-foreground mb-3 text-red-500">危险操作</h4>
-                {!clearConfirm ? (
-                  <Button size="sm" variant="outline" className="h-8 text-xs border-red-300 text-red-500 hover:bg-red-50" onClick={() => { setClearConfirm(true); setClearMsg(null); }}>
-                    <TriangleAlertIcon className="size-3 mr-1" />
-                    清除所有历史数据
-                  </Button>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-xs text-red-500 font-medium">确认清除所有用量数据、采集记录和缓存？此操作不可撤销。</p>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">CC-Switch 数据库路径</label>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setClearConfirm(false)} disabled={clearing}>取消</Button>
-                      <Button size="sm" className="h-8 text-xs bg-red-500 hover:bg-red-600 text-white" onClick={clearAll} disabled={clearing}>
-                        {clearing ? '清除中…' : '确认清除'}
+                      <input
+                        value={cfg.ccSwitchDBPath}
+                        onChange={e => setCfg(c => ({ ...c, ccSwitchDBPath: e.target.value }))}
+                        placeholder="例: C:\Users\用户名\.cc-switch\cc-switch.db"
+                        className="flex-1 h-8 px-2 text-xs rounded-lg border border-input bg-transparent outline-none focus-visible:border-ring"
+                      />
+                      <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={detectDB} disabled={detecting}>
+                        {detecting ? '检测中…' : '检测'}
+                      </Button>
+                      <Button size="sm" className="h-8 text-xs shrink-0" onClick={savePath} disabled={savingPath}>
+                        {savingPath ? '保存中…' : '保存'}
                       </Button>
                     </div>
                   </div>
-                )}
-                {clearMsg && (
-                  <p className={`text-xs mt-2 ${clearMsg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
-                    {clearMsg.text}
-                  </p>
-                )}
+                </div>
+              </div>
+
+              {/* 数据操作 */}
+              <div className="border-t pt-4">
+                <h4 className="text-xs font-medium text-muted-foreground mb-3">数据操作</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-medium">全量同步</p>
+                      <p className="text-xs text-muted-foreground">重读所有数据源，耗时较长</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={() => setConfirmAction('fullSync')} disabled={fullSyncing}>
+                      {fullSyncing ? '同步中…' : '执行'}
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-medium">更新价格数据</p>
+                      <p className="text-xs text-muted-foreground">从 LiteLLM 拉取最新定价</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={() => setConfirmAction('updatePricing')}>
+                      执行
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-medium text-red-600">清除所有历史数据</p>
+                      <p className="text-xs text-muted-foreground">删除全部用量与缓存，不可撤销</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="h-8 text-xs shrink-0 border-red-300 text-red-500 hover:bg-red-50" onClick={() => setConfirmAction('clear')}>
+                      <TriangleAlertIcon className="size-3 mr-1" />
+                      执行
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
           <div className="flex justify-end gap-2 pt-2 border-t">
-            <Button size="sm" variant="outline" onClick={() => setOpen(false)}>取消</Button>
-            <Button size="sm" onClick={save} disabled={saving || !cfg}>{saving ? '保存中…' : '保存'}</Button>
+            <Button size="sm" variant="outline" onClick={() => setOpen(false)}>关闭</Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 操作确认弹窗 */}
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.title}
+          description={confirm.description}
+          danger={confirm.danger}
+          confirmText={confirm.confirmText}
+          busyText={confirm.busyText}
+          busy={busy}
+          onConfirm={confirmAndRun}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
     </>
   );
 }

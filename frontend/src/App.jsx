@@ -10,6 +10,7 @@ import { useSettings } from './hooks/useSettings.js';
 import { FilterProvider } from './store/filterStore.jsx';
 import { formatTs } from './lib/formatters.js';
 import { Button } from './components/ui/button.jsx';
+import { Toaster } from './components/ui/sonner.jsx';
 import Header from './components/layout/Header.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import TablePage from './pages/TablePage.jsx';
@@ -33,7 +34,7 @@ function AppContent() {
     } catch { /* ignore */ }
   }, [dark]);
   const { M, loadError, refreshing, fetchData, allSources, allModels, heatmapData } = useDashboardData();
-  const { collecting, runCollect } = useCollection(fetchData);
+  const { collecting, runCollect, runFullCollect } = useCollection(fetchData);
   const { handleSettingsChange } = useSettings(fetchData);
 
   const onClearData = useCallback(() => {
@@ -68,6 +69,8 @@ function AppContent() {
         onRefresh={fetchData}
         onClearData={onClearData}
         onSettingsChange={handleSettingsChange}
+        onFullSync={runFullCollect}
+        fullSyncing={collecting}
         dark={dark}
         onToggleDark={() => setDark(d => !d)}
       />
@@ -92,6 +95,7 @@ export default function App() {
   return (
     <FilterProvider>
       <AppContent />
+      <Toaster position="top-right" />
     </FilterProvider>
   );
 }

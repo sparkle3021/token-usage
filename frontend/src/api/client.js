@@ -78,11 +78,6 @@ export function detectCCSwitchDB() {
   return window.go.main.App.DetectCCSwitchDB();
 }
 
-/** 执行 CC-Switch 数据库导入 */
-export function importCCSwitchDB() {
-  return window.go.main.App.ImportCCSwitchDB();
-}
-
 // ── 用量查询 API ──
 
 /** 获取所有用量查询配置 */

@@ -32,8 +32,6 @@ export function GetSettings():Promise<model.AppConfig>;
 
 export function GetTimeSeriesData(arg1:number):Promise<model.TimeSeriesData>;
 
-export function ImportCCSwitchDB():Promise<model.CCSwitchImportResult>;
-
 export function ListQuotaConfigs():Promise<Array<model.QuotaConfig>>;
 
 export function SaveSettings(arg1:model.AppConfig):Promise<void>;

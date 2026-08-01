@@ -131,10 +131,9 @@ type CCSwitchImportResult struct {
 
 // PricingUpdateResult is returned by UpdatePricing.
 type PricingUpdateResult struct {
-	Litellm    int    `json:"litellm"`
-	OpenRouter int    `json:"openrouter"`
-	Message    string `json:"message"`
-	Error      string `json:"error,omitempty"`
+	Litellm int    `json:"litellm"`
+	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
 }
 
 // ── 用量查询（Quota）相关结构体 ──

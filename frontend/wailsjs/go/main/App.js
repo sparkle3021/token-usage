@@ -62,10 +62,6 @@ export function GetTimeSeriesData(arg1) {
   return window['go']['main']['App']['GetTimeSeriesData'](arg1);
 }
 
-export function ImportCCSwitchDB() {
-  return window['go']['main']['App']['ImportCCSwitchDB']();
-}
-
 export function ListQuotaConfigs() {
   return window['go']['main']['App']['ListQuotaConfigs']();
 }
