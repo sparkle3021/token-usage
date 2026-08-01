@@ -4,8 +4,6 @@ package service
 import (
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"strconv"
 
 	"token-dashboard/internal/config"
@@ -38,14 +36,12 @@ func (s *SettingService) GetSettings() model.AppConfig {
 	}
 
 	if result.CCSwitchDBPath == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			defaultPath := filepath.Join(home, ".cc-switch", "cc-switch.db")
-			if _, err := os.Stat(defaultPath); err == nil {
-				result.CCSwitchDBPath = defaultPath
-				log.Printf("[service] GetSettings auto-detected cc-switch db at %s", defaultPath)
-			} else {
-				log.Printf("[service] GetSettings cc-switch db not found at %s", defaultPath)
-			}
+		path, exists := config.CCSwitchDefaultPath()
+		if exists {
+			result.CCSwitchDBPath = path
+			log.Printf("[service] GetSettings auto-detected cc-switch db at %s", path)
+		} else {
+			log.Printf("[service] GetSettings cc-switch db not found at %s", path)
 		}
 	}
 

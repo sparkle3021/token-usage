@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"token-dashboard/internal/config/seed"
+	"token-dashboard/internal/assets"
 )
 
 // Config 应用配置，从环境变量和默认值加载。
@@ -60,8 +60,8 @@ func ensurePricingDefaults(dataDir string) {
 	}
 
 	defaults := map[string][]byte{
-		"pricing-litellm.json":   seed.PricingLitellm,
-		"pricing-openrouter.json": seed.PricingOpenRouter,
+		"pricing-litellm.json":   assets.PricingLitellm,
+		"pricing-openrouter.json": assets.PricingOpenRouter,
 	}
 
 	for name, data := range defaults {
@@ -85,6 +85,18 @@ func getEnvInt(key string, def int) int {
 		}
 	}
 	return def
+}
+
+// CCSwitchDefaultPath 返回 CC-Switch 数据库的默认路径（~/.cc-switch/cc-switch.db），
+// 并检测该路径是否存在。三处使用方（app startup、设置服务、导入服务）共用此 helper。
+func CCSwitchDefaultPath() (path string, exists bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	path = filepath.Join(home, ".cc-switch", "cc-switch.db")
+	_, err = os.Stat(path)
+	return path, err == nil
 }
 
 func AtoiDef(s string, def int) int {

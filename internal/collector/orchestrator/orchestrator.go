@@ -86,7 +86,6 @@ func New(db *database.Manager, pr *pricing.Engine) *Engine {
 	}
 	log.Printf("[engine] New parallelism=%d collectors=%d", e.parallelism, len(e.collectors))
 
-	_ = (*pricingEngine)(nil) // compile check
 	return e
 }
 
@@ -301,7 +300,7 @@ func (e *Engine) runCollection() {
 			errMsg := fmt.Sprintf("[%s] %v", r.col.Source(), r.err)
 			stderr += errMsg + "\n"
 			log.Printf("[collector] %s", errMsg)
-			e.db.RecordRun(hostname(), r.col.Source(), "error", r.err.Error(), "go-collector:"+r.col.ID())
+			e.db.RecordRun(collector.Hostname(), r.col.Source(), "error", r.err.Error(), "go-collector:"+r.col.ID())
 			e.emit("collector:done", map[string]interface{}{
 				"source": r.col.Source(), "status": "error", "error": r.err.Error(),
 			})
@@ -340,7 +339,7 @@ func (e *Engine) runCollection() {
 		Status: status, Message: msg,
 		StartedAt: &startedAt, FinishedAt: &finishedAt,
 		ExitCode: &exitCode,
-		Stderr: truncateStr(stderr, 12000),
+		Stderr: database.TruncateStr(stderr, 12000),
 	}
 	e.mu.Unlock()
 	e.release("collection")
@@ -542,32 +541,10 @@ func eventsToModel(device, source string, rows []collector.EventRow) []model.Tim
 	return out
 }
 
-func hostname() string {
-	h, err := os.Hostname()
-	if err != nil {
-		return "unknown"
-	}
-	return h
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-
-func strPtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-func truncateStr(s string, max int) string {
-	if len(s) > max {
-		return s[len(s)-max:]
-	}
-	return s
-}
 
 func mustParseRFC3339(s string) time.Time {
 	t, err := time.Parse(time.RFC3339, s)

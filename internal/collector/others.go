@@ -267,7 +267,7 @@ func (c *OpenClawCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	if c.cache.AllCached(allFiles) {
 		debuglog.Perf("OpenClaw AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] OpenClaw all files cached, skipping")
-		return &CollectResult{Device: hostname(), Source: "OpenClaw", Cached: true}, nil
+		return &CollectResult{Device: Hostname(), Source: "OpenClaw", Cached: true}, nil
 	}
 	debuglog.Perf("OpenClaw AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
@@ -386,11 +386,11 @@ func (c *OpenClawCollector) parseFile(fp string) []openclawRecord {
 // ---------------------------------------------------------------------------
 
 func emptyResult(id, source string) *CollectResult {
-	return &CollectResult{Device: hostname(), Source: source}
+	return &CollectResult{Device: Hostname(), Source: source}
 }
 
 func buildResult(id, source string, dailyMap map[string]*dailyAgg, sessionMap map[string]*sessionAgg, events []EventRow) *CollectResult {
-	r := &CollectResult{Device: hostname(), Source: source}
+	r := &CollectResult{Device: Hostname(), Source: source}
 
 	for _, agg := range dailyMap {
 		r.Daily = append(r.Daily, DailyRow{

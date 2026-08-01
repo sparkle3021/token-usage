@@ -89,7 +89,7 @@ func (m *Manager) Exec(query string, args ...any) (sql.Result, error) {
 	start := time.Now()
 	result, err := m.db.Exec(query, args...)
 	if err != nil {
-		log.Printf("[db] Exec error query=%s err=%v", truncateStr(query, 80), err)
+		log.Printf("[db] Exec error query=%s err=%v", TruncateStr(query, 80), err)
 	} else {
 		n, _ := result.RowsAffected()
 		log.Printf("[db] Exec ok rows=%d elapsed=%v", n, time.Since(start))

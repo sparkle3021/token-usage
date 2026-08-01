@@ -56,7 +56,7 @@ func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*Colle
 	if c.cache.AllCached(allFiles) {
 		debuglog.Perf("Codex AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] Codex all files cached, skipping")
-		return &CollectResult{Device: hostname(), Source: "Codex CLI", Cached: true}, nil
+		return &CollectResult{Device: Hostname(), Source: "Codex CLI", Cached: true}, nil
 	}
 	debuglog.Perf("Codex AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 

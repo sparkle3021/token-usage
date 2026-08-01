@@ -72,7 +72,7 @@ func (c *ClaudeCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*
 	if c.cache.AllCached(allFiles) {
 		debuglog.Perf("ClaudeCode AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] ClaudeCode all files cached, skipping")
-		return &CollectResult{Device: hostname(), Source: claudeSourceLabel, Cached: true}, nil
+		return &CollectResult{Device: Hostname(), Source: claudeSourceLabel, Cached: true}, nil
 	}
 	debuglog.Perf("ClaudeCode AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
@@ -93,7 +93,7 @@ func (c *ClaudeCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*
 		}
 	}
 
-	result := &CollectResult{Device: hostname(), Source: claudeSourceLabel}
+	result := &CollectResult{Device: Hostname(), Source: claudeSourceLabel}
 	for _, agg := range dailyMap {
 		result.Daily = append(result.Daily, DailyRow{
 			UsageDate: agg.date, Model: agg.model,

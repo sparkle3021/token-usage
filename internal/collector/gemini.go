@@ -81,7 +81,7 @@ func (c *GeminiCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 	if c.cache.AllCached(allFiles) {
 		debuglog.Perf("Gemini AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] Gemini all files cached, skipping")
-		return &CollectResult{Device: hostname(), Source: "Gemini CLI", Cached: true}, nil
+		return &CollectResult{Device: Hostname(), Source: "Gemini CLI", Cached: true}, nil
 	}
 	debuglog.Perf("Gemini AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 

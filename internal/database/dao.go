@@ -104,10 +104,12 @@ func nullIfEmpty(s string) *string {
 }
 
 func truncateID(s string) string {
-	return truncateStr(s, 60)
+	return TruncateStr(s, 60)
 }
 
-func truncateStr(s string, max int) string {
+// TruncateStr 截断字符串到 max 长度并追加省略号，用于日志输出的长字段截断。
+// 供 database 及 orchestrator 等包共用（避免重复实现）。
+func TruncateStr(s string, max int) string {
 	if len(s) > max {
 		return s[:max] + "..."
 	}

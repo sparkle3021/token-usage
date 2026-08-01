@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
 	"token-dashboard/internal/collector/orchestrator"
 	"token-dashboard/internal/config"
@@ -82,14 +81,11 @@ func (a *App) startup(ctx context.Context) {
 	if a.db != nil {
 		existing, _ := a.db.GetConfig("cc_switch_db_path")
 		if existing == "" {
-			if home, err := os.UserHomeDir(); err == nil {
-				defaultPath := filepath.Join(home, ".cc-switch", "cc-switch.db")
-				if _, err := os.Stat(defaultPath); err == nil {
-					a.db.SetConfig("cc_switch_db_path", defaultPath)
-					log.Printf("[app] startup auto-detected cc-switch db at %s", defaultPath)
-				} else {
-					log.Printf("[app] startup cc-switch db not found at %s", defaultPath)
-				}
+			if path, exists := config.CCSwitchDefaultPath(); exists {
+				a.db.SetConfig("cc_switch_db_path", path)
+				log.Printf("[app] startup auto-detected cc-switch db at %s", path)
+			} else {
+				log.Printf("[app] startup cc-switch db not found at %s", path)
 			}
 		}
 
