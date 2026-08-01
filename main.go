@@ -40,9 +40,9 @@ func main() {
 	err := wails.Run(&options.App{
 		Title:     "TokenUsage",
 		Width:     900,
-		Height:    600,
+		Height:    620,
 		MinWidth:  900,
-		MinHeight: 600,
+		MinHeight: 620,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

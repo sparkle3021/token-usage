@@ -9,5 +9,10 @@
   "author": {
     "name": "十八",
     "email": "mengjiao.cn@outlook.com"
+  },
+  "info": {
+    "productName": "TokenUsage",
+    "productVersion": "0.2.0",
+    "copyright": "Copyright © 2026 十八"
   }
 }
