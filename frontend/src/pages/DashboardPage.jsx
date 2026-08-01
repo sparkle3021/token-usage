@@ -65,23 +65,33 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       hd[h].reason += r.reasoningOutputTokens || 0; hd[h].cost += r.costUSD || 0;
     }
 
-    const covered = new Set(filteredTime.filter(r => r.usageDate === todayStr).map(r => r.source));
+    // covered 按 (source, hour) 粒度：仅当 time_usage 已有该来源该小时的事件时，
+    // 才跳过 hour_usage 的对应行，避免整源跳过导致同步后的新小时数据被丢弃
+    const covered = new Set(
+      filteredTime
+        .filter(r => r.usageDate === todayStr)
+        .map(r => {
+          const d = new Date(r.eventTime);
+          return isNaN(d.getTime()) ? null : `${r.source}::${d.getHours()}`;
+        })
+        .filter(Boolean),
+    );
     for (const r of filteredHour) {
-      if (r.usageDate !== todayStr || covered.has(r.source)) continue;
+      if (r.usageDate !== todayStr || covered.has(`${r.source}::${r.hour}`)) continue;
       const h = r.hour;
       hd[h].total += r.totalTokens || 0; hd[h].input += r.inputTokens || 0;
       hd[h].output += r.outputTokens || 0; hd[h].cacheRd += r.cacheReadTokens || 0;
       hd[h].reason += r.reasoningOutputTokens || 0; hd[h].cost += r.costUSD || 0;
-      covered.add(r.source);
+      covered.add(`${r.source}::${r.hour}`);
     }
 
     const curHour = new Date().getHours();
     for (const r of filtered) {
-      if (r.usageDate !== todayStr || covered.has(r.source)) continue;
+      if (r.usageDate !== todayStr || covered.has(`${r.source}::${curHour}`)) continue;
       hd[curHour].total += r.totalTokens || 0; hd[curHour].input += r.inputTokens || 0;
       hd[curHour].output += r.outputTokens || 0; hd[curHour].cacheRd += r.cacheReadTokens || 0;
       hd[curHour].reason += r.reasoningOutputTokens || 0; hd[curHour].cost += r.costUSD || 0;
-      covered.add(r.source);
+      covered.add(`${r.source}::${curHour}`);
     }
 
     return {

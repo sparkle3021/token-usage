@@ -43,6 +43,15 @@ export function useDashboardData() {
       .then(([data, tsData, sessionAggData]) => {
         if (id !== fetchIdRef.current) return; // 过期响应丢弃
         setData(data, tsData, sessionAggData);
+        // 后端 getTimeSeriesData 仅 days==1 返回 time_usage；days!=1 时补拉一次最新 time，
+        // 否则今天视图 sparkline 一直用同步前缓存的旧 time 数组
+        if (days !== 1) {
+          const tid = ++fetchIdRef.current;
+          api.getTimeSeriesData(1).then(ts => {
+            if (tid !== fetchIdRef.current) return;
+            setTime(ts.time || []);
+          }).catch(() => {});
+        }
       })
       .catch(err => { if (id === fetchIdRef.current) setLoadError(String(err)); })
       .finally(() => { if (!silent) setRefreshing(false); });
