@@ -95,6 +95,8 @@ export function buildWeeks(filledData) {
 
 /**
  * Calculate month label positions from weeks array.
+ * 末尾月份若仅占 1 列（空间不足，标签会压住格子/溢出）则跳过不显示，
+ * 与 GitHub「最右侧为上月」的展示一致。
  * @param {{{ date: string, count: number, isToday: boolean }}[][]} weeks
  * @returns {{{ col: number, label: string }}[]}
  */
@@ -107,7 +109,11 @@ export function buildMonths(weeks) {
     if (!day) continue;
     const month = parseLocalDate(day.date).getMonth();
     if (month !== prevMonth) {
-      months.push({ col, label: `${month + 1}月` });
+      // 跳过仅占 1 列的末尾月份标签（无空间容纳，且会压住格子）
+      const isLastMonth = col > 0 && col === weeks.length - 1;
+      if (!isLastMonth) {
+        months.push({ col, label: `${month + 1}月` });
+      }
       prevMonth = month;
     }
   }

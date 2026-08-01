@@ -14,7 +14,8 @@ export function useHeatmap(data = [], startDate, endDate) {
     const end = endDate || new Date(now);
     const start = startDate || (() => {
       const d = new Date(now);
-      d.setDate(d.getDate() - DEFAULT_WEEKS * 7 + 1);
+      // 52 周窗口：往前 364 天（含两端 365 个日期），与 GitHub「最近一年」对齐
+      d.setDate(d.getDate() - DEFAULT_WEEKS * 7);
       return d;
     })();
 

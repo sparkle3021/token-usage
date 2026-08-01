@@ -20,6 +20,6 @@ export const DARK_THEME = {
 
 export const CELL_SIZE = 14;
 export const GAP = 3;
-export const DEFAULT_WEEKS = 53;
+export const DEFAULT_WEEKS = 52;
 export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const DAY_LABELS = { 1: 'Mon', 3: 'Wed', 5: 'Fri' };

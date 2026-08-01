@@ -27,7 +27,7 @@ const HeatmapGrid = React.memo(function HeatmapGrid({ weeks, months, cellSize, g
     <div className="w-full flex justify-center overflow-x-auto">
       <div className="inline-flex flex-col shrink-0" style={{ gap, '--cell-size': `${cellSize}px`, '--cell-gap': `${gap}px` }}>
         {/* Month labels */}
-        <div className="flex text-[10px] text-muted-foreground" style={{ paddingLeft: labelWidth, height: 14, lineHeight: '14px', position: 'relative' }}>
+        <div className="flex text-[10px] text-muted-foreground pointer-events-none" style={{ paddingLeft: labelWidth, height: 18, lineHeight: '18px', position: 'relative' }}>
           {months.map(m => (
             <div key={m.col} className="shrink-0 absolute" style={{ left: labelWidth + m.col * slotSize }}>
               {m.label}
