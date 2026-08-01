@@ -128,7 +128,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
   };
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
       <FilterBar
         f={f}
         allSources={allSources}
@@ -213,6 +213,6 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
           </div>
         </Modal>
       )}
-    </>
+    </div>
   );
 }

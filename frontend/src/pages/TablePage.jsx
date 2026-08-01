@@ -32,7 +32,7 @@ export default function TablePage({ M, onRangeSwitch }) {
   const closeDrill = () => setDrill(null);
 
   return (
-    <div className="flex flex-col min-h-0 flex-1 space-y-4">
+    <div className="flex flex-col min-h-0 flex-1 gap-4">
       {/* Filter Bar */}
       <Card className="p-3 shrink-0 overflow-visible" styles={{ body: { padding: 12 } }}>
         <div className="flex flex-wrap items-center gap-2">
