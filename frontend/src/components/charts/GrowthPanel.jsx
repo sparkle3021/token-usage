@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card.jsx';
+import { Card } from 'antd';
 import * as U from '../../lib/utils.js';
 
 export default function GrowthPanel({ totalsByDay }) {
@@ -20,9 +20,9 @@ export default function GrowthPanel({ totalsByDay }) {
   }, [totalsByDay]);
 
   return (
-    <Card>
-      <CardHeader><CardTitle>环比与趋势</CardTitle><CardDescription>基于当前筛选周期</CardDescription></CardHeader>
-      <CardContent>
+    <Card styles={{ body: { padding: 16 } }}>
+      <div className="mb-3"><div className="text-sm font-semibold">环比与趋势</div><div className="text-xs text-muted-foreground">基于当前筛选周期</div></div>
+      <div>
         <div className="space-y-1.5">
           <Stat label="日环比 DoD" value={stats.dod} sub={`今日 ${U.compactCN(stats.today)}`} />
           <Stat label="周环比 WoW" value={stats.wow} sub={`7 日 ${U.compactCN(stats.last7)}`} />
@@ -35,7 +35,7 @@ export default function GrowthPanel({ totalsByDay }) {
             <span>峰值 <b>{stats.bestDate}</b> · {U.compactCN(stats.bestVal)} tokens</span>
           </div>
         )}
-      </CardContent>
+      </div>
     </Card>
   );
 }

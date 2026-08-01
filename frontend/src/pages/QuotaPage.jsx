@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Button } from '@/components/ui/button.jsx';
+import { Button } from 'antd';
 import { PlusIcon } from 'lucide-react';
 import {
   listQuotaConfigs, getProviderSchemas, createQuotaConfig, updateQuotaConfig,
@@ -126,8 +126,7 @@ export default function QuotaPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">用量查询</h2>
-        <Button size="sm" variant="default" className="h-8 text-xs" onClick={handleAdd}>
-          <PlusIcon className="size-3.5 mr-1" />
+        <Button type="primary" size="small" className="h-8 text-xs" onClick={handleAdd} icon={<PlusIcon className="size-3.5" />}>
           添加用量查询
         </Button>
       </div>
@@ -135,7 +134,7 @@ export default function QuotaPage() {
       {configs.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
           <p className="text-sm">暂无用量查询</p>
-          <Button size="sm" onClick={handleAdd}>添加用量查询</Button>
+          <Button type="primary" size="small" onClick={handleAdd}>添加用量查询</Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

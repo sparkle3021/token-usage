@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card.jsx';
-import { Button } from '../ui/button.jsx';
+import { Card, Button } from 'antd';
 import * as U from '../../lib/utils.js';
 import SourceIcon from '../SourceIcon.jsx';
 
@@ -111,37 +110,35 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
   ].filter(Boolean).join(' · ');
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <CardTitle>Token 使用趋势</CardTitle>
-              <CardDescription>{descParts}</CardDescription>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Granularity selector (hidden in hourly mode) */}
-              {!hasHourly && (
-                <div className="flex gap-0.5 bg-muted rounded-lg p-0.5">
-                  {GRANULARITIES.filter(g => {
-                    if (g.id === 'yearly') return dates.length > 730;
-                    return true;
-                  }).map(g => (
-                    <Button key={g.id} size="xs" variant={granularity === g.id ? 'default' : 'ghost'}
-                      onClick={() => onGranularityChange?.(g.id)}>{g.label}</Button>
-                  ))}
-                </div>
-              )}
+    <Card styles={{ body: { padding: 16 } }}>
+      <div className="flex flex-col gap-2 mb-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold">Token 使用趋势</div>
+            <div className="text-xs text-muted-foreground">{descParts}</div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Granularity selector (hidden in hourly mode) */}
+            {!hasHourly && (
               <div className="flex gap-0.5 bg-muted rounded-lg p-0.5">
-                {MODES.map(m => (
-                  <Button key={m.id} size="xs" variant={mode === m.id ? 'default' : 'ghost'} onClick={() => onModeChange(m.id)}>{m.label}</Button>
+                {GRANULARITIES.filter(g => {
+                  if (g.id === 'yearly') return dates.length > 730;
+                  return true;
+                }).map(g => (
+                  <Button key={g.id} size="small" type={granularity === g.id ? 'primary' : 'text'}
+                    className="h-6 text-xs px-2" onClick={() => onGranularityChange?.(g.id)}>{g.label}</Button>
                 ))}
               </div>
+            )}
+            <div className="flex gap-0.5 bg-muted rounded-lg p-0.5">
+              {MODES.map(m => (
+                <Button key={m.id} size="small" type={mode === m.id ? 'primary' : 'text'} className="h-6 text-xs px-2" onClick={() => onModeChange(m.id)}>{m.label}</Button>
+              ))}
             </div>
           </div>
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div>
         {activeSources.length === 0 ? (
           <div className="flex items-center justify-center" style={{ minHeight: 280, height: 'clamp(280px, 35vh, 400px)' }}>
             <span className="text-sm text-muted-foreground">当前时间范围内无数据</span>
@@ -169,7 +166,7 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
           </ResponsiveContainer>
         </div>
         )}
-      </CardContent>
+      </div>
     </Card>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card.jsx';
+import { Card } from 'antd';
 import * as U from '../../lib/utils.js';
 import SourceIcon from '../SourceIcon.jsx';
 
@@ -19,15 +19,12 @@ export default function SourceDonut({ rows, focused, onFocusSource }) {
   const topPct = data[0] && sum ? ((data[0].value / sum) * 100).toFixed(0) : 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>来源占比</CardTitle>
-          <CardDescription className="text-right max-w-[160px]">点击聚焦 · 顶部贡献 {topPct}%</CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col items-center gap-3">
+    <Card styles={{ body: { padding: 16 } }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-semibold">来源占比</div>
+        <div className="text-xs text-muted-foreground text-right max-w-[160px]">点击聚焦 · 顶部贡献 {topPct}%</div>
+      </div>
+      <div className="flex flex-col items-center gap-3">
           <div className="relative" style={{ width: 220, height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -54,7 +51,6 @@ export default function SourceDonut({ rows, focused, onFocusSource }) {
             ))}
           </div>
         </div>
-      </CardContent>
     </Card>
   );
 }

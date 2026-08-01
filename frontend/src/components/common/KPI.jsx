@@ -2,7 +2,7 @@
  * KPI 卡片组件，展示指标数值、环比变化和迷你趋势图（SparkLine）。
  */
 
-import { Card, CardContent } from '../ui/card.jsx';
+import { Card } from 'antd';
 
 /** 环比变化标，绿色 ↑（增长）、红色 ↓（下降）、灰色 ·（持平） */
 function DeltaBadge({ value }) {
@@ -32,9 +32,8 @@ function SparkLine({ values, color }) {
  */
 export default function KPI({ label, value, sub, delta, subDelta, spark, color }) {
   return (
-    <Card className="relative overflow-hidden">
-      <CardContent className="pt-4 px-4 pb-4">
-        <div className="text-[11px] text-muted-foreground font-medium mb-1.5">{label}</div>
+    <Card className="relative overflow-hidden" styles={{ body: { padding: 16 } }}>
+      <div className="text-[11px] text-muted-foreground font-medium mb-1.5">{label}</div>
         {sub ? (
           <>
             <div className="flex items-baseline gap-3">
@@ -55,7 +54,6 @@ export default function KPI({ label, value, sub, delta, subDelta, spark, color }
           </>
         )}
         {spark && spark.length > 1 && <SparkLine values={spark} color={color} />}
-      </CardContent>
     </Card>
   );
 }

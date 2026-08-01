@@ -3,20 +3,21 @@
  */
 
 import { ranges } from '../../store/filterStore.jsx';
-import { Card } from '../ui/card.jsx';
-import { Tabs, TabsList, TabsTrigger } from '../ui/tabs.jsx';
-import { Button } from '../ui/button.jsx';
+import { Card, Tabs, Button } from 'antd';
 import SourceBadge from '../SourceBadge.jsx';
 import MultiSelect from '../MultiSelect.jsx';
 
 export default function FilterBar({ f, allSources, allModels, onSetRange, onToggleSource, onSetModels, onToggleCompare }) {
   return (
-    <Card className="p-3 overflow-visible">
+    <Card className="p-3 overflow-visible" styles={{ body: { padding: 12 } }}>
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">时间</span>
-        <Tabs value={f.rangeId} onValueChange={onSetRange}>
-          <TabsList>{ranges.map(r => <TabsTrigger key={r.id} value={r.id} className="text-xs px-2.5">{r.label}</TabsTrigger>)}</TabsList>
-        </Tabs>
+        <Tabs
+          activeKey={f.rangeId}
+          onChange={onSetRange}
+          size="small"
+          items={ranges.map(r => ({ key: r.id, label: <span className="text-xs px-1">{r.label}</span> }))}
+        />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-1">来源</span>
@@ -27,7 +28,7 @@ export default function FilterBar({ f, allSources, allModels, onSetRange, onTogg
       <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t">
         <MultiSelect items={allModels} selected={f.models} onChange={onSetModels} placeholder="全部模型" />
         <div className="flex-1" />
-        <Button size="sm" variant={f.compare ? 'default' : 'outline'} onClick={onToggleCompare}>
+        <Button size="small" type={f.compare ? 'primary' : 'default'} onClick={onToggleCompare}>
           对比
         </Button>
       </div>

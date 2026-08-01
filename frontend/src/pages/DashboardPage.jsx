@@ -15,7 +15,7 @@ import TrendChart from '../components/charts/TrendChart.jsx';
 import TopModels from '../components/charts/TopModels.jsx';
 import Heatmap from '../components/charts/Heatmap/Heatmap.jsx';
 import HeatmapDrillDialog from './dashboard/HeatmapDrillDialog.jsx';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog.jsx';
+import { Modal } from 'antd';
 import SourceIcon from '../components/SourceIcon.jsx';
 
 export default function DashboardPage({ M, allSources, allModels, heatmapData, onRefresh }) {
@@ -162,50 +162,55 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       {heatmapDate && <HeatmapDrillDialog date={heatmapDate} daily={M?.daily} timeRows={M?.time} hourRows={M?.hour} onClose={() => setHeatmapDate(null)} />}
 
       {topModelDrill && (
-        <Dialog open onOpenChange={o => { if (!o) setTopModelDrill(null); }}>
-          <DialogContent className="sm:max-w-lg min-h-[280px] max-h-[85vh] overflow-hidden flex flex-col" showCloseButton>
-            <DialogTitle className="sr-only">{topModelDrill.model} 详情</DialogTitle>
-            <DialogDescription className="sr-only">模型用量详情</DialogDescription>
+        <Modal
+          open
+          onCancel={() => setTopModelDrill(null)}
+          title={null}
+          width={520}
+          styles={{ body: { maxHeight: 'calc(85vh - 120px)', minHeight: 280, overflowY: 'auto' } }}
+          footer={null}
+        >
+          <h3 className="sr-only">{topModelDrill.model} 详情</h3>
+          <p className="sr-only">模型用量详情</p>
 
-            <div className="mb-4 shrink-0">
-              <div className="text-xs text-muted-foreground mb-0.5">模型详情</div>
-              <h3 className="text-sm font-semibold">{topModelDrill.model}</h3>
-            </div>
+          <div className="mb-4 shrink-0">
+            <div className="text-xs text-muted-foreground mb-0.5">模型详情</div>
+            <h3 className="text-sm font-semibold">{topModelDrill.model}</h3>
+          </div>
 
-            <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
-              <span>总 Token <strong className="text-foreground">{U.compactCN(topModelDrill.total)}</strong></span>
-              <span>费用 <strong className="text-foreground">${(topModelDrill.cost || 0).toFixed(2)}</strong></span>
-              <span>活跃 <strong className="text-foreground">{topModelDrill.dayCount}</strong> 天</span>
-            </div>
+          <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
+            <span>总 Token <strong className="text-foreground">{U.compactCN(topModelDrill.total)}</strong></span>
+            <span>费用 <strong className="text-foreground">${(topModelDrill.cost || 0).toFixed(2)}</strong></span>
+            <span>活跃 <strong className="text-foreground">{topModelDrill.dayCount}</strong> 天</span>
+          </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-subtle">
-            {topModelDrill.sources?.length > 0 && (
-              <div className="space-y-1.5">
-                {topModelDrill.sources.map(s => {
-                  const pct = (s.total / topModelDrill.total * 100);
-                  return (
-                    <div key={s.source} className="grid grid-cols-[1fr_auto] items-center gap-3 px-1.5 py-1.5">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <SourceIcon name={s.source} className="w-3.5 h-3.5 shrink-0" />
-                          <span className="text-xs font-medium truncate">{s.source}</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">
-                          <div className="h-full" style={{ width: `${pct}%`, background: U.getSourceColor(s.source) }} />
-                        </div>
+          <div className="overflow-y-auto scrollbar-subtle">
+          {topModelDrill.sources?.length > 0 && (
+            <div className="space-y-1.5">
+              {topModelDrill.sources.map(s => {
+                const pct = (s.total / topModelDrill.total * 100);
+                return (
+                  <div key={s.source} className="grid grid-cols-[1fr_auto] items-center gap-3 px-1.5 py-1.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <SourceIcon name={s.source} className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-xs font-medium truncate">{s.source}</span>
                       </div>
-                      <div className="text-right shrink-0">
-                        <div className="text-xs font-semibold tabular-nums">{U.compactCN(s.total)}</div>
-                        <div className="text-[10px] text-muted-foreground tabular-nums">{pct.toFixed(1)}%</div>
+                      <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">
+                        <div className="h-full" style={{ width: `${pct}%`, background: U.getSourceColor(s.source) }} />
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                    <div className="text-right shrink-0">
+                      <div className="text-xs font-semibold tabular-nums">{U.compactCN(s.total)}</div>
+                      <div className="text-[10px] text-muted-foreground tabular-nums">{pct.toFixed(1)}%</div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </DialogContent>
-        </Dialog>
+          )}
+          </div>
+        </Modal>
       )}
     </>
   );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '../../ui/tooltip.jsx';
+import { Tooltip } from 'antd';
 import { formatTooltip } from './utils.js';
 
 /**
@@ -15,26 +15,24 @@ const HeatmapCell = React.memo(function HeatmapCell({ day, size, getColor, onSel
   const tooltipText = formatTooltip(date, count ?? 0);
 
   return (
-    <Tooltip>
-      <TooltipTrigger>
-        <div
-          className="cursor-pointer transition-none"
-          style={{
-            width: size,
-            height: size,
-            backgroundColor: color,
-            borderRadius: Math.max(1, size * 0.12) + 'px',
-            ...(today ? { border: '1px solid rgba(255,255,255,0.4)', outline: '1px solid rgba(255,255,255,0.2)' } : {}),
-          }}
-          onClick={() => onSelect?.(date)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter') onSelect?.(date); }}
-        />
-      </TooltipTrigger>
-      <TooltipContent side="top" align="center">
-        <pre className="text-center whitespace-pre-line leading-tight">{tooltipText}</pre>
-      </TooltipContent>
+    <Tooltip
+      title={<pre className="text-center whitespace-pre-line leading-tight">{tooltipText}</pre>}
+      placement="top"
+    >
+      <div
+        className="cursor-pointer transition-none"
+        style={{
+          width: size,
+          height: size,
+          backgroundColor: color,
+          borderRadius: Math.max(1, size * 0.12) + 'px',
+          ...(today ? { border: '1px solid rgba(255,255,255,0.4)', outline: '1px solid rgba(255,255,255,0.2)' } : {}),
+        }}
+        onClick={() => onSelect?.(date)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter') onSelect?.(date); }}
+      />
     </Tooltip>
   );
 });

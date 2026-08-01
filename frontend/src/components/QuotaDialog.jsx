@@ -1,9 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog.jsx';
-import { Button } from '@/components/ui/button.jsx';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
+import { Modal, Select } from 'antd';
 import { HelpCircleIcon } from 'lucide-react';
 
 /** 各供应商的帮助提示 */
@@ -80,82 +76,77 @@ export default function QuotaDialog({ open, onOpenChange, schemas, editCfg, onSa
   const canSave = provider && currentSchema;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? '编辑用量查询' : '添加用量查询'}</DialogTitle>
-        </DialogHeader>
+    <Modal
+      open={open}
+      onCancel={() => onOpenChange(false)}
+      onOk={handleSave}
+      okText={saving ? '保存中…' : '保存'}
+      okButtonProps={{ disabled: !canSave || saving, size: 'small' }}
+      cancelText="取消"
+      cancelButtonProps={{ size: 'small' }}
+      title={isEdit ? '编辑用量查询' : '添加用量查询'}
+      width={448}
+    >
+      <div className="space-y-4 py-2">
+        {/* 供应商选择（编辑时不可改） */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">供应商</label>
+          <Select
+            value={provider}
+            onChange={setProvider}
+            disabled={isEdit}
+            style={{ width: '100%' }}
+            size="small"
+            options={(schemas || []).map(s => ({ value: s.id, label: `${s.id} - ${s.planName}` }))}
+          />
+        </div>
 
-        <div className="space-y-4 py-2">
-          {/* 供应商选择（编辑时不可改） */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">供应商</label>
-            <Select value={provider} onValueChange={setProvider} disabled={isEdit}>
-              <SelectTrigger className="w-full h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent side="bottom" align="start">
-                {schemas?.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.id} - {s.planName}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* 动态配置表单 */}
-          {currentSchema?.fields?.map(f => (
-            <div key={f.key} className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">{f.label}</label>
-              <input
-                type={f.type === 'password' ? 'password' : 'text'}
-                value={fields[f.key] || ''}
-                onChange={e => handleFieldChange(f.key, e.target.value)}
-                placeholder={f.placeholder}
-                className="w-full h-8 px-2 text-xs rounded-lg border border-input bg-transparent outline-none focus-visible:border-ring font-mono"
-              />
-            </div>
-          ))}
-
-          {/* 帮助提示 */}
-          {!isEdit && PROVIDER_HINTS[provider] && (
-            <details className="group">
-              <summary className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-                <HelpCircleIcon className="size-3.5" />
-                如何获取这些信息？
-              </summary>
-              <div className="mt-2 p-3 rounded-lg bg-muted/50 space-y-2 text-xs text-muted-foreground">
-                {PROVIDER_HINTS[provider].steps.map((s, i) => (
-                  <div key={i}>
-                    <span className="font-medium text-foreground">{i + 1}. {s.label}：</span>
-                    {s.detail}
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-
-          {/* 别名 */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">
-              别名
-              <span className="text-muted-foreground/60 ml-1">（可选，不填自动编号）</span>
-            </label>
+        {/* 动态配置表单 */}
+        {currentSchema?.fields?.map(f => (
+          <div key={f.key} className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">{f.label}</label>
             <input
-              value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
-              placeholder="例：公司项目"
-              className="w-full h-8 px-2 text-xs rounded-lg border border-input bg-transparent outline-none focus-visible:border-ring"
+              type={f.type === 'password' ? 'password' : 'text'}
+              value={fields[f.key] || ''}
+              onChange={e => handleFieldChange(f.key, e.target.value)}
+              placeholder={f.placeholder}
+              className="w-full h-8 px-2 text-xs rounded-lg border border-input bg-transparent outline-none focus-visible:border-ring font-mono"
             />
           </div>
-        </div>
+        ))}
 
-        <div className="flex justify-end gap-2 pt-2 border-t">
-          <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button size="sm" onClick={handleSave} disabled={!canSave || saving}>
-            {saving ? '保存中…' : '保存'}
-          </Button>
+        {/* 帮助提示 */}
+        {!isEdit && PROVIDER_HINTS[provider] && (
+          <details className="group">
+            <summary className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+              <HelpCircleIcon className="size-3.5" />
+              如何获取这些信息？
+            </summary>
+            <div className="mt-2 p-3 rounded-lg bg-muted/50 space-y-2 text-xs text-muted-foreground">
+              {PROVIDER_HINTS[provider].steps.map((s, i) => (
+                <div key={i}>
+                  <span className="font-medium text-foreground">{i + 1}. {s.label}：</span>
+                  {s.detail}
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+
+        {/* 别名 */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            别名
+            <span className="text-muted-foreground/60 ml-1">（可选，不填自动编号）</span>
+          </label>
+          <input
+            value={displayName}
+            onChange={e => setDisplayName(e.target.value)}
+            placeholder="例：公司项目"
+            className="w-full h-8 px-2 text-xs rounded-lg border border-input bg-transparent outline-none focus-visible:border-ring"
+          />
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </Modal>
   );
 }

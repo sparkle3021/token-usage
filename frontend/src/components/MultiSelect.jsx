@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Button } from './ui/button.jsx';
+import { Button } from 'antd';
 
 export default function MultiSelect({ items, selected, onChange, placeholder }) {
   const [open, setOpen] = useState(false);
@@ -12,12 +12,12 @@ export default function MultiSelect({ items, selected, onChange, placeholder }) 
 
   return (
     <div ref={ref} className="relative inline-block">
-      <Button size="sm" variant="outline" onClick={() => setOpen(o => !o)} className="text-xs">
+      <Button size="small" onClick={() => setOpen(o => !o)} className="text-xs">
         {selected.size === 0 ? placeholder : selected.size === 1 ? [...selected][0] : `${selected.size} 项`}
       </Button>
       {open && (
         <div className="absolute top-full left-0 mt-1 z-30 min-w-[180px] bg-popover border rounded-lg shadow-lg p-1.5 max-h-64 overflow-y-auto">
-          {selected.size > 0 && <Button size="xs" variant="ghost" className="w-full justify-start text-indigo-500 mb-0.5" onClick={() => onChange(new Set())}>清除</Button>}
+          {selected.size > 0 && <Button type="text" size="small" className="w-full justify-start text-indigo-500 mb-0.5" onClick={() => onChange(new Set())}>清除</Button>}
           {(items || []).map(o => (
             <button key={o} className={`w-full text-left px-2 py-1 text-xs rounded flex items-center gap-2 hover:bg-muted ${selected.has(o) ? 'font-medium' : ''}`}
               onClick={() => { const n = new Set(selected); n.has(o) ? n.delete(o) : n.add(o); onChange(n); }}>

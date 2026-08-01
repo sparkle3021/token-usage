@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card.jsx';
+import { Card } from 'antd';
 import * as U from '../../lib/utils.js';
 
 export default function Gauge({ rate, cacheRead, cacheCreation, prevRate }) {
@@ -9,18 +9,16 @@ export default function Gauge({ rate, cacheRead, cacheCreation, prevRate }) {
   const delta = U.deltaPct(rate, prevRate);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div><CardTitle>缓存命中率</CardTitle><CardDescription>cache_read / total</CardDescription></div>
-          {delta != null && (
-            <span className={`inline-flex items-center gap-0.5 font-semibold text-xs px-1 rounded ${delta > 0.05 ? 'text-green-600 bg-green-50' : delta < -0.05 ? 'text-red-500 bg-red-50' : 'text-muted-foreground bg-muted'}`}>
-              {delta > 0.05 ? '↑' : delta < -0.05 ? '↓' : '·'} {Math.abs(delta).toFixed(1)}%
-            </span>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
+    <Card styles={{ body: { padding: 16 } }}>
+      <div className="flex items-center justify-between mb-3">
+        <div><div className="text-sm font-semibold">缓存命中率</div><div className="text-xs text-muted-foreground">cache_read / total</div></div>
+        {delta != null && (
+          <span className={`inline-flex items-center gap-0.5 font-semibold text-xs px-1 rounded ${delta > 0.05 ? 'text-green-600 bg-green-50' : delta < -0.05 ? 'text-red-500 bg-red-50' : 'text-muted-foreground bg-muted'}`}>
+            {delta > 0.05 ? '↑' : delta < -0.05 ? '↓' : '·'} {Math.abs(delta).toFixed(1)}%
+          </span>
+        )}
+      </div>
+      <div>
         <div className="flex flex-col items-center py-2">
           <svg viewBox="0 0 180 100" className="w-40 max-w-full h-auto">
             <path d="M 10 90 A 80 80 0 0 1 170 90" stroke="oklch(0.93 0.004 80)" strokeWidth="14" fill="none" strokeLinecap="round"/>
@@ -35,7 +33,7 @@ export default function Gauge({ rate, cacheRead, cacheCreation, prevRate }) {
             <span>创建 <b className="text-foreground">{U.compactCN(cacheCreation)}</b></span>
           </div>
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }

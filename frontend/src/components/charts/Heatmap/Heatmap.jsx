@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../../ui/card.jsx';
+import { Card } from 'antd';
 import HeatmapGrid from './HeatmapGrid.jsx';
 import HeatmapLegend from './HeatmapLegend.jsx';
 import { useHeatmap } from './hooks.js';
@@ -59,25 +59,21 @@ export default function Heatmap({
   }, [theme]);
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Token 消耗热力图</CardTitle>
-          <HeatmapLegend theme={theme} cellSize={cellSize} />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div ref={containerRef}>
-          <HeatmapGrid
-            weeks={weeks}
-            months={months}
-            cellSize={cellSize}
-            gap={gap}
-            getColor={getColor}
-            onSelect={onSelect}
-          />
-        </div>
-      </CardContent>
+    <Card className={className} styles={{ body: { padding: 16 } }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-semibold">Token 消耗热力图</div>
+        <HeatmapLegend theme={theme} cellSize={cellSize} />
+      </div>
+      <div ref={containerRef}>
+        <HeatmapGrid
+          weeks={weeks}
+          months={months}
+          cellSize={cellSize}
+          gap={gap}
+          getColor={getColor}
+          onSelect={onSelect}
+        />
+      </div>
     </Card>
   );
 }

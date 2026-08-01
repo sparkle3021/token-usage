@@ -2,7 +2,7 @@
  * 顶栏组件：标题、页面切换、最后同步时间、同步按钮、设置对话框。
  */
 
-import { Button } from '../ui/button.jsx';
+import { Button } from 'antd';
 import SettingsDialog from '../SettingsDialog.jsx';
 import { Sun, Moon } from 'lucide-react';
 
@@ -22,12 +22,10 @@ export default function Header({ page, setPage, lastSync, onCollect, collecting,
       </div>
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground whitespace-nowrap">最后同步 <strong>{lastSync}</strong></span>
-        <Button size="sm" variant="default" onClick={onCollect} disabled={collecting || refreshing}>
+        <Button type="primary" size="small" onClick={onCollect} disabled={collecting || refreshing}>
           {collecting ? '同步中' : '同步'}
         </Button>
-        <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={onToggleDark} title={dark ? '切换到亮色' : '切换到暗色'}>
-          {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-        </Button>
+        <Button size="small" className="h-8 w-8 p-0" icon={dark ? <Sun className="size-4" /> : <Moon className="size-4" />} onClick={onToggleDark} title={dark ? '切换到亮色' : '切换到暗色'} />
         <SettingsDialog onSettingsChange={onSettingsChange} onClear={onClearData} onFullSync={onFullSync} fullSyncing={fullSyncing} />
       </div>
     </div>

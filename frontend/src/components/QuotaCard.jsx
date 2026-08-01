@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
-import { Skeleton } from '@/components/ui/skeleton.jsx';
+import { Button, Card, Skeleton } from 'antd';
 import { PencilIcon, Trash2Icon, RefreshCwIcon } from 'lucide-react';
 import { getSourceIconUrl } from '../lib/iconMap.js';
 
@@ -76,38 +74,27 @@ function QuotaSlots({ slots }) {
 /** Skeleton 骨架屏 */
 function CardSkeleton({ displayType }) {
   return (
-    <Card>
-      <CardHeader className="pb-1">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Skeleton className="size-4 rounded" />
-            <Skeleton className="h-4 w-28" />
-          </div>
-          <div className="flex items-center gap-0.5">
-            <Skeleton className="size-7 rounded" />
-            <Skeleton className="size-7 rounded" />
-            <Skeleton className="size-7 rounded" />
-          </div>
+    <Card styles={{ body: { padding: 16 } }}>
+      <div className="flex items-center justify-between mb-3">
+        <Skeleton active title={{ width: 120 }} paragraph={false} />
+        <div className="flex items-center gap-1">
+          <Skeleton.Button active size="small" shape="circle" />
+          <Skeleton.Button active size="small" shape="circle" />
+          <Skeleton.Button active size="small" shape="circle" />
         </div>
-      </CardHeader>
-      <CardContent>
-        {displayType === 'quota' ? (
-          <div className="flex items-center justify-center gap-10">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex flex-col items-center gap-1.5">
-                <Skeleton className="size-20 rounded-full" />
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-3 w-12" />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2 py-2">
-            <Skeleton className="h-5 w-40 mx-auto" />
-            <Skeleton className="h-4 w-32 mx-auto" />
-          </div>
-        )}
-      </CardContent>
+      </div>
+      {displayType === 'quota' ? (
+        <div className="flex items-center justify-center gap-10">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="flex flex-col items-center gap-1.5">
+              <Skeleton.Avatar active size={80} shape="circle" />
+              <Skeleton active title={false} paragraph={{ rows: 2, width: ['80%', '60%'] }} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Skeleton active title={false} paragraph={{ rows: 2 }} />
+      )}
     </Card>
   );
 }
@@ -146,27 +133,21 @@ export default function QuotaCard({ cfg, data, displayType, slotsLabels, balance
   // Token 已过期
   if (cfg.isValid === false) {
     return (
-      <Card className="border-red-200 bg-red-50/50">
-        <CardHeader className="pb-1">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium flex items-center gap-1.5">
-              <img src={getSourceIconUrl(cfg.provider)} alt={cfg.provider} className="size-4 shrink-0" />
-              {getTitle()}
-            </CardTitle>
-            <div className="flex items-center gap-0.5">
-              <Button size="icon" variant="ghost" className="size-7" onClick={onEdit}>
-                <PencilIcon className="size-3.5" />
-              </Button>
-              <Button size="icon" variant="ghost" className="size-7 text-red-500" onClick={onDelete}>
-                <Trash2Icon className="size-3.5" />
-              </Button>
-            </div>
+      <Card className="border-red-200 bg-red-50/50" styles={{ body: { padding: 16 } }}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-medium flex items-center gap-1.5">
+            <img src={getSourceIconUrl(cfg.provider)} alt={cfg.provider} className="size-4 shrink-0" />
+            {getTitle()}
           </div>
-        </CardHeader>
-        <CardContent className="text-center py-4">
+          <div className="flex items-center gap-0.5">
+            <Button type="text" size="small" className="size-7" icon={<PencilIcon className="size-3.5" />} onClick={onEdit} />
+            <Button type="text" size="small" className="size-7 text-red-500" icon={<Trash2Icon className="size-3.5" />} onClick={onDelete} />
+          </div>
+        </div>
+        <div className="text-center py-4">
           <p className="text-xs text-red-500 mb-2">Token 已过期，请更新</p>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onEdit}>更新配置</Button>
-        </CardContent>
+          <Button size="small" className="h-7 text-xs" onClick={onEdit}>更新配置</Button>
+        </div>
       </Card>
     );
   }
@@ -174,27 +155,19 @@ export default function QuotaCard({ cfg, data, displayType, slotsLabels, balance
   const isError = localData?.error;
 
   return (
-    <Card className={isError ? 'border-red-200 bg-red-50/50' : ''}>
-      <CardHeader className="pb-1">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium flex items-center gap-1.5">
-            <img src={getSourceIconUrl(cfg.provider)} alt={cfg.provider} className="size-4 shrink-0" />
-            {getTitle()}
-          </CardTitle>
-          <div className="flex items-center gap-0.5">
-            <Button size="icon" variant="ghost" className="size-7" onClick={onRefresh}>
-              <RefreshCwIcon className="size-3.5" />
-            </Button>
-            <Button size="icon" variant="ghost" className="size-7" onClick={onEdit}>
-              <PencilIcon className="size-3.5" />
-            </Button>
-            <Button size="icon" variant="ghost" className="size-7 text-red-500" onClick={onDelete}>
-              <Trash2Icon className="size-3.5" />
-            </Button>
-          </div>
+    <Card className={isError ? 'border-red-200 bg-red-50/50' : ''} styles={{ body: { padding: 16 } }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-medium flex items-center gap-1.5">
+          <img src={getSourceIconUrl(cfg.provider)} alt={cfg.provider} className="size-4 shrink-0" />
+          {getTitle()}
         </div>
-      </CardHeader>
-      <CardContent>
+        <div className="flex items-center gap-0.5">
+          <Button type="text" size="small" className="size-7" icon={<RefreshCwIcon className="size-3.5" />} onClick={onRefresh} />
+          <Button type="text" size="small" className="size-7" icon={<PencilIcon className="size-3.5" />} onClick={onEdit} />
+          <Button type="text" size="small" className="size-7 text-red-500" icon={<Trash2Icon className="size-3.5" />} onClick={onDelete} />
+        </div>
+      </div>
+      <div>
         {isError ? (
           <p className="text-xs text-red-500 text-center py-4">{localData.error}</p>
         ) : displayType === 'quota' ? (
@@ -214,7 +187,7 @@ export default function QuotaCard({ cfg, data, displayType, slotsLabels, balance
         ) : (
           <p className="text-xs text-muted-foreground text-center py-4">不支持的展示类型</p>
         )}
-      </CardContent>
+      </div>
     </Card>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card.jsx';
+import { Card } from 'antd';
 import * as U from '../../lib/utils.js';
 
 export default function TopModels({ rows, onDrillModel, allDaily = [] }) {
@@ -32,13 +32,11 @@ export default function TopModels({ rows, onDrillModel, allDaily = [] }) {
   const max = list[0]?.total || 1;
 
   return (
-    <Card className="flex-1 flex flex-col">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div><CardTitle>Top 模型</CardTitle><CardDescription>按总 Token 排序 · {list.length} 个</CardDescription></div>
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 overflow-y-auto scrollbar-subtle min-h-0">
+    <Card className="flex-1 flex flex-col" styles={{ body: { padding: 16, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } }}>
+      <div className="flex items-center justify-between mb-3">
+        <div><div className="text-sm font-semibold">Top 模型</div><div className="text-xs text-muted-foreground">按总 Token 排序 · {list.length} 个</div></div>
+      </div>
+      <div className="flex-1 overflow-y-auto scrollbar-subtle min-h-0">
         <div className="space-y-1.5">
           {list.map(m => (
             <div key={m.model} className="grid grid-cols-[1fr_auto] items-center gap-3 px-1.5 py-1.5 rounded-md cursor-pointer hover:bg-muted/50" onClick={() => onDrillModel?.(m)}>
@@ -62,7 +60,7 @@ export default function TopModels({ rows, onDrillModel, allDaily = [] }) {
             </div>
           ))}
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }

@@ -1,12 +1,8 @@
 import { ranges, rangeDays } from '../store/filterStore.jsx';
 import { useState, useMemo } from 'react';
-import { Card, CardHeader, CardContent } from '../components/ui/card.jsx';
-import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs.jsx';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog.jsx';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/table.jsx';
+import { Card, Tabs, Modal, Table, Button } from 'antd';
 import SourceBadge from '../components/SourceBadge.jsx';
 import SourceIcon from '../components/SourceIcon.jsx';
-import { Button } from '../components/ui/button.jsx';
 import MultiSelect from '../components/MultiSelect.jsx';
 import * as U from '../lib/utils.js';
 import SourceDrillDialog from './table/SourceDrillDialog.jsx';
@@ -37,12 +33,15 @@ export default function TablePage({ M, onRefresh }) {
   return (
     <div className="flex flex-col min-h-0 flex-1 space-y-4">
       {/* Filter Bar */}
-      <Card className="p-3 shrink-0 overflow-visible">
+      <Card className="p-3 shrink-0 overflow-visible" styles={{ body: { padding: 12 } }}>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-1">时间</span>
-          <Tabs value={f.rangeId} onValueChange={setRange}>
-            <TabsList>{ranges.map(r => <TabsTrigger key={r.id} value={r.id} className="text-xs px-2.5">{r.label}</TabsTrigger>)}</TabsList>
-          </Tabs>
+          <Tabs
+            activeKey={f.rangeId}
+            onChange={setRange}
+            size="small"
+            items={ranges.map(r => ({ key: r.id, label: <span className="text-xs px-2.5">{r.label}</span> }))}
+          />
         </div>
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-1">来源</span>
@@ -67,55 +66,73 @@ export default function TablePage({ M, onRefresh }) {
 
       {/* 模型详情弹窗（内联） */}
       {drill?.kind === 'model' && (
-        <Dialog open onOpenChange={o => { if (!o) closeDrill(); }}>
-          <DialogContent className="sm:max-w-lg min-h-[280px] max-h-[85vh] overflow-hidden flex flex-col" showCloseButton>
-            <DialogTitle className="sr-only">{drill.row.model} 详情</DialogTitle>
-            <DialogDescription className="sr-only">模型用量详情</DialogDescription>
-
-            <div className="mb-4 shrink-0">
-              <div className="text-xs text-muted-foreground mb-0.5">模型详情</div>
-              <h3 className="text-sm font-semibold font-mono text-[11px]">{drill.row.model}</h3>
-            </div>
-
-            <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
-              <span>活跃 <strong className="text-foreground">{drill.row.dayCount}</strong> 天</span>
-              <span>总 Token <strong className="text-foreground">{U.compactCN(drill.row.total)}</strong></span>
-              <span>费用 <strong className="text-foreground">${(drill.row.cost || 0).toFixed(2)}</strong></span>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-subtle">
-            {drill.row.sources?.length > 0 && (
-              <div className="space-y-1.5">
-                {drill.row.sources.map(s => {
-                  const pct = (s.total / drill.row.total * 100);
-                  return (
-                    <div key={s.source} className="grid grid-cols-[1fr_auto] items-center gap-3 px-1.5 py-1.5">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <SourceIcon name={s.source} className="w-3.5 h-3.5 shrink-0" />
-                          <span className="text-xs font-medium truncate">{s.source}</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">
-                          <div className="h-full" style={{ width: `${pct}%`, background: U.getSourceColor(s.source) }} />
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className="text-xs font-semibold tabular-nums">{U.compactCN(s.total)}</div>
-                        <div className="text-[10px] text-muted-foreground tabular-nums">{pct.toFixed(1)}%</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            </div>
-          </DialogContent>
-        </Dialog>
+        <ModelDetailModal drill={drill} onClose={closeDrill} />
       )}
 
       {/* 会话详情弹窗（内联） */}
       {drill?.kind === 'session-project' && <SessionProjectDialog drill={drill} onClose={closeDrill} />}
     </div>
+  );
+}
+
+// 模型详情弹窗：280px 保底 + 85vh 封顶 + 内容区内部滚动
+const MODAL_BODY_STYLE = {
+  maxHeight: 'calc(85vh - 120px)',
+  minHeight: 280,
+  overflowY: 'auto',
+};
+
+function ModelDetailModal({ drill, onClose }) {
+  return (
+    <Modal
+      open
+      onCancel={onClose}
+      title={null}
+      width={520}
+      styles={{ body: MODAL_BODY_STYLE }}
+      footer={null}
+    >
+      <h3 className="sr-only">{drill.row.model} 详情</h3>
+      <p className="sr-only">模型用量详情</p>
+
+      <div className="mb-4 shrink-0">
+        <div className="text-xs text-muted-foreground mb-0.5">模型详情</div>
+        <h3 className="text-sm font-semibold font-mono text-[11px]">{drill.row.model}</h3>
+      </div>
+
+      <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
+        <span>活跃 <strong className="text-foreground">{drill.row.dayCount}</strong> 天</span>
+        <span>总 Token <strong className="text-foreground">{U.compactCN(drill.row.total)}</strong></span>
+        <span>费用 <strong className="text-foreground">${(drill.row.cost || 0).toFixed(2)}</strong></span>
+      </div>
+
+      <div className="overflow-y-auto scrollbar-subtle">
+        {drill.row.sources?.length > 0 && (
+          <div className="space-y-1.5">
+            {drill.row.sources.map(s => {
+              const pct = (s.total / drill.row.total * 100);
+              return (
+                <div key={s.source} className="grid grid-cols-[1fr_auto] items-center gap-3 px-1.5 py-1.5">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <SourceIcon name={s.source} className="w-3.5 h-3.5 shrink-0" />
+                      <span className="text-xs font-medium truncate">{s.source}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">
+                      <div className="h-full" style={{ width: `${pct}%`, background: U.getSourceColor(s.source) }} />
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-xs font-semibold tabular-nums">{U.compactCN(s.total)}</div>
+                    <div className="text-[10px] text-muted-foreground tabular-nums">{pct.toFixed(1)}%</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -130,66 +147,88 @@ function SessionProjectDialog({ drill, onClose }) {
   const curPage = Math.min(page, pageCount);
   const visible = sessions.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
 
+  const columns = [
+    {
+      title: '会话',
+      dataIndex: 'sessionId',
+      key: 'sessionId',
+      render: v => <span className="text-xs font-mono">{String(v).split('/').slice(-1)[0]}</span>,
+    },
+    {
+      title: '活动',
+      dataIndex: 'lastTs',
+      key: 'lastTs',
+      render: v => <span className="text-xs text-muted-foreground">{U.formatTs(v)}</span>,
+    },
+    {
+      title: 'Total',
+      dataIndex: 'totalTokens',
+      key: 'totalTokens',
+      align: 'right',
+      render: v => <span className="text-xs tabular-nums">{U.compactCN(v || 0)}</span>,
+    },
+    {
+      title: '费用',
+      dataIndex: 'costUSD',
+      key: 'costUSD',
+      align: 'right',
+      render: v => <span className="text-xs tabular-nums">{(v || 0) > 0 ? `$${v.toFixed(2)}` : '—'}</span>,
+    },
+  ];
+
   return (
-    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-xl min-h-[280px] max-h-[85vh] overflow-hidden flex flex-col" showCloseButton>
-        <DialogTitle className="sr-only">{row.projectPath}</DialogTitle>
-        <DialogDescription className="sr-only">项目会话用量详情</DialogDescription>
+    <Modal
+      open
+      onCancel={onClose}
+      title={null}
+      width={576}
+      styles={{ body: MODAL_BODY_STYLE }}
+      footer={null}
+    >
+      <h3 className="sr-only">{row.projectPath}</h3>
+      <p className="sr-only">项目会话用量详情</p>
 
-        <div className="mb-4 shrink-0">
-          <div className="text-xs text-muted-foreground mb-0.5">项目详情</div>
-          <h3 className="text-sm font-semibold font-mono">{row.projectPath || '—'}</h3>
-          <p className="text-xs text-muted-foreground">{row.source} · {row.device}</p>
-        </div>
+      <div className="mb-4 shrink-0">
+        <div className="text-xs text-muted-foreground mb-0.5">项目详情</div>
+        <h3 className="text-sm font-semibold font-mono">{row.projectPath || '—'}</h3>
+        <p className="text-xs text-muted-foreground">{row.source} · {row.device}</p>
+      </div>
 
-        <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
-          <span>总 Token <strong className="text-foreground">{U.compactCN(row.total || 0)}</strong></span>
-          <span>费用 <strong className="text-foreground">${(row.cost || 0).toFixed(2)}</strong></span>
-          <span>会话数 <strong className="text-foreground">{row.sessionCount || 0}</strong></span>
-          <span>活跃 <strong className="text-foreground">{U.formatTs(row.lastTs)}</strong></span>
-        </div>
+      <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
+        <span>总 Token <strong className="text-foreground">{U.compactCN(row.total || 0)}</strong></span>
+        <span>费用 <strong className="text-foreground">${(row.cost || 0).toFixed(2)}</strong></span>
+        <span>会话数 <strong className="text-foreground">{row.sessionCount || 0}</strong></span>
+        <span>活跃 <strong className="text-foreground">{U.formatTs(row.lastTs)}</strong></span>
+      </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-subtle">
+      <div className="overflow-y-auto scrollbar-subtle">
         {sessions.length > 0 && (
           <div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">会话</TableHead>
-                  <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">活动</TableHead>
-                  <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground text-right">Total</TableHead>
-                  <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground text-right">费用</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map(s => (
-                  <TableRow key={s.sessionId}>
-                    <TableCell className="text-xs font-mono">{String(s.sessionId).split('/').slice(-1)[0]}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{U.formatTs(s.lastTs)}</TableCell>
-                    <TableCell className="text-xs tabular-nums text-right">{U.compactCN(s.totalTokens || 0)}</TableCell>
-                    <TableCell className="text-xs tabular-nums text-right">{(s.costUSD || 0) > 0 ? `$${s.costUSD.toFixed(2)}` : '—'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <Table
+              columns={columns}
+              dataSource={visible}
+              rowKey="sessionId"
+              size="small"
+              pagination={false}
+              locale={{ emptyText: '暂无数据' }}
+            />
             {pageCount > 1 && (
               <div className="flex items-center justify-between pt-2">
                 <span className="text-[11px] text-muted-foreground">共 {sessions.length} 条 · 第 {curPage}/{pageCount} 页</span>
                 <div className="flex gap-1">
-                  <Button size="xs" variant="outline" disabled={curPage <= 1} onClick={() => setPage(curPage - 1)}>上一页</Button>
-                  <Button size="xs" variant="outline" disabled={curPage >= pageCount} onClick={() => setPage(curPage + 1)}>下一页</Button>
+                  <Button size="small" disabled={curPage <= 1} onClick={() => setPage(curPage - 1)}>上一页</Button>
+                  <Button size="small" disabled={curPage >= pageCount} onClick={() => setPage(curPage + 1)}>下一页</Button>
                 </div>
               </div>
             )}
           </div>
         )}
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </Modal>
   );
 }
 
-// ── 数据明细表格（shadcn Table 内联）──────────────────────────
+// ── 数据明细表格（antd Table columns）──────────────────────────
 
 const TD = {
   head: "text-[11px] uppercase tracking-wider text-muted-foreground whitespace-nowrap",
@@ -272,22 +311,25 @@ function DataTablePanel({ daily = [], sessionAgg = [], onDrill, fullHeight = fal
   }, [sessionAgg]);
 
   const tabs = [
-    { id: 'sources', label: '来源', count: bySource.length },
-    { id: 'models', label: '模型', count: byModel.length },
-    { id: 'sessions', label: '会话', count: sessionProjectRows.length },
+    { key: 'sources', label: '来源', count: bySource.length },
+    { key: 'models', label: '模型', count: byModel.length },
+    { key: 'sessions', label: '会话', count: sessionProjectRows.length },
   ];
 
   return (
-    <Card className={fullHeight ? 'flex flex-col flex-1 min-h-0' : ''}>
-      <CardHeader>
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>{tabs.map(t => <TabsTrigger key={t.id} value={t.id} className="text-xs">{t.label} <span className="opacity-55 ml-1">{t.count}</span></TabsTrigger>)}</TabsList>
-        </Tabs>
-      </CardHeader>
-      <CardContent className={`px-0 ${fullHeight ? 'flex flex-col flex-1 min-h-0' : ''}`}>
-        {tab === 'sessions' && sessionMinDate && (
-          <div className="px-4 pt-1 pb-1 text-[10px] text-muted-foreground shrink-0">数据范围 {sessionMinDate} 起</div>
-        )}
+    <Card className={fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} styles={{ body: { padding: 0 } }}>
+      <div className="px-4 pt-3">
+        <Tabs
+          activeKey={tab}
+          onChange={setTab}
+          size="small"
+          items={tabs.map(t => ({ key: t.key, label: <span className="text-xs">{t.label} <span className="opacity-55 ml-1">{t.count}</span></span> }))}
+        />
+      </div>
+      {tab === 'sessions' && sessionMinDate && (
+        <div className="px-4 pt-1 pb-1 text-[10px] text-muted-foreground shrink-0">数据范围 {sessionMinDate} 起</div>
+      )}
+      <div className={fullHeight ? 'flex flex-col flex-1 min-h-0' : ''}>
         {tab === 'sources' && (
           <SourceTable rows={bySource} onDrill={r => onDrill?.({ kind: 'source-model', row: r })} />
         )}
@@ -297,90 +339,198 @@ function DataTablePanel({ daily = [], sessionAgg = [], onDrill, fullHeight = fal
         {tab === 'sessions' && (
           <SessionTable rows={sessionProjectRows} onDrill={r => onDrill?.({ kind: 'session-project', row: r })} />
         )}
-      </CardContent>
+      </div>
     </Card>
   );
 }
 
-// ── 纯展示表格（shadcn Table，无排序搜索）──
-
-function BasicTable({ head, rows, children, fullHeight, stickyLast = false }) {
-  const stickyHead = "sticky right-0 bg-card z-10";
-  return (
-    <div className={fullHeight ? 'relative flex-1 min-h-0' : ''}>
-      <div className={`${fullHeight ? 'absolute inset-0 overflow-auto' : 'max-h-[400px] overflow-auto'}`}>
-        <Table>
-          <TableHeader>
-            <TableRow>{head.map((h, i) => (
-              <TableHead key={h} className={`${TD.head} ${stickyLast && i === head.length - 1 ? stickyHead : ''}`}>{h}</TableHead>
-            ))}</TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 && <TableRow><TableCell colSpan={head.length + 1} className="text-center py-8 text-muted-foreground">暂无数据</TableCell></TableRow>}
-            {rows.map((r, i) => <TableRow key={i}>{children(r)}</TableRow>)}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
-  );
-}
+// ── 纯展示表格（antd Table）──
 
 function SourceTable({ rows, onDrill }) {
-  const head = ['来源', '设备', '模型', 'Total', 'Input', 'Output', 'Cache', '费用', ''];
-  return (
-    <BasicTable head={head} rows={rows} fullHeight stickyLast>
-      {r => <>
-        <TableCell className={TD.cell}><SourceBadge source={r.source || 'unknown'} /></TableCell>
-        <TableCell className={`${TD.cell} text-muted-foreground text-[11px]`}>{r.device}</TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{r.modelCount}</TableCell>
-        <TableCell className={`${TD.cell} text-right font-semibold`}>{U.fmt.format(r.total || 0)}</TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{U.compact(r.input)}</TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{U.compact(r.output)}</TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{U.compact(r.cache)}</TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{r.cost > 0 ? <span className="text-amber-600">${r.cost.toFixed(2)}</span> : '—'}</TableCell>
-        <TableCell className="sticky right-0 bg-card z-10 py-0 text-right"><RowLink onClick={() => onDrill(r)}>模型分布</RowLink></TableCell>
-      </>}
-    </BasicTable>
-  );
+  const columns = [
+    {
+      title: '来源',
+      key: 'source',
+      render: (_, r) => <SourceBadge source={r.source || 'unknown'} />,
+    },
+    {
+      title: '设备',
+      dataIndex: 'device',
+      key: 'device',
+      render: v => <span className={`${TD.cell} text-muted-foreground text-[11px]`}>{v}</span>,
+    },
+    {
+      title: '模型',
+      dataIndex: 'modelCount',
+      key: 'modelCount',
+      align: 'right',
+      render: v => <span className={TD.cell}>{v}</span>,
+    },
+    {
+      title: 'Total',
+      dataIndex: 'total',
+      key: 'total',
+      align: 'right',
+      render: v => <span className={`${TD.cell} font-semibold`}>{U.fmt.format(v || 0)}</span>,
+    },
+    {
+      title: 'Input',
+      dataIndex: 'input',
+      key: 'input',
+      align: 'right',
+      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+    },
+    {
+      title: 'Output',
+      dataIndex: 'output',
+      key: 'output',
+      align: 'right',
+      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+    },
+    {
+      title: 'Cache',
+      dataIndex: 'cache',
+      key: 'cache',
+      align: 'right',
+      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+    },
+    {
+      title: '费用',
+      dataIndex: 'cost',
+      key: 'cost',
+      align: 'right',
+      render: v => <span className={TD.cell}>{v > 0 ? <span className="text-amber-600">${v.toFixed(2)}</span> : '—'}</span>,
+    },
+    {
+      title: '',
+      key: 'action',
+      fixed: 'end',
+      align: 'right',
+      render: (_, r) => <RowLink onClick={() => onDrill(r)}>模型分布</RowLink>,
+    },
+  ];
+  return <Table columns={columns} dataSource={rows} rowKey={(r) => `${r.source}::${r.device}`} size="small" pagination={{ pageSize: 10 }} locale={{ emptyText: '暂无数据' }} scroll={{ x: 'max-content' }} />;
 }
 
 function ModelTable({ rows, onDrill }) {
-  const head = ['模型', '活跃天', 'Total', 'Input', 'Output', '费用', ''];
-  return (
-    <BasicTable head={head} rows={rows} fullHeight stickyLast>
-      {r => <>
-        <TableCell className={TD.cell}>
-          <span className="inline-flex items-center gap-1.5 font-mono text-[11px]">
-            {U.getModelIconUrl(r.model) && <img src={U.getModelIconUrl(r.model)} className="w-3.5 h-3.5 shrink-0" alt="" />}
-            {r.model}
-          </span>
-        </TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{r.dayCount}</TableCell>
-        <TableCell className={`${TD.cell} text-right font-semibold`}>{U.fmt.format(r.total || 0)}</TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{U.compact(r.input)}</TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{U.compact(r.output)}</TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{r.cost > 0 ? <span className="text-amber-600">${r.cost.toFixed(2)}</span> : '—'}</TableCell>
-        <TableCell className="sticky right-0 bg-card z-10 py-0 text-right"><RowLink onClick={() => onDrill(r)}>详情</RowLink></TableCell>
-      </>}
-    </BasicTable>
-  );
+  const columns = [
+    {
+      title: '模型',
+      key: 'model',
+      render: (_, r) => (
+        <span className="inline-flex items-center gap-1.5 font-mono text-[11px]">
+          {U.getModelIconUrl(r.model) && <img src={U.getModelIconUrl(r.model)} className="w-3.5 h-3.5 shrink-0" alt="" />}
+          {r.model}
+        </span>
+      ),
+    },
+    {
+      title: '活跃天',
+      dataIndex: 'dayCount',
+      key: 'dayCount',
+      align: 'right',
+      render: v => <span className={TD.cell}>{v}</span>,
+    },
+    {
+      title: 'Total',
+      dataIndex: 'total',
+      key: 'total',
+      align: 'right',
+      render: v => <span className={`${TD.cell} font-semibold`}>{U.fmt.format(v || 0)}</span>,
+    },
+    {
+      title: 'Input',
+      dataIndex: 'input',
+      key: 'input',
+      align: 'right',
+      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+    },
+    {
+      title: 'Output',
+      dataIndex: 'output',
+      key: 'output',
+      align: 'right',
+      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+    },
+    {
+      title: '费用',
+      dataIndex: 'cost',
+      key: 'cost',
+      align: 'right',
+      render: v => <span className={TD.cell}>{v > 0 ? <span className="text-amber-600">${v.toFixed(2)}</span> : '—'}</span>,
+    },
+    {
+      title: '',
+      key: 'action',
+      fixed: 'end',
+      align: 'right',
+      render: (_, r) => <RowLink onClick={() => onDrill(r)}>详情</RowLink>,
+    },
+  ];
+  return <Table columns={columns} dataSource={rows} rowKey="model" size="small" pagination={{ pageSize: 10 }} locale={{ emptyText: '暂无数据' }} scroll={{ x: 'max-content' }} />;
 }
 
 function SessionTable({ rows, onDrill }) {
-  const head = ['来源', '项目', '会话', '活动', 'Input', 'Output', 'Total', '费用', ''];
-  return (
-    <BasicTable head={head} rows={rows} fullHeight stickyLast>
-      {r => <>
-        <TableCell className={TD.cell}><SourceBadge source={r.source || 'unknown'} /></TableCell>
-        <TableCell className={`${TD.cell} font-mono text-[11px]`} title={r.projectPath}>{r.projectPath || '—'}</TableCell>
-        <TableCell className={`${TD.cell} text-right text-muted-foreground text-[11px]`}>{r.sessionCount || 0}</TableCell>
-        <TableCell className={`${TD.cell} text-muted-foreground text-[11px]`}>{U.formatTs(r.lastTs)}</TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{U.compact(r.input)}</TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{U.compact(r.output)}</TableCell>
-        <TableCell className={`${TD.cell} text-right font-semibold`}>{U.fmt.format(r.total || 0)}</TableCell>
-        <TableCell className={`${TD.cell} text-right`}>{r.cost > 0 ? <span className="text-amber-600">${r.cost.toFixed(2)}</span> : '—'}</TableCell>
-        <TableCell className="sticky right-0 bg-card z-10 py-0 text-right"><RowLink onClick={() => onDrill(r)}>详情</RowLink></TableCell>
-      </>}
-    </BasicTable>
-  );
+  const columns = [
+    {
+      title: '来源',
+      key: 'source',
+      render: (_, r) => <SourceBadge source={r.source || 'unknown'} />,
+    },
+    {
+      title: '项目',
+      dataIndex: 'projectPath',
+      key: 'projectPath',
+      render: (v) => <span className={`${TD.cell} font-mono text-[11px]`} title={v}>{v || '—'}</span>,
+    },
+    {
+      title: '会话',
+      dataIndex: 'sessionCount',
+      key: 'sessionCount',
+      align: 'right',
+      render: v => <span className={`${TD.cell} text-muted-foreground text-[11px]`}>{v || 0}</span>,
+    },
+    {
+      title: '活动',
+      dataIndex: 'lastTs',
+      key: 'lastTs',
+      render: v => <span className={`${TD.cell} text-muted-foreground text-[11px]`}>{U.formatTs(v)}</span>,
+    },
+    {
+      title: 'Input',
+      dataIndex: 'input',
+      key: 'input',
+      align: 'right',
+      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+    },
+    {
+      title: 'Output',
+      dataIndex: 'output',
+      key: 'output',
+      align: 'right',
+      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+    },
+    {
+      title: 'Total',
+      dataIndex: 'total',
+      key: 'total',
+      align: 'right',
+      render: v => <span className={`${TD.cell} font-semibold`}>{U.fmt.format(v || 0)}</span>,
+    },
+    {
+      title: '费用',
+      dataIndex: 'cost',
+      key: 'cost',
+      align: 'right',
+      render: v => <span className={TD.cell}>{v > 0 ? <span className="text-amber-600">${v.toFixed(2)}</span> : '—'}</span>,
+    },
+    {
+      title: '',
+      key: 'action',
+      fixed: 'end',
+      align: 'right',
+      render: (_, r) => <RowLink onClick={() => onDrill(r)}>详情</RowLink>,
+    },
+  ];
+  return <Table columns={columns} dataSource={rows} rowKey={(r) => `${r.source}::${r.device}::${r.projectPath}`} size="small" pagination={{ pageSize: 10 }} locale={{ emptyText: '暂无数据' }} scroll={{ x: 'max-content' }} />;
 }
