@@ -52,6 +52,24 @@ func (s *SettingService) GetSettings() model.AppConfig {
 	return result
 }
 
+// EnsureDefaultCCSwitchPath 启动时检测 CC-Switch 默认路径并写入配置（若未配置）。
+// 原 app.startup 逻辑，下沉至服务层以消除 app 层对数据库的直接访问。
+func (s *SettingService) EnsureDefaultCCSwitchPath() {
+	if s.db == nil {
+		return
+	}
+	existing, _ := s.db.GetConfig("cc_switch_db_path")
+	if existing != "" {
+		return
+	}
+	if path, exists := config.CCSwitchDefaultPath(); exists {
+		s.db.SetConfig("cc_switch_db_path", path)
+		log.Printf("[service] EnsureDefaultCCSwitchPath auto-detected cc-switch db at %s", path)
+	} else {
+		log.Printf("[service] EnsureDefaultCCSwitchPath cc-switch db not found at %s", path)
+	}
+}
+
 // SaveSettings 持久化设置并立即应用自动同步间隔。
 func (s *SettingService) SaveSettings(cfg model.AppConfig) error {
 	pairs := map[string]string{

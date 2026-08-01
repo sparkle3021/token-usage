@@ -3,46 +3,33 @@ package service
 // Package service 提供业务逻辑层，负责聚合多表数据、调用定价引擎和采集编排。
 // 该层不依赖 Wails 运行时，便于独立测试。
 import (
-	"encoding/json"
-	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"token-dashboard/internal/database"
 	"token-dashboard/internal/model"
-	"token-dashboard/internal/pricing"
-)
-
-const (
-	pricingLiteLLMURL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
 )
 
 // DashboardService 仪表盘业务逻辑，聚合数据库原始数据并计算定价。
 type DashboardService struct {
-	db      *database.Manager
-	pricing *pricing.Engine
-	dataDir string // 数据目录，用于读写定价配置文件
+	db *database.Manager
 
 	// 会话聚合缓存：GetSessionsData 首次计算后缓存，采集完成时失效。
 	// time_usage 全表聚合较慢（~2.5s），缓存避免每次拉取都重算。
-	sessionsCache    []model.SessionAgg
-	sessionsCacheMu  sync.Mutex
+	sessionsCache   []model.SessionAgg
+	sessionsCacheMu sync.Mutex
 
 	// 仪表盘汇总缓存：GetDashboardData 首次计算后缓存，采集完成时失效。
 	// daily/runs 在数据源未更新时不变，切时间范围无需重查。
-	dailyCache    *model.DashboardData
-	dailyCacheMu  sync.Mutex
+	dailyCache   *model.DashboardData
+	dailyCacheMu sync.Mutex
 }
 
 // NewDashboardService 创建仪表盘服务实例。
-func NewDashboardService(db *database.Manager, pr *pricing.Engine, dataDir string) *DashboardService {
-	return &DashboardService{db: db, pricing: pr, dataDir: dataDir}
+func NewDashboardService(db *database.Manager) *DashboardService {
+	return &DashboardService{db: db}
 }
 
 // InvalidateCaches 清空仪表盘与会话聚合缓存，采集完成后由 App 调用。
@@ -174,63 +161,4 @@ func (s *DashboardService) GetTimeSeriesData(days int) *model.TimeSeriesData {
 	hourRows, _ := s.db.QueryHourUsage()
 	log.Printf("[service] GetTimeSeriesData(%d) timeRows=%d hourRows=%d elapsed=%v", days, len(timeRows), len(hourRows), time.Since(start))
 	return &model.TimeSeriesData{Time: timeRows, Hour: hourRows}
-}
-
-// UpdatePricing 从 LiteLLM 拉取最新定价数据并重载定价引擎。
-func (s *DashboardService) UpdatePricing() model.PricingUpdateResult {
-	log.Printf("[service] UpdatePricing started")
-	priceDir := filepath.Join(s.dataDir, "config")
-	os.MkdirAll(priceDir, 0755)
-
-	result := model.PricingUpdateResult{}
-
-	litellmData, err := fetchPricingJSON(pricingLiteLLMURL)
-	if err != nil {
-		log.Printf("[service] UpdatePricing litellm error=%v", err)
-		result.Error = fmt.Sprintf("LiteLLM 获取失败: %v", err)
-		return result
-	}
-	if err := os.WriteFile(filepath.Join(priceDir, "pricing-litellm.json"), wrapPricingJSON(litellmData), 0644); err != nil {
-		log.Printf("[service] UpdatePricing litellm write error=%v", err)
-		result.Error = fmt.Sprintf("LiteLLM 写入失败: %v", err)
-		return result
-	}
-
-	var litellmRaw map[string]interface{}
-	json.Unmarshal(litellmData, &litellmRaw)
-	result.Litellm = len(litellmRaw)
-
-	if s.pricing != nil {
-		if err := s.pricing.Reload(s.dataDir); err != nil {
-			log.Printf("[service] UpdatePricing reload error=%v", err)
-			result.Error = fmt.Sprintf("价格引擎重载失败: %v", err)
-			return result
-		}
-	}
-
-	result.Message = fmt.Sprintf("LiteLLM %d 条", result.Litellm)
-	log.Printf("[service] UpdatePricing done %s", result.Message)
-	return result
-}
-
-func fetchPricingJSON(url string) ([]byte, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch %s: HTTP %d", url, resp.StatusCode)
-	}
-	return io.ReadAll(resp.Body)
-}
-
-func wrapPricingJSON(raw []byte) []byte {
-	wrapped := map[string]interface{}{
-		"fetchedAt": time.Now().UnixMilli(),
-		"data":      json.RawMessage(raw),
-	}
-	b, _ := json.Marshal(wrapped)
-	return b
 }

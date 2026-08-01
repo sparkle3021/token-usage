@@ -147,11 +147,44 @@ func (s *CollectionService) GetAutoSyncInterval() int {
 	return s.autoSyncMinutes
 }
 
+// Shutdown 停止自动同步定时器并关闭数据库连接。
+// 数据库连接归属 CollectionService（持有 *database.Manager），app 层不直接持有。
 func (s *CollectionService) Shutdown() {
 	s.autoSyncMu.Lock()
 	defer s.autoSyncMu.Unlock()
 	if s.autoSyncCancel != nil {
 		s.autoSyncCancel()
 		s.autoSyncCancel = nil
+	}
+	if s.db != nil {
+		s.db.Close()
+	}
+}
+
+// CurrentOp 返回当前正在运行的操作名称（供前端展示），"" 表示空闲。
+func (s *CollectionService) CurrentOp() string {
+	if s.engine == nil {
+		return ""
+	}
+	return s.engine.CurrentOp()
+}
+
+// ReconcileStaleCheckpoints 检测 CC-Switch 陈旧检查点：若检查点存在但库中
+// 无任何用量数据（数据被清除过），则重置检查点使下次同步全量重导。
+// 原 app.startup 逻辑，下沉至服务层以消除 app 层对数据库的直接访问。
+func (s *CollectionService) ReconcileStaleCheckpoints() {
+	if s.db == nil {
+		return
+	}
+	ckProxy, _ := s.db.GetCheckpoint("cc_switch_cursor_proxy_request_logs")
+	ckRollup, _ := s.db.GetCheckpoint("cc_switch_rollup_max_date")
+	if ckProxy == "" && ckRollup == "" {
+		return
+	}
+	var cnt int
+	s.db.DB().QueryRow("SELECT (SELECT COUNT(*) FROM daily_usage) + (SELECT COUNT(*) FROM hour_usage)").Scan(&cnt)
+	if cnt == 0 {
+		log.Printf("[service] stale CC-Switch checkpoint detected (proxy=%q rollup=%q), total_data=0 — resetting for full re-sync", ckProxy, ckRollup)
+		s.db.ResetCCSwitchCheckpoints()
 	}
 }

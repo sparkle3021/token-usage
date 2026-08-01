@@ -17,16 +17,14 @@ import (
 // App Wails 应用主结构体，持有各服务实例，并将方法绑定到前端 window.go.main.App.*。
 // 每个方法仅做参数转发，业务逻辑在各 service 中实现。
 type App struct {
-	ctx            context.Context
-	dashboardSvc   *service.DashboardService
-	collectionSvc  *service.CollectionService
-	importSvc      *service.ImportService
-	settingSvc     *service.SettingService
-	quotaSvc       *service.QuotaService
-
-	db      *database.Manager      // 保留用于 startup 中的 CC-Switch 检测
-	engine  *orchestrator.Engine   // 保留用于 startup 中的事件桥接
-	dataDir string
+	ctx           context.Context
+	dashboardSvc  *service.DashboardService
+	collectionSvc *service.CollectionService
+	importSvc     *service.ImportService
+	settingSvc    *service.SettingService
+	quotaSvc      *service.QuotaService
+	pricingSvc    *service.PricingService
+	dataDir       string
 }
 
 // NewApp 初始化配置、数据库、定价引擎和采集引擎，组装各服务并返回 App 实例。
@@ -52,11 +50,12 @@ func NewApp() *App {
 	eng := orchestrator.New(db, pr)
 	log.Printf("[app] NewApp engine initialized collectors=%d", len(eng.Collectors()))
 
-	dashboardSvc := service.NewDashboardService(db, pr, cfg.DataDir)
+	dashboardSvc := service.NewDashboardService(db)
 	collectionSvc := service.NewCollectionService(db, eng)
 	importSvc := service.NewImportService()
 	settingSvc := service.NewSettingService(db, collectionSvc)
 	quotaSvc := service.NewQuotaService(db)
+	pricingSvc := service.NewPricingService(pr, cfg.DataDir)
 
 	return &App{
 		dashboardSvc:  dashboardSvc,
@@ -64,42 +63,20 @@ func NewApp() *App {
 		importSvc:     importSvc,
 		settingSvc:    settingSvc,
 		quotaSvc:      quotaSvc,
-		db:            db,
-		engine:        eng,
+		pricingSvc:    pricingSvc,
 		dataDir:       cfg.DataDir,
 	}
 }
 
-// startup Wails 启动回调，保存上下文、桥接采集事件、检测 CC-Switch 状态。
+// startup Wails 启动回调，保存上下文、桥接采集事件、触发 CC-Switch 检测与检查点校验。
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.collectionSvc.SetCtx(ctx)
 	a.collectionSvc.SetOnCollectionDone(func() { a.dashboardSvc.InvalidateCaches() })
 	a.collectionSvc.WireEngineEvents()
 
-	// Auto-detect CC-Switch DB path on startup if not configured
-	if a.db != nil {
-		existing, _ := a.db.GetConfig("cc_switch_db_path")
-		if existing == "" {
-			if path, exists := config.CCSwitchDefaultPath(); exists {
-				a.db.SetConfig("cc_switch_db_path", path)
-				log.Printf("[app] startup auto-detected cc-switch db at %s", path)
-			} else {
-				log.Printf("[app] startup cc-switch db not found at %s", path)
-			}
-		}
-
-		ckProxy, _ := a.db.GetCheckpoint("cc_switch_cursor_proxy_request_logs")
-		ckRollup, _ := a.db.GetCheckpoint("cc_switch_rollup_max_date")
-		if ckProxy != "" || ckRollup != "" {
-			var cnt int
-			a.db.DB().QueryRow("SELECT (SELECT COUNT(*) FROM daily_usage) + (SELECT COUNT(*) FROM hour_usage)").Scan(&cnt)
-			if cnt == 0 {
-				log.Printf("[app] stale CC-Switch checkpoint detected (proxy=%q rollup=%q), total_data=0 — resetting for full re-sync", ckProxy, ckRollup)
-				a.db.ResetCCSwitchCheckpoints()
-			}
-		}
-	}
+	a.settingSvc.EnsureDefaultCCSwitchPath()
+	a.collectionSvc.ReconcileStaleCheckpoints()
 }
 
 // shutdown Wails 关闭回调，停止自动同步定时器并关闭数据库连接。
@@ -107,9 +84,6 @@ func (a *App) shutdown(ctx context.Context) {
 	log.Println("[app] shutdown")
 	if a.collectionSvc != nil {
 		a.collectionSvc.Shutdown()
-	}
-	if a.db != nil {
-		a.db.Close()
 	}
 }
 
@@ -151,10 +125,7 @@ func (a *App) CollectStatus() *model.CollectStatus {
 
 // CurrentOp 返回当前正在运行的操作名称，供前端展示。返回 "" 表示空闲。
 func (a *App) CurrentOp() string {
-	if a.engine == nil {
-		return ""
-	}
-	return a.engine.CurrentOp()
+	return a.collectionSvc.CurrentOp()
 }
 
 func (a *App) ClearAllData() error {
@@ -191,7 +162,7 @@ func (a *App) SaveSettings(cfg model.AppConfig) error {
 
 // UpdatePricing 从远程源拉取最新定价数据并重载定价引擎。
 func (a *App) UpdatePricing() model.PricingUpdateResult {
-	return a.dashboardSvc.UpdatePricing()
+	return a.pricingSvc.UpdatePricing()
 }
 
 // ---------------------------------------------------------------------------
