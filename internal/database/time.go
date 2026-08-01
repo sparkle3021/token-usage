@@ -74,7 +74,8 @@ func (m *Manager) QueryTimeUsage(days int) ([]model.TimeUsage, error) {
 
 	since := ""
 	if days > 0 {
-		since = time.Now().AddDate(0, 0, -days).Format("2006-01-02")
+		// 用 event_time（RFC3339）过滤，走 idx_time_usage_time 索引顺序扫描即有序，避免全表临时排序
+		since = time.Now().AddDate(0, 0, -days).Format("2006-01-02T00:00:00")
 	}
 
 	var rows *sql.Rows
@@ -86,7 +87,7 @@ func (m *Manager) QueryTimeUsage(days int) ([]model.TimeUsage, error) {
 				input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 				reasoning_output_tokens, total_tokens, cost_usd
 			FROM time_usage
-			WHERE usage_date >= ?
+			WHERE event_time >= ?
 			ORDER BY event_time DESC
 		`, since)
 	} else {

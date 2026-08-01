@@ -75,7 +75,7 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.collectionSvc.SetCtx(ctx)
-	a.collectionSvc.SetOnCollectionDone(func() { a.dashboardSvc.InvalidateSessionsCache() })
+	a.collectionSvc.SetOnCollectionDone(func() { a.dashboardSvc.InvalidateCaches() })
 	a.collectionSvc.WireEngineEvents()
 
 	// Auto-detect CC-Switch DB path on startup if not configured

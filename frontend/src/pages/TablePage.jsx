@@ -1,13 +1,13 @@
 import { ranges, rangeDays } from '../store/filterStore.jsx';
 import { useState, useMemo } from 'react';
-import { Card, Tabs, Modal, Table, Button } from 'antd';
+import { Card, Tabs, Segmented, Modal, Table, Button } from 'antd';
 import SourceBadge from '../components/SourceBadge.jsx';
 import SourceIcon from '../components/SourceIcon.jsx';
 import MultiSelect from '../components/MultiSelect.jsx';
 import * as U from '../lib/utils.js';
 import SourceDrillDialog from './table/SourceDrillDialog.jsx';
 
-export default function TablePage({ M, onRefresh }) {
+export default function TablePage({ M, onRangeSwitch }) {
   const defaults = { rangeId: '30d', startDate: U.daysAgo(29), endDate: U.daysAgo(0), sources: new Set(), devices: new Set(), models: new Set() };
   const [f, setF] = useState(defaults);
   const [drill, setDrill] = useState(null);
@@ -25,7 +25,8 @@ export default function TablePage({ M, onRefresh }) {
       const days = rangeDays[rangeId] || 30;
       setF({ ...f, rangeId, startDate: U.daysAgo(days - 1), endDate: U.daysAgo(0) });
     }
-    if (onRefresh) onRefresh();
+    // 切时间：本地立即渲染，后台异步补拉时间序列（不阻塞切换）
+    onRangeSwitch?.(rangeDays[rangeId]);
   };
 
   const closeDrill = () => setDrill(null);
@@ -35,16 +36,16 @@ export default function TablePage({ M, onRefresh }) {
       {/* Filter Bar */}
       <Card className="p-3 shrink-0 overflow-visible" styles={{ body: { padding: 12 } }}>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-1">时间</span>
-          <Tabs
-            activeKey={f.rangeId}
+          <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium mr-1">时间</span>
+          <Segmented
+            value={f.rangeId}
             onChange={setRange}
             size="small"
-            items={ranges.map(r => ({ key: r.id, label: <span className="text-xs px-2.5">{r.label}</span> }))}
+            options={ranges.map(r => ({ label: r.label, value: r.id }))}
           />
         </div>
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-1">来源</span>
+          <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium mr-1">来源</span>
           {allSources.map(s => (
             <SourceBadge key={s} source={s} selected={f.sources.has(s)} onClick={() => { const n = new Set(f.sources); n.has(s) ? n.delete(s) : n.add(s); setF({ ...f, sources: n }); }} />
           ))}

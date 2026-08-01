@@ -25,7 +25,7 @@ function AppContent({ dark, onToggleDark }) {
   setMessageApi(message);
   const [page, setPage] = useState('dashboard');
 
-  const { M, loadError, refreshing, fetchData, allSources, allModels, heatmapData } = useDashboardData();
+  const { M, loadError, refreshing, fetchData, fetchTimeSeries, allSources, allModels, heatmapData } = useDashboardData();
   const { collecting, runCollect, runFullCollect } = useCollection(fetchData);
   const { handleSettingsChange } = useSettings(fetchData);
 
@@ -72,12 +72,12 @@ function AppContent({ dark, onToggleDark }) {
           allSources={allSources}
           allModels={allModels}
           heatmapData={heatmapData}
-          onRefresh={fetchData}
+          onRangeSwitch={fetchTimeSeries}
         />
       ) : page === 'quota' ? (
         <QuotaPage />
       ) : (
-        <TablePage M={M} onRefresh={fetchData} />
+        <TablePage M={M} onRangeSwitch={fetchTimeSeries} />
       )}
     </div>
   );

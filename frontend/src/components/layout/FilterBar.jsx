@@ -1,9 +1,9 @@
 /**
- * 过滤器行组件：时间范围 Tabs、来源标签选择、模型多选、对比切换。
+ * 过滤器行组件：时间范围 Segmented、来源标签选择、模型多选、对比切换。
  */
 
 import { ranges } from '../../store/filterStore.jsx';
-import { Card, Tabs, Button } from 'antd';
+import { Card, Segmented, Button } from 'antd';
 import SourceBadge from '../SourceBadge.jsx';
 import MultiSelect from '../MultiSelect.jsx';
 
@@ -11,16 +11,16 @@ export default function FilterBar({ f, allSources, allModels, onSetRange, onTogg
   return (
     <Card className="p-3 overflow-visible" styles={{ body: { padding: 12 } }}>
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">时间</span>
-        <Tabs
-          activeKey={f.rangeId}
+        <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">时间</span>
+        <Segmented
+          value={f.rangeId}
           onChange={onSetRange}
           size="small"
-          items={ranges.map(r => ({ key: r.id, label: <span className="text-xs px-1">{r.label}</span> }))}
+          options={ranges.map(r => ({ label: r.label, value: r.id }))}
         />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-1">来源</span>
+        <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium mr-1">来源</span>
         {allSources.map(s => (
           <SourceBadge key={s} source={s} selected={f.sources.has(s)} onClick={() => onToggleSource(s)} />
         ))}

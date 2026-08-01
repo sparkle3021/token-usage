@@ -33,6 +33,11 @@ type DashboardService struct {
 	// time_usage 全表聚合较慢（~2.5s），缓存避免每次拉取都重算。
 	sessionsCache    []model.SessionAgg
 	sessionsCacheMu  sync.Mutex
+
+	// 仪表盘汇总缓存：GetDashboardData 首次计算后缓存，采集完成时失效。
+	// daily/runs 在数据源未更新时不变，切时间范围无需重查。
+	dailyCache    *model.DashboardData
+	dailyCacheMu  sync.Mutex
 }
 
 // NewDashboardService 创建仪表盘服务实例。
@@ -40,18 +45,28 @@ func NewDashboardService(db *database.Manager, pr *pricing.Engine, dataDir strin
 	return &DashboardService{db: db, pricing: pr, dataDir: dataDir}
 }
 
-// InvalidateSessionsCache 清空会话聚合缓存，采集完成后由 App 调用。
-func (s *DashboardService) InvalidateSessionsCache() {
+// InvalidateCaches 清空仪表盘与会话聚合缓存，采集完成后由 App 调用。
+func (s *DashboardService) InvalidateCaches() {
 	s.sessionsCacheMu.Lock()
-	defer s.sessionsCacheMu.Unlock()
 	s.sessionsCache = nil
+	s.sessionsCacheMu.Unlock()
+	s.dailyCacheMu.Lock()
+	s.dailyCache = nil
+	s.dailyCacheMu.Unlock()
 }
 
 // GetDashboardData 获取仪表盘汇总数据，包含日用量、会话和采集运行记录。
 // 自动关联 project_path 到日用量记录，并规范化运行日志。
+// 结果缓存于内存（dailyCache），采集完成后由 InvalidateCaches 失效。
 func (s *DashboardService) GetDashboardData() *model.DashboardData {
 	defer log.Printf("[service] GetDashboardData done")
 	start := time.Now()
+
+	s.dailyCacheMu.Lock()
+	defer s.dailyCacheMu.Unlock()
+	if s.dailyCache != nil {
+		return s.dailyCache
+	}
 
 	if s.db == nil {
 		log.Printf("[service] GetDashboardData db=nil")
@@ -97,15 +112,17 @@ func (s *DashboardService) GetDashboardData() *model.DashboardData {
 	log.Printf("[service] GetDashboardData daily=%d sessions=%d runs=%d elapsed=%v",
 		len(daily), len(sessions), len(runs), time.Since(start))
 
-	return &model.DashboardData{
+	result := &model.DashboardData{
 		Daily:    daily,
 		Sessions: sessions,
 		Runs:     runs,
 	}
+	s.dailyCache = result
+	return result
 }
 
 // GetSessionsData 按 session_id 聚合 time_usage 返回会话明细，作为会话 Tab 数据源。
-// 结果缓存于内存，首次计算后复用，采集完成后由 InvalidateSessionsCache 失效。
+// 结果缓存于内存，首次计算后复用，采集完成后由 InvalidateCaches 失效。
 func (s *DashboardService) GetSessionsData() []model.SessionAgg {
 	if s.db == nil {
 		return nil

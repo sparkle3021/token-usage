@@ -18,7 +18,7 @@ import HeatmapDrillDialog from './dashboard/HeatmapDrillDialog.jsx';
 import { Modal } from 'antd';
 import SourceIcon from '../components/SourceIcon.jsx';
 
-export default function DashboardPage({ M, allSources, allModels, heatmapData, onRefresh }) {
+export default function DashboardPage({ M, allSources, allModels, heatmapData, onRangeSwitch }) {
   const { f, dispatch } = useFilter();
   const [trendMode, setTrendMode] = useState('stacked');
   const [topModelDrill, setTopModelDrill] = useState(null);
@@ -113,7 +113,8 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
 
   const setRange = (rangeId) => {
     dispatch({ type: 'SET_RANGE', rangeId, daily: M?.daily || [] });
-    onRefresh(false, rangeDays[rangeId]);
+    // 切时间：本地立即渲染（dispatch 已触发），后台异步补拉时间序列
+    onRangeSwitch?.(rangeDays[rangeId]);
     // Compute expected range length for granularity recommendation
     let days = rangeDays[rangeId];
     if (!days && rangeId === 'all' && M?.daily?.length) {
