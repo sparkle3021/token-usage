@@ -64,7 +64,8 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
       if (onSettingsChange) onSettingsChange(next);
       return true;
     } catch (err) {
-      toast?.error('保存失败', err ? `详情：${String(err)}` : undefined);
+      console.error('[settings] save failed', err);
+      toast?.error('保存失败，请重试');
       return false;
     }
   }, [cfg, onSettingsChange, toast]);
@@ -92,10 +93,11 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
         setCfg(c => ({ ...c, ccSwitchDBPath: path }));
         toast?.success('已自动检测到数据库路径，点击"保存"生效');
       } else {
-        toast?.info('未找到默认路径，请手动填写', '默认路径为 ~/.cc-switch/cc-switch.db');
+        toast?.info('未找到默认路径，请手动填写（默认 ~/.cc-switch/cc-switch.db）');
       }
     } catch (err) {
-      toast?.error('检测失败', `详情：${String(err)}`);
+      console.error('[settings] detect db failed', err);
+      toast?.error('检测失败，请检查路径或网络');
     } finally {
       setDetecting(false);
     }
@@ -108,15 +110,16 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
       switch (confirmAction) {
         case 'fullSync': {
           await onFullSync();
-          toast?.success('全量同步已启动', '重读所有数据源，可在顶栏查看进度');
+          toast?.success('全量同步已启动，重读所有数据源，可在顶栏查看进度');
           break;
         }
         case 'updatePricing': {
           const result = await window.go.main.App.UpdatePricing();
           if (result.error) {
-            toast?.error('价格更新失败', `详情：${result.error}`);
+            console.error('[settings] update pricing failed', result.error);
+            toast?.error('价格更新失败，请检查网络后重试');
           } else {
-            toast?.success('价格更新成功', result.message || `LiteLLM ${result.litellm} 条`);
+            toast?.success('价格更新成功，' + (result.message || `LiteLLM ${result.litellm} 条`));
           }
           break;
         }
@@ -129,7 +132,8 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
       }
       setConfirmAction(null);
     } catch (err) {
-      toast?.error('操作失败', `详情：${String(err)}`);
+      console.error('[settings] operation failed', err);
+      toast?.error('操作失败，请重试');
     } finally {
       setBusy(false);
     }

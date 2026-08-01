@@ -401,7 +401,7 @@ function SourceTable({ rows, onDrill }) {
       render: v => <span className={TD.cell}>{v > 0 ? <span className="text-amber-600">${v.toFixed(2)}</span> : '—'}</span>,
     },
     {
-      title: '',
+      title: '操作',
       key: 'action',
       fixed: 'end',
       align: 'right',
@@ -459,7 +459,7 @@ function ModelTable({ rows, onDrill }) {
       render: v => <span className={TD.cell}>{v > 0 ? <span className="text-amber-600">${v.toFixed(2)}</span> : '—'}</span>,
     },
     {
-      title: '',
+      title: '操作',
       key: 'action',
       fixed: 'end',
       align: 'right',
@@ -524,7 +524,7 @@ function SessionTable({ rows, onDrill }) {
       render: v => <span className={TD.cell}>{v > 0 ? <span className="text-amber-600">${v.toFixed(2)}</span> : '—'}</span>,
     },
     {
-      title: '',
+      title: '操作',
       key: 'action',
       fixed: 'end',
       align: 'right',
