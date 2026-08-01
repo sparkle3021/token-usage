@@ -175,8 +175,8 @@ function CTooltip({ active, payload, label }) {
   if (!active || !payload) return null;
   const total = payload.reduce((s, p) => s + (p.value || 0), 0);
   return (
-    <div className="bg-white shadow-lg border rounded-lg p-2.5 text-xs">
-      <div className="font-semibold mb-1.5 text-foreground">{label}</div>
+    <div className="bg-popover text-popover-foreground shadow-lg border rounded-lg p-2.5 text-xs">
+      <div className="font-semibold mb-1.5">{label}</div>
       {payload.map(p => (
         <div key={p.name} className="flex items-center gap-2 mt-0.5">
           <SourceIcon name={p.name} className="w-3 h-3" />
@@ -185,7 +185,7 @@ function CTooltip({ active, payload, label }) {
         </div>
       ))}
       {payload.length > 1 && (
-        <div className="flex items-center justify-between gap-2 mt-1.5 pt-1.5 border-t font-semibold text-foreground">
+        <div className="flex items-center justify-between gap-2 mt-1.5 pt-1.5 border-t font-semibold">
           <span>合计</span>
           <span className="tabular-nums">{U.compactCN(total)}</span>
         </div>

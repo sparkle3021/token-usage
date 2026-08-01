@@ -117,6 +117,13 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
                 <Tooltip
                   formatter={(v, name) => [U.compactCN(v), name]}
                   labelFormatter={label => `${date} ${label}`}
+                  contentStyle={{
+                    background: 'var(--popover)',
+                    color: 'var(--popover-foreground)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
                 />
                 {seriesModels.map((m, i) => (
                   <Bar key={m.key} name={m.label} dataKey={m.key} stackId="a" fill={palette[i % palette.length]} radius={[2, 2, 0, 0]} />
