@@ -1,4 +1,4 @@
-/** @type {import('./types.js').HeatmapTheme} */
+/** @type {{{ empty: string, level1: string, level2: string, level3: string, level4: string, level5: string }}} */
 export const DEFAULT_THEME = {
   empty: '#ebedf0',
   level1: '#9be9a8',

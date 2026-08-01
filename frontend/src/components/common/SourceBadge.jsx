@@ -1,8 +1,8 @@
-import * as U from '../lib/utils.js';
-import SourceIcon from './SourceIcon.jsx';
+import { getSourceColor } from '@/lib/iconMap.js';
+import SourceIcon from '@/components/common/SourceIcon.jsx';
 
 export default function SourceBadge({ source, selected, onClick, size = 'sm' }) {
-  const color = U.getSourceColor(source || '');
+  const color = getSourceColor(source || '');
   const sm = size === 'sm';
 
   const base = `inline-flex items-center rounded font-medium whitespace-nowrap

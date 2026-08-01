@@ -1,8 +1,9 @@
+import { compactCN } from '@/lib/formatters.js';
+import { getSourceColor } from '@/lib/iconMap.js';
 import React, { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Card } from 'antd';
-import * as U from '../../lib/utils.js';
-import SourceIcon from '../SourceIcon.jsx';
+import SourceIcon from '@/components/common/SourceIcon.jsx';
 
 export default function SourceDonut({ rows, focused, onFocusSource }) {
   const data = useMemo(() => {
@@ -10,7 +11,7 @@ export default function SourceDonut({ rows, focused, onFocusSource }) {
     const items = sources.map(src => {
       let v = 0;
       for (const r of rows) if (r.source === src) v += r.totalTokens;
-      return { name: src, value: v, color: U.getSourceColor(src) };
+      return { name: src, value: v, color: getSourceColor(src) };
     }).sort((a, b) => b.value - a.value);
     return items;
   }, [rows]);
@@ -35,7 +36,7 @@ export default function SourceDonut({ rows, focused, onFocusSource }) {
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider">合计</div>
-              <div className="text-xl font-semibold tabular-nums">{U.compactCN(sum)}</div>
+              <div className="text-xl font-semibold tabular-nums">{compactCN(sum)}</div>
             </div>
           </div>
           <div className="w-full space-y-1">
@@ -45,7 +46,7 @@ export default function SourceDonut({ rows, focused, onFocusSource }) {
                 onClick={() => onFocusSource(focused === d.name ? null : d.name)}>
                 <SourceIcon name={d.name} className="w-4 h-4 shrink-0" />
                 <span className="text-xs truncate flex-1">{d.name}</span>
-                <span className="text-xs text-muted-foreground tabular-nums">{U.compactCN(d.value)}</span>
+                <span className="text-xs text-muted-foreground tabular-nums">{compactCN(d.value)}</span>
                 <span className="text-xs font-semibold tabular-nums w-10 text-right">{sum ? ((d.value / sum) * 100).toFixed(1) : 0}%</span>
               </div>
             ))}

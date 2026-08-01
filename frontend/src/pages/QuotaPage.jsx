@@ -4,9 +4,9 @@ import { PlusIcon } from 'lucide-react';
 import {
   listQuotaConfigs, getProviderSchemas, createQuotaConfig, updateQuotaConfig,
   deleteQuotaConfig, fetchQuota,
-} from '../api/client.js';
-import QuotaCard from '../components/QuotaCard.jsx';
-import QuotaDialog from '../components/QuotaDialog.jsx';
+} from '@/api/client.js';
+import QuotaCard from '@/components/common/QuotaCard.jsx';
+import QuotaDialog from '@/components/dialogs/QuotaDialog.jsx';
 
 export default function QuotaPage() {
   const [configs, setConfigs] = useState([]);

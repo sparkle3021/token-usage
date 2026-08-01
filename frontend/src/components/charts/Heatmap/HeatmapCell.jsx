@@ -1,10 +1,10 @@
 import React from 'react';
 import { Tooltip } from 'antd';
-import { formatTooltip } from './utils.js';
+import { formatTooltip } from '@/components/charts/Heatmap/utils.js';
 
 /**
  * @param {Object} props
- * @param {import('./types.js').DayData} props.day
+ * @param {{{ date: string, count: number, isToday: boolean }}} props.day
  * @param {number} props.size
  * @param {(count: number) => string} props.getColor
  * @param {(date: string) => void} [props.onSelect]

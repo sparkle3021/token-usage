@@ -1,6 +1,7 @@
+import { compactCN } from '@/lib/formatters.js';
+import { getModelIconUrl, getSourceColor } from '@/lib/iconMap.js';
 import React, { useMemo } from 'react';
 import { Card } from 'antd';
-import * as U from '../../lib/utils.js';
 
 export default function TopModels({ rows, onDrillModel, allDaily = [] }) {
   const list = useMemo(() => {
@@ -42,19 +43,19 @@ export default function TopModels({ rows, onDrillModel, allDaily = [] }) {
             <div key={m.model} className="grid grid-cols-[1fr_auto] items-center gap-3 px-1.5 py-1.5 rounded-md cursor-pointer hover:bg-muted/50" onClick={() => onDrillModel?.(m)}>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  {U.getModelIconUrl(m.model) && <img src={U.getModelIconUrl(m.model)} className="w-4 h-4 shrink-0" alt="" />}
+                  {getModelIconUrl(m.model) && <img src={getModelIconUrl(m.model)} className="w-4 h-4 shrink-0" alt="" />}
                   <span className="text-xs font-medium truncate">{m.model}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden" style={{ width: `${(m.total / max) * 100}%` }}>
                   <div className="h-full flex">
                     {m.sources.slice(0, 4).map(s => (
-                      <div key={s.source} className="h-full transition-all" style={{ width: `${(s.total / m.total) * 100}%`, background: U.getSourceColor(s.source) }} />
+                      <div key={s.source} className="h-full transition-all" style={{ width: `${(s.total / m.total) * 100}%`, background: getSourceColor(s.source) }} />
                     ))}
                   </div>
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-xs font-semibold tabular-nums">{U.compactCN(m.total)}</div>
+                <div className="text-xs font-semibold tabular-nums">{compactCN(m.total)}</div>
                 <div className="text-[10px] text-muted-foreground">{m.cost > 0 ? '$' + m.cost.toFixed(2) : '—'}</div>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { DEFAULT_THEME } from './constants.js';
+import { DEFAULT_THEME } from '@/components/charts/Heatmap/constants.js';
 
 /**
  * Parse yyyy-MM-dd to Date (local timezone)
@@ -32,10 +32,10 @@ export function isToday(dateStr) {
 
 /**
  * Fill missing dates with 0 count within the date range
- * @param {import('./types.js').Contribution[]} data
+ * @param {{{ date: string, count: number }}[]} data
  * @param {Date} startDate
  * @param {Date} endDate
- * @returns {import('./types.js').Contribution[]}
+ * @returns {{{ date: string, count: number }}[]}
  */
 export function fillMissingDates(data, startDate, endDate) {
   const map = new Map();
@@ -55,8 +55,8 @@ export function fillMissingDates(data, startDate, endDate) {
 /**
  * Build week columns from filled data.
  * Each week = 7 days (Sun..Sat). First/last column may be partial.
- * @param {import('./types.js').Contribution[]} filledData
- * @returns {import('./types.js').DayData[][]}
+ * @param {{{ date: string, count: number }}[]} filledData
+ * @returns {{{ date: string, count: number, isToday: boolean }}[][]}
  */
 export function buildWeeks(filledData) {
   if (filledData.length === 0) return [];
@@ -95,8 +95,8 @@ export function buildWeeks(filledData) {
 
 /**
  * Calculate month label positions from weeks array.
- * @param {import('./types.js').DayData[][]} weeks
- * @returns {import('./types.js').MonthLabel[]}
+ * @param {{{ date: string, count: number, isToday: boolean }}[][]} weeks
+ * @returns {{{ col: number, label: string }}[]}
  */
 export function buildMonths(weeks) {
   const months = [];
@@ -118,7 +118,7 @@ export function buildMonths(weeks) {
 /**
  * Get contribution color for a count value (exponential bins).
  * @param {number} count
- * @param {import('./types.js').HeatmapTheme} [theme]
+ * @param {{{ empty: string, level1: string, level2: string, level3: string, level4: string, level5: string }}} [theme]
  * @returns {string}
  */
 export function getContributionColor(count, theme = DEFAULT_THEME) {

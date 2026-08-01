@@ -1,6 +1,6 @@
+import { compactCN, deltaPct } from '@/lib/formatters.js';
 import React, { useMemo } from 'react';
 import { Card } from 'antd';
-import * as U from '../../lib/utils.js';
 
 export default function GrowthPanel({ totalsByDay }) {
   const stats = useMemo(() => {
@@ -8,11 +8,11 @@ export default function GrowthPanel({ totalsByDay }) {
     const values = entries.map(d => d[1]);
     const n = values.length;
     const today = values[n - 1] || 0;
-    const dod = n >= 2 ? U.deltaPct(today, values[n - 2] || 0) : null;
+    const dod = n >= 2 ? deltaPct(today, values[n - 2] || 0) : null;
     const last7 = values.slice(-7).reduce((s, v) => s + v, 0);
-    const wow = n >= 14 ? U.deltaPct(last7, values.slice(-14, -7).reduce((s, v) => s + v, 0)) : null;
+    const wow = n >= 14 ? deltaPct(last7, values.slice(-14, -7).reduce((s, v) => s + v, 0)) : null;
     const last30 = values.slice(-30).reduce((s, v) => s + v, 0);
-    const mom = n >= 60 ? U.deltaPct(last30, values.slice(-60, -30).reduce((s, v) => s + v, 0)) : null;
+    const mom = n >= 60 ? deltaPct(last30, values.slice(-60, -30).reduce((s, v) => s + v, 0)) : null;
     let bestIdx = 0;
     values.forEach((v, i) => { if (v > values[bestIdx]) bestIdx = i; });
     const avg = n ? Math.round(values.reduce((s, v) => s + v, 0) / n) : 0;
@@ -24,15 +24,15 @@ export default function GrowthPanel({ totalsByDay }) {
       <div className="mb-3"><div className="text-sm font-semibold">环比与趋势</div><div className="text-xs text-muted-foreground">基于当前筛选周期</div></div>
       <div>
         <div className="space-y-1.5">
-          <Stat label="日环比 DoD" value={stats.dod} sub={`今日 ${U.compactCN(stats.today)}`} />
-          <Stat label="周环比 WoW" value={stats.wow} sub={`7 日 ${U.compactCN(stats.last7)}`} />
-          <Stat label="月环比 MoM" value={stats.mom} sub={`30 日 ${U.compactCN(stats.last30)}`} />
-          <Stat label="日均" value={null} sub={U.compactCN(stats.avg)} subUnit="tokens/天" />
+          <Stat label="日环比 DoD" value={stats.dod} sub={`今日 ${compactCN(stats.today)}`} />
+          <Stat label="周环比 WoW" value={stats.wow} sub={`7 日 ${compactCN(stats.last7)}`} />
+          <Stat label="月环比 MoM" value={stats.mom} sub={`30 日 ${compactCN(stats.last30)}`} />
+          <Stat label="日均" value={null} sub={compactCN(stats.avg)} subUnit="tokens/天" />
         </div>
         {stats.bestDate && (
           <div className="mt-3 p-2.5 bg-muted rounded-lg text-[11px] flex items-center gap-2">
             <span className="text-amber-500 shrink-0">★</span>
-            <span>峰值 <b>{stats.bestDate}</b> · {U.compactCN(stats.bestVal)} tokens</span>
+            <span>峰值 <b>{stats.bestDate}</b> · {compactCN(stats.bestVal)} tokens</span>
           </div>
         )}
       </div>

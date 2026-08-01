@@ -1,9 +1,9 @@
 import React from 'react';
-import { DEFAULT_THEME, CELL_SIZE } from './constants.js';
+import { DEFAULT_THEME, CELL_SIZE } from '@/components/charts/Heatmap/constants.js';
 
 /**
  * @param {Object} props
- * @param {import('./types.js').HeatmapTheme} [props.theme]
+ * @param {{{ empty: string, level1: string, level2: string, level3: string, level4: string, level5: string }}} [props.theme]
  * @param {number} [props.cellSize]
  */
 const HeatmapLegend = React.memo(function HeatmapLegend({ theme = DEFAULT_THEME, cellSize = CELL_SIZE }) {

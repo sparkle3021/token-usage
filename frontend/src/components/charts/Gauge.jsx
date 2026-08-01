@@ -1,12 +1,12 @@
+import { compactCN, deltaPct } from '@/lib/formatters.js';
 import React from 'react';
 import { Card } from 'antd';
-import * as U from '../../lib/utils.js';
 
 export default function Gauge({ rate, cacheRead, cacheCreation, prevRate }) {
   const r = Math.max(0, Math.min(100, rate));
   const C = Math.PI * 70;
   const dash = (r / 100) * C;
-  const delta = U.deltaPct(rate, prevRate);
+  const delta = deltaPct(rate, prevRate);
 
   return (
     <Card styles={{ body: { padding: 16 } }}>
@@ -29,8 +29,8 @@ export default function Gauge({ rate, cacheRead, cacheCreation, prevRate }) {
             <span className="text-2xl font-semibold tabular-nums">{r.toFixed(1)}</span><span className="text-sm text-muted-foreground ml-0.5">%</span>
           </div>
           <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
-            <span>读取 <b className="text-foreground">{U.compactCN(cacheRead)}</b></span>
-            <span>创建 <b className="text-foreground">{U.compactCN(cacheCreation)}</b></span>
+            <span>读取 <b className="text-foreground">{compactCN(cacheRead)}</b></span>
+            <span>创建 <b className="text-foreground">{compactCN(cacheCreation)}</b></span>
           </div>
         </div>
       </div>

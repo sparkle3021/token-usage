@@ -2,10 +2,10 @@
  * 过滤器行组件：时间范围 Segmented、来源标签选择、模型多选、对比切换。
  */
 
-import { ranges } from '../../store/filterStore.jsx';
+import { ranges } from '@/store/filterStore.jsx';
 import { Card, Segmented, Button } from 'antd';
-import SourceBadge from '../SourceBadge.jsx';
-import MultiSelect from '../MultiSelect.jsx';
+import SourceBadge from '@/components/common/SourceBadge.jsx';
+import MultiSelect from '@/components/common/MultiSelect.jsx';
 
 export default function FilterBar({ f, allSources, allModels, onSetRange, onToggleSource, onSetModels, onToggleCompare }) {
   return (

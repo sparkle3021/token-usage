@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button, Card, Skeleton } from 'antd';
 import { PencilIcon, Trash2Icon, RefreshCwIcon } from 'lucide-react';
-import { getSourceIconUrl } from '../lib/iconMap.js';
+import { getSourceIconUrl } from '@/lib/iconMap.js';
 
 const PROVIDER_NAMES = {
   opencode: 'OpenCode',

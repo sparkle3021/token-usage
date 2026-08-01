@@ -1,10 +1,10 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Card } from 'antd';
-import HeatmapGrid from './HeatmapGrid.jsx';
-import HeatmapLegend from './HeatmapLegend.jsx';
-import { useHeatmap } from './hooks.js';
-import { getContributionColor } from './utils.js';
-import { DEFAULT_THEME, DARK_THEME, CELL_SIZE, GAP } from './constants.js';
+import HeatmapGrid from '@/components/charts/Heatmap/HeatmapGrid.jsx';
+import HeatmapLegend from '@/components/charts/Heatmap/HeatmapLegend.jsx';
+import { useHeatmap } from '@/components/charts/Heatmap/hooks.js';
+import { getContributionColor } from '@/components/charts/Heatmap/utils.js';
+import { DEFAULT_THEME, DARK_THEME, CELL_SIZE, GAP } from '@/components/charts/Heatmap/constants.js';
 
 const LABEL_WIDTH = 32;
 const MIN_CELL = 8;
@@ -13,7 +13,7 @@ const MAX_CELL = 20;
 /**
  * GitHub-style contribution heatmap with adaptive cell sizing.
  *
- * @param {import('./types.js').HeatmapProps} props
+ * @param {Object} props
  */
 export default function Heatmap({
   data = [],

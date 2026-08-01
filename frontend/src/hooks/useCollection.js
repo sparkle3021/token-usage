@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import * as api from '../api/client.js';
+import * as api from '@/api/client.js';
 
 const POLL_TIMEOUT = 30000;
 const FULL_POLL_TIMEOUT = 60000;

@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useMemo } from 'react';
-import { daysAgo } from '../lib/formatters.js';
+import { daysAgo } from '@/lib/formatters.js';
 
 /**
  * 全局过滤器状态管理，基于 Context + useReducer。

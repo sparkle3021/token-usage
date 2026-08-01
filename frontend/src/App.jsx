@@ -6,16 +6,17 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { App as AntdApp, Button, ConfigProvider, theme as antdTheme } from 'antd';
-import { useDashboardData } from './hooks/useDashboardData.js';
-import { useCollection } from './hooks/useCollection.js';
-import { useSettings } from './hooks/useSettings.js';
-import { FilterProvider } from './store/filterStore.jsx';
-import { formatTs } from './lib/formatters.js';
-import { setMessageApi } from './lib/message.js';
-import Header from './components/layout/Header.jsx';
-import DashboardPage from './pages/DashboardPage.jsx';
-import TablePage from './pages/TablePage.jsx';
-import QuotaPage from './pages/QuotaPage.jsx';
+import { useDashboardData } from '@/hooks/useDashboardData.js';
+import { useCollection } from '@/hooks/useCollection.js';
+import { useSettings } from '@/hooks/useSettings.js';
+import { FilterProvider } from '@/store/filterStore.jsx';
+import { formatTs } from '@/lib/formatters.js';
+import { setMessageApi } from '@/lib/message.js';
+import { clearAllData } from '@/api/client.js';
+import Header from '@/components/layout/Header.jsx';
+import DashboardPage from '@/pages/DashboardPage.jsx';
+import TablePage from '@/pages/TablePage.jsx';
+import QuotaPage from '@/pages/QuotaPage.jsx';
 import { WindowSetDarkTheme, WindowSetLightTheme, WindowSetBackgroundColour } from '../wailsjs/runtime/runtime.js';
 
 const THEME_KEY = 'app-theme';
@@ -30,7 +31,7 @@ function AppContent({ dark, onToggleDark }) {
   const { handleSettingsChange } = useSettings(fetchData);
 
   const onClearData = useCallback(() => {
-    window.go.main.App.ClearAllData().then(() => fetchData(true)).catch(() => {});
+    clearAllData().then(() => fetchData(true)).catch(() => {});
   }, [fetchData]);
 
   const lastSync = M?.runs?.[0]?.collectedAt ? formatTs(M.runs[0].collectedAt) : '—';

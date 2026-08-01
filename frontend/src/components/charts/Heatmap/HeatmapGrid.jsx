@@ -1,11 +1,11 @@
 import React from 'react';
-import HeatmapCell from './HeatmapCell.jsx';
-import { DAY_LABELS } from './constants.js';
+import HeatmapCell from '@/components/charts/Heatmap/HeatmapCell.jsx';
+import { DAY_LABELS } from '@/components/charts/Heatmap/constants.js';
 
 /**
  * @param {Object} props
- * @param {import('./types.js').DayData[][]} props.weeks
- * @param {import('./types.js').MonthLabel[]} props.months
+ * @param {{{ date: string, count: number, isToday: boolean }}[][]} props.weeks
+ * @param {{{ col: number, label: string }}[]} props.months
  * @param {number} props.cellSize
  * @param {number} props.gap
  * @param {(count: number) => string} props.getColor

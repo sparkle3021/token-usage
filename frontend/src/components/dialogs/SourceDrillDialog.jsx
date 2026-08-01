@@ -1,7 +1,9 @@
+import { aggregateTotals } from '@/lib/aggregators.js';
+import { compactCN } from '@/lib/formatters.js';
+import { getModelIconUrl, getSourceColor } from '@/lib/iconMap.js';
 import { useMemo } from 'react';
 import { Modal } from 'antd';
-import * as U from '../../lib/utils.js';
-import SourceIcon from '../../components/SourceIcon.jsx';
+import SourceIcon from '@/components/common/SourceIcon.jsx';
 
 /**
  * Table 页面来源行「模型分布」按钮点击 → 专用弹窗。
@@ -13,7 +15,7 @@ export default function SourceDrillDialog({ drill, daily, allDaily = [], onClose
 
   const detail = useMemo(() => {
     const matching = (daily || []).filter(r => r.source === row.source && r.device === row.device);
-    const totals = U.aggregateTotals(matching);
+    const totals = aggregateTotals(matching);
     // 活跃天数按全量 daily 统计（来源的固有属性，不随筛选范围变化）
     const dates = new Set((allDaily || []).filter(r => r.source === row.source && r.device === row.device && r.usageDate).map(r => r.usageDate));
 
@@ -48,7 +50,7 @@ export default function SourceDrillDialog({ drill, daily, allDaily = [], onClose
 
       <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
         <span>活跃 <strong className="text-foreground">{detail.dates.size}</strong> 天</span>
-        <span>总 Token <strong className="text-foreground">{U.compactCN(detail.totals.totalTokens)}</strong></span>
+        <span>总 Token <strong className="text-foreground">{compactCN(detail.totals.totalTokens)}</strong></span>
         <span>费用 <strong className="text-foreground">${(detail.totals.costUSD || 0).toFixed(2)}</strong></span>
         <span>缓存命中率 <strong className="text-foreground">{detail.totals.cacheHitRate.toFixed(1)}%</strong></span>
       </div>
@@ -62,15 +64,15 @@ export default function SourceDrillDialog({ drill, daily, allDaily = [], onClose
                 <div key={m.model} className="grid grid-cols-[1fr_auto] items-center gap-3 px-1.5 py-1.5">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      {U.getModelIconUrl(m.model) && <img src={U.getModelIconUrl(m.model)} className="w-3.5 h-3.5 shrink-0" alt="" />}
+                      {getModelIconUrl(m.model) && <img src={getModelIconUrl(m.model)} className="w-3.5 h-3.5 shrink-0" alt="" />}
                       <span className="text-xs font-medium truncate">{m.model}</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">
-                      <div className="h-full" style={{ width: `${pct}%`, background: U.getSourceColor(row.source) }} />
+                      <div className="h-full" style={{ width: `${pct}%`, background: getSourceColor(row.source) }} />
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-xs font-semibold tabular-nums">{U.compactCN(m.total)}</div>
+                    <div className="text-xs font-semibold tabular-nums">{compactCN(m.total)}</div>
                     <div className="text-[10px] text-muted-foreground tabular-nums">{pct.toFixed(1)}%</div>
                   </div>
                 </div>

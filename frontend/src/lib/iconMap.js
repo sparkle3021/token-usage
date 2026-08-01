@@ -3,27 +3,27 @@
  * 根据来源名称或模型名称返回对应 SVG 图标 URL 和 oklch 颜色值。
  */
 
-import claudeIcon from '../assets/icons/claude.svg';
-import geminiIcon from '../assets/icons/gemini.svg';
-import gptIcon from '../assets/icons/gpt.svg';
-import hermesIcon from '../assets/icons/hermes.svg';
-import openclawIcon from '../assets/icons/openclaw.svg';
-import opencodeIcon from '../assets/icons/opencode.svg';
-import commonIcon from '../assets/icons/common.svg';
+import claudeIcon from '@/assets/icons/claude.svg';
+import geminiIcon from '@/assets/icons/gemini.svg';
+import gptIcon from '@/assets/icons/gpt.svg';
+import hermesIcon from '@/assets/icons/hermes.svg';
+import openclawIcon from '@/assets/icons/openclaw.svg';
+import opencodeIcon from '@/assets/icons/opencode.svg';
+import commonIcon from '@/assets/icons/common.svg';
 
-import modelClaude from '../assets/models/claude.svg';
-import modelDeepseek from '../assets/models/deepseek.svg';
-import modelDoubao from '../assets/models/doubao.svg';
-import modelGemini from '../assets/models/gemini.svg';
-import modelGrok from '../assets/models/grok.svg';
-import modelHunyuan from '../assets/models/hunyuan.svg';
-import modelKimi from '../assets/models/kimi.svg';
-import modelMinimax from '../assets/models/minimax.svg';
-import modelOllama from '../assets/models/ollama.svg';
-import modelOpenai from '../assets/models/gpt.svg';
-import modelQwen from '../assets/models/qwen.svg';
-import modelXiaomi from '../assets/models/xiaomimimo.svg';
-import modelZhipu from '../assets/models/zhipu.svg';
+import modelClaude from '@/assets/models/claude.svg';
+import modelDeepseek from '@/assets/models/deepseek.svg';
+import modelDoubao from '@/assets/models/doubao.svg';
+import modelGemini from '@/assets/models/gemini.svg';
+import modelGrok from '@/assets/models/grok.svg';
+import modelHunyuan from '@/assets/models/hunyuan.svg';
+import modelKimi from '@/assets/models/kimi.svg';
+import modelMinimax from '@/assets/models/minimax.svg';
+import modelOllama from '@/assets/models/ollama.svg';
+import modelOpenai from '@/assets/models/gpt.svg';
+import modelQwen from '@/assets/models/qwen.svg';
+import modelXiaomi from '@/assets/models/xiaomimimo.svg';
+import modelZhipu from '@/assets/models/zhipu.svg';
 
 const SOURCE_ICONS = {
   'Claude Code': claudeIcon,

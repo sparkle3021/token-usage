@@ -1,8 +1,9 @@
+import { aggregateRows, compact, compactCN, computeActivityStats } from '@/lib/formatters.js';
+import { getSourceColor } from '@/lib/iconMap.js';
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Card, Button } from 'antd';
-import * as U from '../../lib/utils.js';
-import SourceIcon from '../SourceIcon.jsx';
+import SourceIcon from '@/components/common/SourceIcon.jsx';
 
 const MODES = [{ id: 'stacked', label: '堆叠' }, { id: 'line', label: '折线' }, { id: 'bar', label: '柱状' }];
 const GRANULARITIES = [{ id: 'daily', label: '日' }, { id: 'weekly', label: '周' }, { id: 'monthly', label: '月' }, { id: 'yearly', label: '年' }];
@@ -68,7 +69,7 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
       return { chartData: data, aggBuckets: null, aggUnit: '天', aggCount: dates.length };
     }
 
-    const buckets = U.aggregateRows(rows, dates, granularity);
+    const buckets = aggregateRows(rows, dates, granularity);
     const labelKey = granularity === 'weekly' ? 'week' : granularity === 'monthly' ? 'month' : 'year';
     const data = [...buckets.entries()].map(([label, sourceMap]) => {
       const pt = { [labelKey]: label };
@@ -92,7 +93,7 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
       }
       return { active, longestGap };
     }
-    return U.computeActivityStats(aggBuckets);
+    return computeActivityStats(aggBuckets);
   }, [aggBuckets, rows, dates]);
 
   const activeSources = useMemo(
@@ -100,11 +101,11 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
     [sources, chartData],
   );
 
-  const palette = activeSources.map(s => U.getSourceColor(s));
+  const palette = activeSources.map(s => getSourceColor(s));
   const dataKey = chartData[0]?.hour != null ? 'hour' : chartData[0]?.week != null ? 'week' : chartData[0]?.month != null ? 'month' : chartData[0]?.year != null ? 'year' : 'date';
 
   const descParts = [
-    totals?.totalTokens != null ? `${U.compactCN(totals.totalTokens)} tokens` : '',
+    totals?.totalTokens != null ? `${compactCN(totals.totalTokens)} tokens` : '',
     hasHourly ? '24 小时' : `${aggCount} ${aggUnit}`,
     granularity !== 'daily' && !hasHourly ? `按${granularity === 'weekly' ? '周' : granularity === 'monthly' ? '月' : '年'}聚合` : '',
     !hasHourly ? `活跃 ${activityStats.active} ${aggUnit}` : '',
@@ -152,7 +153,7 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.93 0.004 80)" />
                 <XAxis dataKey={dataKey} tick={{ fontSize: 10.5, fill: 'oklch(0.55 0.005 80)' }} />
-                <YAxis tick={{ fontSize: 10.5, fill: 'oklch(0.62 0.004 80)' }} tickFormatter={v => U.compact(v)} />
+                <YAxis tick={{ fontSize: 10.5, fill: 'oklch(0.62 0.004 80)' }} tickFormatter={v => compact(v)} />
                 <Tooltip content={<CTooltip />} />
                 {activeSources.map((s, i) => (<Line key={s} type="monotone" dataKey={s} stroke={palette[i]} strokeWidth={2} dot={false} />))}
               </LineChart>
@@ -160,7 +161,7 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.93 0.004 80)" />
                 <XAxis dataKey={dataKey} tick={{ fontSize: 10.5, fill: 'oklch(0.55 0.005 80)' }} />
-                <YAxis tick={{ fontSize: 10.5, fill: 'oklch(0.62 0.004 80)' }} tickFormatter={v => U.compact(v)} />
+                <YAxis tick={{ fontSize: 10.5, fill: 'oklch(0.62 0.004 80)' }} tickFormatter={v => compact(v)} />
                 <Tooltip content={<CTooltip />} />
                 {activeSources.map((s, i) => (<Bar key={s} dataKey={s} stackId={mode === 'stacked' ? 'total' : undefined} fill={palette[i]} />))}
               </BarChart>
@@ -183,13 +184,13 @@ function CTooltip({ active, payload, label }) {
         <div key={p.name} className="flex items-center gap-2 mt-0.5">
           <SourceIcon name={p.name} className="w-3 h-3" />
           <span className="text-muted-foreground">{p.name}</span>
-          <span className="font-semibold ml-auto tabular-nums">{U.compactCN(p.value)}</span>
+          <span className="font-semibold ml-auto tabular-nums">{compactCN(p.value)}</span>
         </div>
       ))}
       {payload.length > 1 && (
         <div className="flex items-center justify-between gap-2 mt-1.5 pt-1.5 border-t font-semibold">
           <span>合计</span>
-          <span className="tabular-nums">{U.compactCN(total)}</span>
+          <span className="tabular-nums">{compactCN(total)}</span>
         </div>
       )}
     </div>

@@ -1,7 +1,8 @@
+import { compactCN } from '@/lib/formatters.js';
+import { getSourceColor } from '@/lib/iconMap.js';
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Modal, Card } from 'antd';
-import * as U from '../../lib/utils.js';
 
 const OTHER_KEY = '__other__';
 const TOP_N = 6;
@@ -86,7 +87,7 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
     });
   }, [timeRows, hourRows, date, seriesModels, dayDaily]);
 
-  const palette = seriesModels.map(m => U.getSourceColor(m.key));
+  const palette = seriesModels.map(m => getSourceColor(m.key));
   const hasHourly = hourlyData.some(pt => seriesModels.some(m => (pt[m.key] || 0) > 0));
 
   return (
@@ -101,8 +102,8 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
     >
       <div className="text-xs text-muted-foreground mb-2 shrink-0">
         来源数 <strong className="text-foreground">{daySources.length}</strong>
-        {topSource && <> · 峰值 <strong className="text-foreground">{topSource.source}</strong>（{U.compactCN(topSource.tokens)}）</>}
-        · 总量 <strong className="text-foreground">{U.compactCN(dayTotal)}</strong>
+        {topSource && <> · 峰值 <strong className="text-foreground">{topSource.source}</strong>（{compactCN(topSource.tokens)}）</>}
+        · 总量 <strong className="text-foreground">{compactCN(dayTotal)}</strong>
       </div>
 
       <Card className="flex-1 min-h-0" styles={{ body: { padding: 16, height: '100%' } }}>
@@ -113,9 +114,9 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
               <BarChart data={hourlyData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                 <XAxis dataKey="hour" tick={{ fontSize: 10 }} interval={3} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => U.compactCN(v)} width={50} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => compactCN(v)} width={50} />
                 <Tooltip
-                  formatter={(v, name) => [U.compactCN(v), name]}
+                  formatter={(v, name) => [compactCN(v), name]}
                   labelFormatter={label => `${date} ${label}`}
                   contentStyle={{
                     background: 'var(--popover)',

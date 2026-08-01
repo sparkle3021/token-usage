@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import * as api from '../api/client.js';
-import { daysAgo } from '../lib/formatters.js';
+import * as api from '@/api/client.js';
+import { daysAgo } from '@/lib/formatters.js';
 
 /**
  * 仪表盘数据获取 Hook。

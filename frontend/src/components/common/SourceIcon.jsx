@@ -1,4 +1,4 @@
-import { getSourceIconUrl } from '../lib/iconMap.js';
+import { getSourceIconUrl } from '@/lib/iconMap.js';
 
 export default function SourceIcon({ name, className = 'w-3.5 h-3.5' }) {
   const url = getSourceIconUrl(name);

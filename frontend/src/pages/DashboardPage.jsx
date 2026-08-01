@@ -3,20 +3,20 @@
  * 使用 useFilter 订阅全局过滤器状态，根据过滤条件实时计算聚合指标。
  */
 
+import { aggregateField, aggregateMapToArray, addDays, compactCN, deltaPct, rangeDates } from '@/lib/formatters.js';
+import { getSourceColor } from '@/lib/iconMap.js';
 import { useMemo, useState } from 'react';
-import { useFilter, rangeDays } from '../store/filterStore.jsx';
-import { filterDaily, filterTimeSeries } from '../lib/filters.js';
-import { aggregateTotals } from '../lib/aggregators.js';
-import { addDays, rangeDates, compactCN, deltaPct } from '../lib/formatters.js';
-import * as U from '../lib/utils.js';
-import KPI from '../components/common/KPI.jsx';
-import FilterBar from '../components/layout/FilterBar.jsx';
-import TrendChart from '../components/charts/TrendChart.jsx';
-import TopModels from '../components/charts/TopModels.jsx';
-import Heatmap from '../components/charts/Heatmap/Heatmap.jsx';
-import HeatmapDrillDialog from './dashboard/HeatmapDrillDialog.jsx';
+import { useFilter, rangeDays } from '@/store/filterStore.jsx';
+import { filterDaily, filterTimeSeries } from '@/lib/filters.js';
+import { aggregateTotals } from '@/lib/aggregators.js';
+import KPI from '@/components/common/KPI.jsx';
+import FilterBar from '@/components/layout/FilterBar.jsx';
+import TrendChart from '@/components/charts/TrendChart.jsx';
+import TopModels from '@/components/charts/TopModels.jsx';
+import Heatmap from '@/components/charts/Heatmap/Heatmap.jsx';
+import HeatmapDrillDialog from '@/components/dialogs/HeatmapDrillDialog.jsx';
 import { Modal } from 'antd';
-import SourceIcon from '../components/SourceIcon.jsx';
+import SourceIcon from '@/components/common/SourceIcon.jsx';
 
 export default function DashboardPage({ M, allSources, allModels, heatmapData, onRangeSwitch }) {
   const { f, dispatch } = useFilter();
@@ -98,7 +98,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
 
   const sparkValues = useMemo(
     () => hourlySpark ? hourlySpark.total
-      : granularity !== 'daily' ? U.aggregateMapToArray(dailyMap, dates, granularity)
+      : granularity !== 'daily' ? aggregateMapToArray(dailyMap, dates, granularity)
       : dates.map(d => dailyMap.get(d) || 0),
     [hourlySpark, granularity, dailyMap, dates],
   );
@@ -108,7 +108,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       const m = { totalTokens: 'total', inputTokens: 'input', outputTokens: 'output', cacheReadTokens: 'cacheRead', reasoningOutputTokens: 'reasoning', costUSD: 'cost' };
       return hourlySpark[m[key]] || hourlySpark.total;
     }
-    if (granularity !== 'daily') return U.aggregateField(filtered, dates, granularity, key);
+    if (granularity !== 'daily') return aggregateField(filtered, dates, granularity, key);
     const m = new Map();
     for (const r of filtered) m.set(r.usageDate, (m.get(r.usageDate) || 0) + (r[key] || 0));
     return dates.map(d => m.get(d) || 0);
@@ -186,7 +186,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
           </div>
 
           <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
-            <span>总 Token <strong className="text-foreground">{U.compactCN(topModelDrill.total)}</strong></span>
+            <span>总 Token <strong className="text-foreground">{compactCN(topModelDrill.total)}</strong></span>
             <span>费用 <strong className="text-foreground">${(topModelDrill.cost || 0).toFixed(2)}</strong></span>
             <span>活跃 <strong className="text-foreground">{topModelDrill.dayCount}</strong> 天</span>
           </div>
@@ -204,11 +204,11 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
                         <span className="text-xs font-medium truncate">{s.source}</span>
                       </div>
                       <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">
-                        <div className="h-full" style={{ width: `${pct}%`, background: U.getSourceColor(s.source) }} />
+                        <div className="h-full" style={{ width: `${pct}%`, background: getSourceColor(s.source) }} />
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-xs font-semibold tabular-nums">{U.compactCN(s.total)}</div>
+                      <div className="text-xs font-semibold tabular-nums">{compactCN(s.total)}</div>
                       <div className="text-[10px] text-muted-foreground tabular-nums">{pct.toFixed(1)}%</div>
                     </div>
                   </div>

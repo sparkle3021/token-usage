@@ -1,29 +1,31 @@
-import { ranges, rangeDays } from '../store/filterStore.jsx';
+import { ranges, rangeDays } from '@/store/filterStore.jsx';
 import { useState, useMemo } from 'react';
 import { Card, Tabs, Segmented, Modal, Table, Button } from 'antd';
-import SourceBadge from '../components/SourceBadge.jsx';
-import SourceIcon from '../components/SourceIcon.jsx';
-import MultiSelect from '../components/MultiSelect.jsx';
-import * as U from '../lib/utils.js';
-import SourceDrillDialog from './table/SourceDrillDialog.jsx';
+import { compact, compactCN, daysAgo, formatTs, numFmt as fmt } from '@/lib/formatters.js';
+import { getModelIconUrl, getSourceColor } from '@/lib/iconMap.js';
+import { filterDaily } from '@/lib/filters.js';
+import SourceBadge from '@/components/common/SourceBadge.jsx';
+import SourceIcon from '@/components/common/SourceIcon.jsx';
+import MultiSelect from '@/components/common/MultiSelect.jsx';
+import SourceDrillDialog from '@/components/dialogs/SourceDrillDialog.jsx';
 
 export default function TablePage({ M, onRangeSwitch }) {
-  const defaults = { rangeId: '30d', startDate: U.daysAgo(29), endDate: U.daysAgo(0), sources: new Set(), devices: new Set(), models: new Set() };
+  const defaults = { rangeId: '30d', startDate: daysAgo(29), endDate: daysAgo(0), sources: new Set(), devices: new Set(), models: new Set() };
   const [f, setF] = useState(defaults);
   const [drill, setDrill] = useState(null);
 
   const allSources = useMemo(() => [...new Set(M.daily.map(r => r.source))].sort(), [M.daily]);
   const allModels = useMemo(() => [...new Set(M.daily.map(r => r.model))].filter(Boolean).sort(), [M.daily]);
 
-  const filtered = useMemo(() => U.filterDaily(M.daily, f), [f, M.daily]);
+  const filtered = useMemo(() => filterDaily(M.daily, f), [f, M.daily]);
 
   const setRange = (rangeId) => {
     if (rangeId === 'all') {
       const sorted = M.daily.map(x => x.usageDate).filter(Boolean).sort();
-      setF({ ...f, rangeId, startDate: sorted[0] || U.daysAgo(0), endDate: sorted[sorted.length - 1] || U.daysAgo(0) });
+      setF({ ...f, rangeId, startDate: sorted[0] || daysAgo(0), endDate: sorted[sorted.length - 1] || daysAgo(0) });
     } else {
       const days = rangeDays[rangeId] || 30;
-      setF({ ...f, rangeId, startDate: U.daysAgo(days - 1), endDate: U.daysAgo(0) });
+      setF({ ...f, rangeId, startDate: daysAgo(days - 1), endDate: daysAgo(0) });
     }
     // 切时间：本地立即渲染，后台异步补拉时间序列（不阻塞切换）
     onRangeSwitch?.(rangeDays[rangeId]);
@@ -105,7 +107,7 @@ function ModelDetailModal({ drill, onClose }) {
 
       <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
         <span>活跃 <strong className="text-foreground">{drill.row.dayCount}</strong> 天</span>
-        <span>总 Token <strong className="text-foreground">{U.compactCN(drill.row.total)}</strong></span>
+        <span>总 Token <strong className="text-foreground">{compactCN(drill.row.total)}</strong></span>
         <span>费用 <strong className="text-foreground">${(drill.row.cost || 0).toFixed(2)}</strong></span>
       </div>
 
@@ -122,11 +124,11 @@ function ModelDetailModal({ drill, onClose }) {
                       <span className="text-xs font-medium truncate">{s.source}</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">
-                      <div className="h-full" style={{ width: `${pct}%`, background: U.getSourceColor(s.source) }} />
+                      <div className="h-full" style={{ width: `${pct}%`, background: getSourceColor(s.source) }} />
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-xs font-semibold tabular-nums">{U.compactCN(s.total)}</div>
+                    <div className="text-xs font-semibold tabular-nums">{compactCN(s.total)}</div>
                     <div className="text-[10px] text-muted-foreground tabular-nums">{pct.toFixed(1)}%</div>
                   </div>
                 </div>
@@ -163,7 +165,7 @@ function SessionProjectDialog({ drill, onClose }) {
       dataIndex: 'lastTs',
       key: 'lastTs',
       width: 132,
-      render: v => <span className="text-xs text-muted-foreground">{U.formatTs(v)}</span>,
+      render: v => <span className="text-xs text-muted-foreground">{formatTs(v)}</span>,
     },
     {
       title: 'Total',
@@ -171,7 +173,7 @@ function SessionProjectDialog({ drill, onClose }) {
       key: 'totalTokens',
       align: 'right',
       width: 88,
-      render: v => <span className="text-xs tabular-nums">{U.compactCN(v || 0)}</span>,
+      render: v => <span className="text-xs tabular-nums">{compactCN(v || 0)}</span>,
     },
     {
       title: '费用',
@@ -203,10 +205,10 @@ function SessionProjectDialog({ drill, onClose }) {
       </div>
 
       <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
-        <span>总 Token <strong className="text-foreground">{U.compactCN(row.total || 0)}</strong></span>
+        <span>总 Token <strong className="text-foreground">{compactCN(row.total || 0)}</strong></span>
         <span>费用 <strong className="text-foreground">${(row.cost || 0).toFixed(2)}</strong></span>
         <span>会话数 <strong className="text-foreground">{row.sessionCount || 0}</strong></span>
-        <span>活跃 <strong className="text-foreground">{U.formatTs(row.lastTs)}</strong></span>
+        <span>活跃 <strong className="text-foreground">{formatTs(row.lastTs)}</strong></span>
       </div>
 
       <div className="flex-dialog-body min-h-0 overflow-y-auto scrollbar-subtle">
@@ -370,28 +372,28 @@ function SourceTable({ rows, onDrill }) {
       dataIndex: 'total',
       key: 'total',
       align: 'right',
-      render: v => <span className={`${TD.cell} font-semibold`}>{U.fmt.format(v || 0)}</span>,
+      render: v => <span className={`${TD.cell} font-semibold`}>{fmt.format(v || 0)}</span>,
     },
     {
       title: 'Input',
       dataIndex: 'input',
       key: 'input',
       align: 'right',
-      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+      render: v => <span className={TD.cell}>{compact(v)}</span>,
     },
     {
       title: 'Output',
       dataIndex: 'output',
       key: 'output',
       align: 'right',
-      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+      render: v => <span className={TD.cell}>{compact(v)}</span>,
     },
     {
       title: 'Cache',
       dataIndex: 'cache',
       key: 'cache',
       align: 'right',
-      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+      render: v => <span className={TD.cell}>{compact(v)}</span>,
     },
     {
       title: '费用',
@@ -418,7 +420,7 @@ function ModelTable({ rows, onDrill }) {
       key: 'model',
       render: (_, r) => (
         <span className="inline-flex items-center gap-1.5 font-mono text-[11px]">
-          {U.getModelIconUrl(r.model) && <img src={U.getModelIconUrl(r.model)} className="w-3.5 h-3.5 shrink-0" alt="" />}
+          {getModelIconUrl(r.model) && <img src={getModelIconUrl(r.model)} className="w-3.5 h-3.5 shrink-0" alt="" />}
           {r.model}
         </span>
       ),
@@ -435,21 +437,21 @@ function ModelTable({ rows, onDrill }) {
       dataIndex: 'total',
       key: 'total',
       align: 'right',
-      render: v => <span className={`${TD.cell} font-semibold`}>{U.fmt.format(v || 0)}</span>,
+      render: v => <span className={`${TD.cell} font-semibold`}>{fmt.format(v || 0)}</span>,
     },
     {
       title: 'Input',
       dataIndex: 'input',
       key: 'input',
       align: 'right',
-      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+      render: v => <span className={TD.cell}>{compact(v)}</span>,
     },
     {
       title: 'Output',
       dataIndex: 'output',
       key: 'output',
       align: 'right',
-      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+      render: v => <span className={TD.cell}>{compact(v)}</span>,
     },
     {
       title: '费用',
@@ -493,28 +495,28 @@ function SessionTable({ rows, onDrill }) {
       title: '活动',
       dataIndex: 'lastTs',
       key: 'lastTs',
-      render: v => <span className={`${TD.cell} text-muted-foreground text-[11px]`}>{U.formatTs(v)}</span>,
+      render: v => <span className={`${TD.cell} text-muted-foreground text-[11px]`}>{formatTs(v)}</span>,
     },
     {
       title: 'Input',
       dataIndex: 'input',
       key: 'input',
       align: 'right',
-      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+      render: v => <span className={TD.cell}>{compact(v)}</span>,
     },
     {
       title: 'Output',
       dataIndex: 'output',
       key: 'output',
       align: 'right',
-      render: v => <span className={TD.cell}>{U.compact(v)}</span>,
+      render: v => <span className={TD.cell}>{compact(v)}</span>,
     },
     {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
       align: 'right',
-      render: v => <span className={`${TD.cell} font-semibold`}>{U.fmt.format(v || 0)}</span>,
+      render: v => <span className={`${TD.cell} font-semibold`}>{fmt.format(v || 0)}</span>,
     },
     {
       title: '费用',

@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
-import { fillMissingDates, buildWeeks, buildMonths } from './utils.js';
-import { DEFAULT_WEEKS } from './constants.js';
+import { fillMissingDates, buildWeeks, buildMonths } from '@/components/charts/Heatmap/utils.js';
+import { DEFAULT_WEEKS } from '@/components/charts/Heatmap/constants.js';
 
 /**
- * @param {import('./types.js').Contribution[]} data
+ * @param {{{ date: string, count: number }}[]} data
  * @param {Date} [startDate]
  * @param {Date} [endDate]
- * @returns {{ weeks: import('./types.js').DayData[][], months: import('./types.js').MonthLabel[], filledCount: number }}
+ * @returns {{ weeks: {{ date: string, count: number, isToday: boolean }}[][], months: {{ col: number, label: string }}[], filledCount: number }}
  */
 export function useHeatmap(data = [], startDate, endDate) {
   return useMemo(() => {

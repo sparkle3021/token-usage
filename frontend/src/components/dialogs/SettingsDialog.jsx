@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Modal, Select, Button } from 'antd';
 import { getMessage } from '@/lib/message.js';
 import { SettingsIcon, TriangleAlertIcon } from 'lucide-react';
+import { getSettings, saveSettings, detectCCSwitchDB, updatePricing, clearAllData } from '@/api/client.js';
 
 const DEFAULTS = { autoSyncMinutes: 5, ccSwitchDBPath: '', ccSwitchEnabled: false, ccSwitchAutoSync: false };
 
@@ -46,7 +47,7 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
   useEffect(() => {
     if (open) {
       setLoadErr(null);
-      window.go.main.App.GetSettings().then(cfg => {
+      getSettings().then(cfg => {
         setCfg(cfg);
       }).catch(err => {
         setLoadErr(String(err));
@@ -60,7 +61,7 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
     const next = { ...cfg, ...patch };
     setCfg(next);
     try {
-      await window.go.main.App.SaveSettings(next);
+      await saveSettings(next);
       if (onSettingsChange) onSettingsChange(next);
       return true;
     } catch (err) {
@@ -88,7 +89,7 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
   const detectDB = useCallback(async () => {
     setDetecting(true);
     try {
-      const path = await window.go.main.App.DetectCCSwitchDB();
+      const path = await detectCCSwitchDB();
       if (path) {
         setCfg(c => ({ ...c, ccSwitchDBPath: path }));
         toast?.success('已自动检测到数据库路径，点击"保存"生效');
@@ -114,7 +115,7 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
           break;
         }
         case 'updatePricing': {
-          const result = await window.go.main.App.UpdatePricing();
+          const result = await updatePricing();
           if (result.error) {
             console.error('[settings] update pricing failed', result.error);
             toast?.error('价格更新失败，请检查网络后重试');
@@ -124,7 +125,7 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
           break;
         }
         case 'clear': {
-          await window.go.main.App.ClearAllData();
+          await clearAllData();
           if (onClear) onClear();
           toast?.success('已清除所有历史数据');
           break;

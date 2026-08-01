@@ -3,7 +3,7 @@
  */
 
 import { Button } from 'antd';
-import SettingsDialog from '../SettingsDialog.jsx';
+import SettingsDialog from '@/components/dialogs/SettingsDialog.jsx';
 import { Sun, Moon } from 'lucide-react';
 
 export default function Header({ page, setPage, lastSync, onCollect, collecting, refreshing, onClearData, onSettingsChange, onFullSync, fullSyncing, dark, onToggleDark }) {
