@@ -55,34 +55,29 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
     const todayStr = dates[0];
     const hd = Array.from({ length: 24 }, () => ({ total: 0, input: 0, output: 0, cacheRd: 0, reason: 0, cost: 0 }));
 
+    // hour_usage 优先（权威聚合：time_usage 汇总 + CC-Switch 直接写入），
+    // time_usage 兜底补缺——避免 time_usage 有缺口时 sparkline 少数据
+    const covered = new Set();
+    for (const r of filteredHour) {
+      if (r.usageDate !== todayStr) continue;
+      const key = `${r.source}::${r.hour}`;
+      const h = r.hour;
+      hd[h].total += r.totalTokens || 0; hd[h].input += r.inputTokens || 0;
+      hd[h].output += r.outputTokens || 0; hd[h].cacheRd += r.cacheReadTokens || 0;
+      hd[h].reason += r.reasoningOutputTokens || 0; hd[h].cost += r.costUSD || 0;
+      covered.add(key);
+    }
+
     for (const r of filteredTime) {
       if (r.usageDate !== todayStr) continue;
       const d = new Date(r.eventTime);
       if (isNaN(d.getTime())) continue;
       const h = d.getHours();
+      if (covered.has(`${r.source}::${h}`)) continue;
       hd[h].total += r.totalTokens || 0; hd[h].input += r.inputTokens || 0;
       hd[h].output += r.outputTokens || 0; hd[h].cacheRd += r.cacheReadTokens || 0;
       hd[h].reason += r.reasoningOutputTokens || 0; hd[h].cost += r.costUSD || 0;
-    }
-
-    // covered 按 (source, hour) 粒度：仅当 time_usage 已有该来源该小时的事件时，
-    // 才跳过 hour_usage 的对应行，避免整源跳过导致同步后的新小时数据被丢弃
-    const covered = new Set(
-      filteredTime
-        .filter(r => r.usageDate === todayStr)
-        .map(r => {
-          const d = new Date(r.eventTime);
-          return isNaN(d.getTime()) ? null : `${r.source}::${d.getHours()}`;
-        })
-        .filter(Boolean),
-    );
-    for (const r of filteredHour) {
-      if (r.usageDate !== todayStr || covered.has(`${r.source}::${r.hour}`)) continue;
-      const h = r.hour;
-      hd[h].total += r.totalTokens || 0; hd[h].input += r.inputTokens || 0;
-      hd[h].output += r.outputTokens || 0; hd[h].cacheRd += r.cacheReadTokens || 0;
-      hd[h].reason += r.reasoningOutputTokens || 0; hd[h].cost += r.costUSD || 0;
-      covered.add(`${r.source}::${r.hour}`);
+      covered.add(`${r.source}::${h}`);
     }
 
     const curHour = new Date().getHours();

@@ -12,17 +12,19 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
     const m = new Map();
     if (isHourly && (timeRows?.length || hourRows?.length)) {
       const todayStr = dates[0];
+      // hour_usage 优先（权威聚合：time_usage 汇总 + CC-Switch 直接写入），
+      // time_usage 兜底补缺——避免 time_usage 有缺口时图表少数据
+      for (const r of hourRows || []) {
+        if (r.usageDate !== todayStr) continue;
+        const hour = String(r.hour).padStart(2, '0');
+        const key = `${hour}::${r.source}`;
+        m.set(key, (m.get(key) || 0) + r.totalTokens);
+      }
       for (const r of timeRows || []) {
         if (r.usageDate !== todayStr) continue;
         const d = new Date(r.eventTime);
         if (isNaN(d.getTime())) continue;
         const hour = String(d.getHours()).padStart(2, '0');
-        const key = `${hour}::${r.source}`;
-        m.set(key, (m.get(key) || 0) + r.totalTokens);
-      }
-      for (const r of hourRows || []) {
-        if (r.usageDate !== todayStr) continue;
-        const hour = String(r.hour).padStart(2, '0');
         const key = `${hour}::${r.source}`;
         if (m.has(key)) continue;
         m.set(key, (m.get(key) || 0) + r.totalTokens);
