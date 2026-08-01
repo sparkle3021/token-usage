@@ -139,15 +139,22 @@ func extractLocalHour(ts string) int {
 	return t.Local().Hour()
 }
 
-func (m *Manager) QueryHourUsage() ([]model.HourUsage, error) {
+// QueryHourUsage 返回 hour_usage 行；days>0 时仅包含最近 days 天（含当天），days<=0 返回全量。
+// 窗口基准用 Go 本地时间（与 QueryTimeUsage 的 event_time 过滤同日口径），避免 SQLite date('now') 的 UTC 偏移。
+func (m *Manager) QueryHourUsage(days int) ([]model.HourUsage, error) {
 	start := time.Now()
-	rows, err := m.db.Query(`
+	sqlText := `
 		SELECT device, source, usage_date, hour, model,
 			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 			reasoning_output_tokens, total_tokens, cost_usd
-		FROM hour_usage
-		ORDER BY usage_date DESC, hour ASC
-	`)
+		FROM hour_usage`
+	var args []interface{}
+	if days > 0 {
+		sqlText += ` WHERE usage_date >= ?`
+		args = append(args, time.Now().AddDate(0, 0, -(days-1)).Format("2006-01-02"))
+	}
+	sqlText += ` ORDER BY usage_date DESC, hour ASC`
+	rows, err := m.db.Query(sqlText, args...)
 	if err != nil {
 		return nil, err
 	}

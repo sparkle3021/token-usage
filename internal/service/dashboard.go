@@ -158,7 +158,7 @@ func (s *DashboardService) GetTimeSeriesData(days int) *model.TimeSeriesData {
 			log.Printf("[service] GetTimeSeriesData(%d) QueryTimeUsage ERR: %v", days, err)
 		}
 	}
-	hourRows, _ := s.db.QueryHourUsage()
+	hourRows, _ := s.db.QueryHourUsage(days)
 	log.Printf("[service] GetTimeSeriesData(%d) timeRows=%d hourRows=%d elapsed=%v", days, len(timeRows), len(hourRows), time.Since(start))
 	return &model.TimeSeriesData{Time: timeRows, Hour: hourRows}
 }
