@@ -10,12 +10,41 @@ Token Dashboard 是一款桌面应用，直接读取本机 AI CLI 工具（Claud
 
 - **多工具聚合** —— 同时追踪 7 款 AI 编程工具的使用数据
 - **多维度统计** —— 按工具、模型、日期维度查看 Token 消耗和费用
-- **趋势图表** —— 折线图展示每日/每小时用量变化趋势
-- **热力图** —— 按小时×星期的 Token 消耗密度热力图
-- **会话详情** —— 查看每次 AI 对话的 Token 用量明细
+- **趋势图表** —— 折线图/柱状图展示每日/每小时用量变化，支持日/周/月/年粒度聚合
+- **热力图** —— 按小时×星期的 Token 消耗密度热力图（最近一年窗口）
+- **会话详情** —— 查看每次 AI 对话的 Token 用量明细，支持项目维度视图
+- **用量查询** —— 多供应商配额/余额实时查看（DeepSeek、BigModel 等）
+- **明暗主题** —— 一键切换亮色/暗色主题，图表与弹窗全量适配
 - **自动采集** —— 支持设置定时自动同步（1–60 分钟间隔）
 - **定价更新** —— 一键从 LiteLLM / OpenRouter 拉取最新模型定价
 - **CC-Switch 兼容** —— 支持从 CC-Switch 直接导入历史数据
+
+## 📥 安装
+
+### 直接下载
+
+最新版本可从 [GitHub Releases](https://github.com/sparkle3021/token-usage/releases) 下载 Windows 可执行文件（`TokenUsage.exe`），解压后直接运行，无需安装环境。
+
+### 从源码构建
+
+**前置条件**：Go ≥ 1.25、Node.js ≥ 18、[Wails CLI](https://wails.io/docs/gettingstarted/installation)
+
+```bash
+git clone https://github.com/sparkle3021/token-usage.git
+cd token-dashboard
+cd frontend && npm install && cd ..
+wails build
+```
+
+构建产物位于 `build/bin/` 目录。
+
+### 开发模式
+
+```bash
+wails dev
+```
+
+前端支持 Vite 热更新，后端支持热重载。
 
 ## 📊 支持的 AI 工具
 
@@ -29,98 +58,26 @@ Token Dashboard 是一款桌面应用，直接读取本机 AI CLI 工具（Claud
 | Hermes Agent | SQLite | `~/.hermes/state.db` |
 | CC-Switch | SQLite | `~/.cc-switch/cc-switch.db`（外部导入） |
 
-## 🛠 技术栈
+## 🚀 快速上手
 
-| 层 | 技术 |
-|----|------|
-| 桌面框架 | [Wails v2](https://wails.io) (Go + WebView2) |
-| 后端 | Go 1.25 + [modernc.org/sqlite](https://modernc.org/sqlite)（纯 Go，无 CGO） |
-| 前端 | React 19 + Vite 8 + Tailwind CSS v4 |
-| UI 组件 | [shadcn/ui](https://ui.shadcn.com) (base-nova 风格) |
-| 图表 | [Recharts](https://recharts.org) |
-| 定价数据 | LiteLLM + OpenRouter 模型定价 |
-
-## 📦 安装
-
-### 从源码构建
-
-**前置条件**：Go ≥ 1.25、Node.js ≥ 18、[Wails CLI](https://wails.io/docs/gettingstarted/installation)
-
-```bash
-# 克隆仓库
-git clone https://github.com/sparkle3021/token-usage.git
-cd token-dashboard
-
-# 安装前端依赖并构建
-cd frontend && npm install && cd ..
-
-# 构建桌面应用（自动生成 Go bindings + 打包前端）
-wails build
-```
-
-构建产物位于 `build/bin/` 目录。
-
-### 直接运行（开发模式）
-
-```bash
-wails dev
-```
-
-启动后前端支持 Vite HMR 热更新，Go 后端支持热重载。
+1. 启动应用，首次打开会自动扫描本机已安装的 AI 工具日志
+2. 点击顶栏 **同步** 按钮采集数据（支持全量同步）
+3. 在**看板**页查看 Token 趋势、热力图与 Top 模型
+4. 在**用量查询**页配置供应商（DeepSeek / BigModel）查看实时余额与配额
+5. 开启**自动同步**（设置页，1–60 分钟间隔），数据持续更新
 
 ## ⚙️ 配置
 
-通过环境变量配置：
+首次启动自动创建数据目录（默认 `~/.token-usage/`，可用环境变量 `DATA_DIR` 覆盖），内含数据库与日志，无需手动配置。
 
 | 环境变量 | 默认值 | 说明 |
 |---------|--------|------|
 | `DATA_DIR` | `~/.token-usage` | 数据目录（数据库 + 日志 + 定价缓存） |
-| `COLLECTOR_PARALLELISM` | `4` | 采集并发数 |
+| `COLLECTOR_PARALLELISM` | `4` | 数据采集并发数 |
 
-首次启动时，应用会自动在数据目录下创建 SQLite 数据库和默认定价文件，无需额外配置。
+## 🛠 技术栈
 
-### 数据目录结构
-
-```
-~/.token-usage/
-├── td.db                   # SQLite 数据库（WAL 模式）
-├── logs/
-│   └── app.log             # 应用日志
-└── config/
-    ├── pricing-litellm.json     # LiteLLM 定价缓存
-    └── pricing-openrouter.json  # OpenRouter 定价缓存
-```
-
-## 🏗 架构
-
-```
-┌─────────────────────────────────────────────────┐
-│                    Frontend                      │
-│         React 19 + shadcn/ui + Recharts         │
-│            window.go.main.App.* (IPC)           │
-└──────────────────────┬──────────────────────────┘
-                       │ Wails IPC Bridge
-┌──────────────────────▼──────────────────────────┐
-│                   app.go                        │
-│              (方法绑定 & 转发)                    │
-├─────────────────────────────────────────────────┤
-│              internal/service/                   │
-│   DashboardService  CollectionService  ...       │
-├─────────────────────────────────────────────────┤
-│     internal/orchestrator/   internal/database/  │
-│     (并发采集调度)             (SQLite DAO)       │
-└─────────────────────────────────────────────────┘
-```
-
-### 数据流
-
-```
-JSONL 采集器 → time_usage → BuildHourUsageFromTimeUsage → hour_usage
-CC-Switch   → hour_usage（直接写入）
-hour_usage  → BuildDailyFromHourUsage → daily_usage（SUM + MAX 合并）
-```
-
-三条数据管线在趋势图/热力图渲染时按 `timeRows → hourRows → dailyRows` 优先级逐层回退。
+[Wails v2](https://wails.io) · Go · [modernc.org/sqlite](https://modernc.org/sqlite) · React 19 · Vite 8 · Tailwind CSS v4 · [Ant Design v6](https://ant.design) · Recharts
 
 ## 🔒 隐私
 
@@ -142,7 +99,7 @@ go build ./...
 wails build
 ```
 
-项目没有测试用例和 CI 流水线，当前处于早期开发阶段。
+推送 `v*` 标签自动触发 CI：代码检查 → Windows 构建 → 发布 GitHub Release。
 
 ## 📄 License
 
