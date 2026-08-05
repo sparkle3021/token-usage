@@ -16,6 +16,8 @@ import (
 type Manager struct {
 	db *sql.DB
 
+	localDeviceID string
+
 	stmtDaily   *sql.Stmt
 	stmtSession *sql.Stmt
 	stmtTime    *sql.Stmt
@@ -56,6 +58,12 @@ func New(dbPath string) (*Manager, error) {
 	if err := m.initSchema(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
+	}
+	if err := m.migrateDeviceIdentity(); err != nil {
+		log.Printf("[db] migrateDeviceIdentity error (continue degraded): %v", err)
+	}
+	if err := m.migrateHourTimezone(); err != nil {
+		log.Printf("[db] migrateHourTimezone error (continue degraded): %v", err)
 	}
 	if err := m.initPreparedStmts(); err != nil {
 		db.Close()
@@ -330,6 +338,14 @@ func (m *Manager) initSchema() error {
 		return fmt.Errorf("create hour_usage table: %w", err)
 	}
 
+	m.db.Exec(`CREATE TABLE IF NOT EXISTS devices (
+		device_id TEXT PRIMARY KEY,
+		hostname TEXT NOT NULL DEFAULT '',
+		display_name TEXT NOT NULL DEFAULT '',
+		is_local INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+		updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+	);`)
 	m.db.Exec("ALTER TABLE collection_runs ADD COLUMN last_file_mtime INTEGER")
 	m.db.Exec("ALTER TABLE parse_cache ADD COLUMN last_parsed_offset INTEGER NOT NULL DEFAULT 0")
 	m.db.Exec("ALTER TABLE quota_configs ADD COLUMN is_valid INTEGER NOT NULL DEFAULT 1")

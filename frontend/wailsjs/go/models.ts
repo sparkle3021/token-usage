@@ -174,6 +174,7 @@ export namespace model {
 	    daily: DailyUsage[];
 	    sessions: SessionUsage[];
 	    runs: CollectionRun[];
+	    deviceNames: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new DashboardData(source);
@@ -184,6 +185,7 @@ export namespace model {
 	        this.daily = this.convertValues(source["daily"], DailyUsage);
 	        this.sessions = this.convertValues(source["sessions"], SessionUsage);
 	        this.runs = this.convertValues(source["runs"], CollectionRun);
+	        this.deviceNames = source["deviceNames"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -203,6 +205,24 @@ export namespace model {
 		    }
 		    return a;
 		}
+	}
+	export class DeviceInfo {
+	    deviceId: string;
+	    hostname: string;
+	    displayName: string;
+	    isLocal: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DeviceInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.deviceId = source["deviceId"];
+	        this.hostname = source["hostname"];
+	        this.displayName = source["displayName"];
+	        this.isLocal = source["isLocal"];
+	    }
 	}
 	export class HourUsage {
 	    device: string;
@@ -493,6 +513,7 @@ export namespace model {
 	export class TimeSeriesData {
 	    time: TimeUsage[];
 	    hour: HourUsage[];
+	    deviceNames: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new TimeSeriesData(source);
@@ -502,6 +523,7 @@ export namespace model {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.time = this.convertValues(source["time"], TimeUsage);
 	        this.hour = this.convertValues(source["hour"], HourUsage);
+	        this.deviceNames = source["deviceNames"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

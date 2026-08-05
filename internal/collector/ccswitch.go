@@ -28,6 +28,13 @@ type CCSwitchCollector struct {
 	pendingRollupDate string
 }
 
+// SetDevice 注入设备身份（UUID），由 orchestrator 构造后调用，覆盖默认 hostname。
+func (c *CCSwitchCollector) SetDevice(id string) {
+	if id != "" {
+		c.device = id
+	}
+}
+
 // CCSwitchStats holds the result statistics from the last Collect() run.
 type CCSwitchStats struct {
 	ProxyRows       int
@@ -187,8 +194,8 @@ func (c *CCSwitchCollector) importProxyLogs(extDB *sql.DB, ext *collectResultExt
 	}
 
 	query := `SELECT created_at,
-		date(created_at, 'unixepoch', 'localtime') as date,
-		CAST(strftime('%H', datetime(created_at, 'unixepoch', 'localtime')) AS INTEGER) as hour,
+		date(created_at, 'unixepoch') as date,
+		CAST(strftime('%H', datetime(created_at, 'unixepoch')) AS INTEGER) as hour,
 		app_type, model, input_tokens, output_tokens,
 		cache_read_tokens, cache_creation_tokens, total_cost_usd
 		FROM proxy_request_logs

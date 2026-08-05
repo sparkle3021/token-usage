@@ -73,6 +73,14 @@ func New(db *database.Manager, pr *pricing.Engine) *Engine {
 	e.ccSwitchCol = ccCol
 	e.collectors = append(e.collectors, ccCol)
 
+	// 注入本机设备身份（UUID），使所有采集器统一使用稳定身份写入，替代 os.Hostname()。
+	deviceID := db.LocalDeviceID()
+	for _, col := range e.collectors {
+		if s, ok := col.(interface{ SetDevice(string) }); ok {
+			s.SetDevice(deviceID)
+		}
+	}
+
 	// Read parallelism from env, default to 4
 	if p := os.Getenv("COLLECTOR_PARALLELISM"); p != "" {
 		n, err := strconv.Atoi(p)
@@ -300,7 +308,7 @@ func (e *Engine) runCollection() {
 			errMsg := fmt.Sprintf("[%s] %v", r.col.Source(), r.err)
 			stderr += errMsg + "\n"
 			log.Printf("[collector] %s", errMsg)
-			e.db.RecordRun(collector.Hostname(), r.col.Source(), "error", r.err.Error(), "go-collector:"+r.col.ID())
+			e.db.RecordRun(e.db.LocalDeviceID(), r.col.Source(), "error", r.err.Error(), "go-collector:"+r.col.ID())
 			e.emit("collector:done", map[string]interface{}{
 				"source": r.col.Source(), "status": "error", "error": r.err.Error(),
 			})

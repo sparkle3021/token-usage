@@ -53,7 +53,7 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
       mm.set(model, (mm.get(model) || 0) + tokens);
     };
 
-    const covered = new Set();
+    const covered = new Set(); // 仅用于 time→hour 优先级，避免双重计数
     for (const r of timeRows || []) {
       if (r.usageDate !== date) continue;
       covered.add(r.source);
@@ -65,9 +65,13 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
       if (r.usageDate !== date || covered.has(r.source)) continue;
       add(r.hour, r.model, r.totalTokens || 0);
     }
+    // 纯日级来源（当天无任何 hour/time 数据）才把日总量兜底到当前小时
+    const hourlySources = new Set();
+    for (const r of timeRows || []) if (r.usageDate === date) hourlySources.add(r.source);
+    for (const r of hourRows || []) if (r.usageDate === date) hourlySources.add(r.source);
     const currentHour = new Date().getHours();
     for (const r of dayDaily) {
-      if (covered.has(r.source)) continue;
+      if (hourlySources.has(r.source)) continue;
       add(currentHour, r.model, r.totalTokens || 0);
     }
 

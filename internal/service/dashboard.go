@@ -60,10 +60,18 @@ func (s *DashboardService) GetDashboardData() *model.DashboardData {
 		return &model.DashboardData{}
 	}
 
-	daily, err := s.db.QueryDaily()
-	if err != nil {
-		log.Printf("[service] GetDashboardData QueryDaily err=%v", err)
+	// 日视图读 daily_usage 表（含 hour 重建 + CC-Switch rollup + Hermes 全部来源），
+	// 按 UTC 日 → 本机时区平移为本地日。
+	// 回归修复：改为从 hour_usage 现场聚合会遗漏 CC-Switch rollup（仅日级、只写 daily_usage、
+	// 且与 hour 重建同 key 时取 MAX 增大），导致 token 总量显著减少（v0.2.0 ~113 亿 → 80 亿）。
+	dbDaily, derr := s.db.QueryDaily()
+	if derr != nil {
+		log.Printf("[service] GetDashboardData QueryDaily err=%v", derr)
 	}
+	for i := range dbDaily {
+		dbDaily[i].UsageDate = localizeDate(dbDaily[i].UsageDate)
+	}
+	daily := dbDaily
 	sessions, err := s.db.QuerySessions()
 	if err != nil {
 		log.Printf("[service] GetDashboardData QuerySessions err=%v", err)
@@ -99,10 +107,13 @@ func (s *DashboardService) GetDashboardData() *model.DashboardData {
 	log.Printf("[service] GetDashboardData daily=%d sessions=%d runs=%d elapsed=%v",
 		len(daily), len(sessions), len(runs), time.Since(start))
 
+	names, _ := s.db.DeviceNames()
+
 	result := &model.DashboardData{
-		Daily:    daily,
-		Sessions: sessions,
-		Runs:     runs,
+		Daily:       daily,
+		Sessions:    sessions,
+		Runs:        runs,
+		DeviceNames: names,
 	}
 	s.dailyCache = result
 	return result
@@ -159,6 +170,36 @@ func (s *DashboardService) GetTimeSeriesData(days int) *model.TimeSeriesData {
 		}
 	}
 	hourRows, _ := s.db.QueryHourUsage(days)
+	for i := range hourRows {
+		hourRows[i].UsageDate, hourRows[i].Hour = localizeUTCDateHour(hourRows[i].UsageDate, hourRows[i].Hour)
+	}
+	// time rows 的 usageDate 统一为本地日语义：新数据为 UTC 日 → 转本机日；旧数据为本地日原样保留。
+	for i := range timeRows {
+		if t, perr := time.Parse(time.RFC3339, timeRows[i].EventTime); perr == nil {
+			timeRows[i].UsageDate = t.In(time.Local).Format("2006-01-02")
+		}
+	}
+	names, _ := s.db.DeviceNames()
 	log.Printf("[service] GetTimeSeriesData(%d) timeRows=%d hourRows=%d elapsed=%v", days, len(timeRows), len(hourRows), time.Since(start))
-	return &model.TimeSeriesData{Time: timeRows, Hour: hourRows}
+	return &model.TimeSeriesData{Time: timeRows, Hour: hourRows, DeviceNames: names}
+}
+
+// localizeUTCDateHour 将 UTC (date, hour) 平移为本机时区 (date, hour)。
+func localizeUTCDateHour(utcDate string, utcHour int) (string, int) {
+	t, err := time.ParseInLocation("2006-01-02", utcDate, time.UTC)
+	if err != nil {
+		return utcDate, utcHour
+	}
+	t = t.Add(time.Duration(utcHour) * time.Hour).In(time.Local)
+	return t.Format("2006-01-02"), t.Hour()
+}
+
+// localizeDate 将 UTC 日期按"UTC 中午代表点"平移为本机时区日期，
+// 用于无小时粒度来源（Hermes Agent）日级的近似本地化。
+func localizeDate(utcDate string) string {
+	t, err := time.ParseInLocation("2006-01-02", utcDate, time.UTC)
+	if err != nil {
+		return utcDate
+	}
+	return t.Add(12 * time.Hour).In(time.Local).Format("2006-01-02")
 }

@@ -4,6 +4,7 @@ import { Card, Tabs, Segmented, Modal, Table, Button } from 'antd';
 import { compact, compactCN, daysAgo, formatTs, numFmt as fmt } from '@/lib/formatters.js';
 import { getModelIconUrl, getSourceColor } from '@/lib/iconMap.js';
 import { filterDaily } from '@/lib/filters.js';
+import { deviceName } from '@/lib/devices.js';
 import SourceBadge from '@/components/common/SourceBadge.jsx';
 import SourceIcon from '@/components/common/SourceIcon.jsx';
 import MultiSelect from '@/components/common/MultiSelect.jsx';
@@ -59,12 +60,12 @@ export default function TablePage({ M, onRangeSwitch }) {
 
       {/* Table */}
       <div className="flex flex-col flex-1 min-h-0">
-        <DataTablePanel daily={filtered} sessionAgg={M.sessionAgg} onDrill={setDrill} fullHeight allDaily={M.daily} dateRange={[f.startDate, f.endDate]} />
+        <DataTablePanel daily={filtered} sessionAgg={M.sessionAgg} onDrill={setDrill} fullHeight allDaily={M.daily} dateRange={[f.startDate, f.endDate]} deviceNames={M.deviceNames} />
       </div>
 
       {/* 来源模型分布弹窗 */}
       {drill?.kind === 'source-model' && (
-        <SourceDrillDialog drill={drill} daily={filtered} allDaily={M.daily} onClose={closeDrill} />
+        <SourceDrillDialog drill={drill} daily={filtered} allDaily={M.daily} deviceNames={M.deviceNames} onClose={closeDrill} />
       )}
 
       {/* 模型详情弹窗（内联） */}
@@ -73,7 +74,7 @@ export default function TablePage({ M, onRangeSwitch }) {
       )}
 
       {/* 会话详情弹窗（内联） */}
-      {drill?.kind === 'session-project' && <SessionProjectDialog drill={drill} onClose={closeDrill} />}
+      {drill?.kind === 'session-project' && <SessionProjectDialog drill={drill} onClose={closeDrill} deviceNames={M.deviceNames} />}
     </div>
   );
 }
@@ -144,7 +145,7 @@ function ModelDetailModal({ drill, onClose }) {
 // 项目会话弹窗：展示该项目（source+device+projectPath）下的会话列表，独立分页。
 const PAGE_SIZE = 15;
 
-function SessionProjectDialog({ drill, onClose }) {
+function SessionProjectDialog({ drill, onClose, deviceNames = {} }) {
   const row = drill.row;
   const sessions = useMemo(() => [...(row?.sessions || [])].sort((a, b) => (b.totalTokens || 0) - (a.totalTokens || 0)), [row?.sessions]);
   const [page, setPage] = useState(1);
@@ -201,7 +202,7 @@ function SessionProjectDialog({ drill, onClose }) {
       <div className="mb-4 shrink-0">
         <div className="text-xs text-muted-foreground mb-0.5">项目详情</div>
         <h3 className="text-sm font-semibold font-mono">{row.projectPath || '—'}</h3>
-        <p className="text-xs text-muted-foreground">{row.source} · {row.device}</p>
+        <p className="text-xs text-muted-foreground">{row.source} · {deviceName(deviceNames, row.device)}</p>
       </div>
 
       <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
@@ -252,7 +253,7 @@ function RowLink({ onClick, children }) {
   );
 }
 
-function DataTablePanel({ daily = [], sessionAgg = [], onDrill, fullHeight = false, allDaily = [], dateRange = null }) {
+function DataTablePanel({ daily = [], sessionAgg = [], onDrill, fullHeight = false, allDaily = [], dateRange = null, deviceNames = {} }) {
   const [tab, setTab] = useState('sources');
 
   // ── 来源聚合（同 TablePanel bySource）──
@@ -332,7 +333,7 @@ function DataTablePanel({ daily = [], sessionAgg = [], onDrill, fullHeight = fal
       </div>
       <div className={fullHeight ? 'flex flex-col flex-1 min-h-0' : ''}>
         {tab === 'sources' && (
-          <SourceTable rows={bySource} onDrill={r => onDrill?.({ kind: 'source-model', row: r })} />
+          <SourceTable rows={bySource} deviceNames={deviceNames} onDrill={r => onDrill?.({ kind: 'source-model', row: r })} />
         )}
         {tab === 'models' && (
           <ModelTable rows={byModel} onDrill={r => onDrill?.({ kind: 'model', row: r })} />
@@ -347,7 +348,7 @@ function DataTablePanel({ daily = [], sessionAgg = [], onDrill, fullHeight = fal
 
 // ── 纯展示表格（antd Table）──
 
-function SourceTable({ rows, onDrill }) {
+function SourceTable({ rows, onDrill, deviceNames = {} }) {
   const columns = [
     {
       title: '来源',
@@ -358,7 +359,7 @@ function SourceTable({ rows, onDrill }) {
       title: '设备',
       dataIndex: 'device',
       key: 'device',
-      render: v => <span className={`${TD.cell} text-muted-foreground text-[11px]`}>{v}</span>,
+      render: v => <span className={`${TD.cell} text-muted-foreground text-[11px]`}>{deviceName(deviceNames, v)}</span>,
     },
     {
       title: '模型',

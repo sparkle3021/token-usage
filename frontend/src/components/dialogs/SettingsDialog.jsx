@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Modal, Select, Button } from 'antd';
 import { getMessage } from '@/lib/message.js';
 import { SettingsIcon, TriangleAlertIcon } from 'lucide-react';
-import { getSettings, saveSettings, detectCCSwitchDB, updatePricing, clearAllData } from '@/api/client.js';
+import { getSettings, saveSettings, detectCCSwitchDB, updatePricing, clearAllData, getDevices, renameDevice, exportData } from '@/api/client.js';
 
 const DEFAULTS = { autoSyncMinutes: 5, ccSwitchDBPath: '', ccSwitchEnabled: false, ccSwitchAutoSync: false };
 
@@ -41,6 +41,12 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
   const [confirmAction, setConfirmAction] = useState(null);
   const [busy, setBusy] = useState(false);
 
+  // 设备管理：注册表列表 + 展示名草稿 + 保存中标记
+  const [devices, setDevices] = useState([]);
+  const [nameDrafts, setNameDrafts] = useState({});
+  const [savingDeviceId, setSavingDeviceId] = useState(null);
+  const [exporting, setExporting] = useState(false);
+
   const toast = getMessage();
 
   // Load settings on open
@@ -53,6 +59,12 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
         setLoadErr(String(err));
         setCfg({ ...DEFAULTS });
       });
+      getDevices().then(list => {
+        setDevices(list || []);
+        const drafts = {};
+        for (const d of list || []) drafts[d.deviceId] = d.displayName || d.hostname || '';
+        setNameDrafts(drafts);
+      }).catch(() => {});
     }
   }, [open]);
 
@@ -101,6 +113,43 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
       toast?.error('检测失败，请检查路径或网络');
     } finally {
       setDetecting(false);
+    }
+  }, [toast]);
+
+  // 保存设备展示名（仅改 devices.display_name，不触碰用量数据）
+  const saveDeviceName = useCallback(async (deviceId) => {
+    const name = (nameDrafts[deviceId] || '').trim();
+    if (!name) {
+      toast?.warning('设备名不能为空');
+      return;
+    }
+    setSavingDeviceId(deviceId);
+    try {
+      await renameDevice(deviceId, name);
+      setDevices(ds => ds.map(d => d.deviceId === deviceId ? { ...d, displayName: name } : d));
+      toast?.success('设备名已更新');
+    } catch (err) {
+      console.error('[settings] rename device failed', err);
+      toast?.error('重命名失败，请重试');
+    } finally {
+      setSavingDeviceId(null);
+    }
+  }, [nameDrafts, toast]);
+
+  // 导出用量数据（hour/session + 设备映射 → 用户选择路径的 JSON 文件）
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const path = await exportData();
+      if (path) {
+        toast?.success(`已导出：${path}`);
+      }
+      // path 为空 = 用户在对话框取消，静默
+    } catch (err) {
+      console.error('[settings] export failed', err);
+      toast?.error('导出失败，请重试');
+    } finally {
+      setExporting(false);
     }
   }, [toast]);
 
@@ -230,10 +279,51 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
               </div>
             </div>
 
+            {/* 设备管理 */}
+            <div className="border-t pt-4">
+              <h4 className="text-xs font-medium text-muted-foreground mb-3">设备管理</h4>
+              {devices.length === 0 ? (
+                <p className="text-xs text-muted-foreground">暂无设备</p>
+              ) : (
+                <div className="space-y-2">
+                  {devices.map(d => (
+                    <div key={d.deviceId} className="flex items-center gap-2">
+                      <input
+                        value={nameDrafts[d.deviceId] ?? ''}
+                        onChange={e => setNameDrafts(dr => ({ ...dr, [d.deviceId]: e.target.value }))}
+                        placeholder={d.hostname || '设备名'}
+                        className="flex-1 h-8 min-w-0 px-2 text-xs rounded-lg border border-input bg-transparent outline-none focus-visible:border-ring"
+                      />
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                        {d.hostname}{d.isLocal ? ' · 本机' : ''}
+                      </span>
+                      <Button
+                        size="small"
+                        className="h-8 text-xs shrink-0"
+                        onClick={() => saveDeviceName(d.deviceId)}
+                        disabled={savingDeviceId === d.deviceId}
+                      >
+                        {savingDeviceId === d.deviceId ? '保存中…' : '保存'}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* 数据操作 */}
             <div className="border-t pt-4">
               <h4 className="text-xs font-medium text-muted-foreground mb-3">数据操作</h4>
               <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-medium">导出数据</p>
+                    <p className="text-xs text-muted-foreground">导出用量为 JSON，供跨设备合并</p>
+                  </div>
+                  <Button size="small" className="h-8 text-xs shrink-0" onClick={handleExport} disabled={exporting}>
+                    {exporting ? '导出中…' : '导出'}
+                  </Button>
+                </div>
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-xs font-medium">全量同步</p>

@@ -75,7 +75,7 @@ func (m *Manager) buildHourUsageFromTimeUsageExec(ex batchExecer, device, source
 			continue
 		}
 
-		hour := extractLocalHour(eventTime)
+		hour := extractUTCHour(eventTime)
 		if hour < 0 {
 			continue
 		}
@@ -115,28 +115,25 @@ func (m *Manager) buildHourUsageFromTimeUsageExec(ex batchExecer, device, source
 	return nil
 }
 
-func extractLocalHour(ts string) int {
+// extractUTCHour 从时间串提取 UTC 小时；带时区串直接取 UTC，无时区串按本机时区解释后转 UTC。
+// 返回 -1 表示解析失败。
+func extractUTCHour(ts string) int {
 	if ts == "" {
 		return -1
 	}
-	layouts := []string{
-		time.RFC3339Nano,
-		time.RFC3339,
-		"2006-01-02T15:04:05",
-		"2006-01-02 15:04:05",
-	}
-	var t time.Time
-	var err error
-	for _, layout := range layouts {
-		t, err = time.Parse(layout, ts)
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+		t, err := time.Parse(layout, ts)
 		if err == nil {
-			break
+			return t.UTC().Hour()
 		}
 	}
-	if err != nil {
-		return -1
+	for _, layout := range []string{"2006-01-02T15:04:05", "2006-01-02 15:04:05"} {
+		t, err := time.ParseInLocation(layout, ts, time.Local)
+		if err == nil {
+			return t.UTC().Hour()
+		}
 	}
-	return t.Local().Hour()
+	return -1
 }
 
 // QueryHourUsage 返回 hour_usage 行；days>0 时仅包含最近 days 天（含当天），days<=0 返回全量。
@@ -150,8 +147,9 @@ func (m *Manager) QueryHourUsage(days int) ([]model.HourUsage, error) {
 		FROM hour_usage`
 	var args []interface{}
 	if days > 0 {
+		// 按本地窗口换算 UTC 下限，避免本地当天数据（前一 UTC 日）被滤掉
 		sqlText += ` WHERE usage_date >= ?`
-		args = append(args, time.Now().AddDate(0, 0, -(days-1)).Format("2006-01-02"))
+		args = append(args, localWindowStartUTC(days-1).Format("2006-01-02"))
 	}
 	sqlText += ` ORDER BY usage_date DESC, hour ASC`
 	rows, err := m.db.Query(sqlText, args...)

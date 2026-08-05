@@ -2,6 +2,23 @@ package collector
 
 import "token-dashboard/internal/model"
 
+// DeviceIdentity 采集器设备身份：默认本机 hostname，由 orchestrator 注入本机
+// device_id（UUID）后统一使用稳定身份。迁移失败等注入缺失场景回退 hostname 保持可用。
+type DeviceIdentity struct {
+	device string
+}
+
+// SetDevice 注入设备身份（UUID），由 orchestrator 在构造后调用。
+func (d *DeviceIdentity) SetDevice(id string) { d.device = id }
+
+// Device 返回当前设备身份；未注入时回退本机 hostname。
+func (d *DeviceIdentity) Device() string {
+	if d.device == "" {
+		return Hostname()
+	}
+	return d.device
+}
+
 // CachePersistence is an optional interface collectors can implement to
 // control when file fingerprints are persisted. The Engine calls
 // PersistCache after successfully writing data, and DiscardCache on failure.

@@ -22,7 +22,7 @@ import (
 // Hermes
 // ---------------------------------------------------------------------------
 
-type HermesCollector struct{}
+type HermesCollector struct{ DeviceIdentity }
 
 func NewHermesCollector() *HermesCollector {
 	return &HermesCollector{}
@@ -45,12 +45,12 @@ func (c *HermesCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 	log.Printf("[collector] Hermes dbPath=%s", dbPath)
 	if _, err := os.Stat(dbPath); err != nil {
 		log.Printf("[collector] Hermes db not found path=%s", dbPath)
-		return emptyResult("hermes", "Hermes Agent"), nil
+		return emptyResult(c.Device(), "hermes", "Hermes Agent"), nil
 	}
 
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		return emptyResult("hermes", "Hermes Agent"), nil
+		return emptyResult(c.Device(), "hermes", "Hermes Agent"), nil
 	}
 	defer db.Close()
 
@@ -84,14 +84,14 @@ func (c *HermesCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 	debuglog.Perf("Hermes collect dbPath=%s daily=%d elapsed=%v", dbPath, len(dailyMap), time.Since(start))
 	log.Printf("[collector] Hermes done daily=%d", len(dailyMap))
 
-	return buildResult("hermes", "Hermes Agent", dailyMap, sessionMap, nil), nil
+	return buildResult(c.Device(), "hermes", "Hermes Agent", dailyMap, sessionMap, nil), nil
 }
 
 // ---------------------------------------------------------------------------
 // OpenCode
 // ---------------------------------------------------------------------------
 
-type OpenCodeCollector struct{}
+type OpenCodeCollector struct{ DeviceIdentity }
 
 func NewOpenCodeCollector() *OpenCodeCollector {
 	return &OpenCodeCollector{}
@@ -114,13 +114,13 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	log.Printf("[collector] OpenCode dbPath=%s", dbPath)
 	if _, err := os.Stat(dbPath); err != nil {
 		log.Printf("[collector] OpenCode db not found path=%s", dbPath)
-		return emptyResult("opencode", "OpenCode"), nil
+		return emptyResult(c.Device(), "opencode", "OpenCode"), nil
 	}
 
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		log.Printf("[collector] OpenCode open db error: %v", err)
-		return emptyResult("opencode", "OpenCode"), nil
+		return emptyResult(c.Device(), "opencode", "OpenCode"), nil
 	}
 	defer db.Close()
 
@@ -218,7 +218,7 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 		time.UnixMilli(minCreated).Format("2006-01-02"),
 		time.UnixMilli(maxCreated).Format("2006-01-02"))
 
-	return buildResult("opencode", "OpenCode", dailyMap, sessionMap, events), nil
+	return buildResult(c.Device(), "opencode", "OpenCode", dailyMap, sessionMap, events), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +226,7 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 // ---------------------------------------------------------------------------
 
 type OpenClawCollector struct {
+	DeviceIdentity
 	cache *ParseCache
 }
 
@@ -267,7 +268,7 @@ func (c *OpenClawCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	if c.cache.AllCached(allFiles) {
 		debuglog.Perf("OpenClaw AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] OpenClaw all files cached, skipping")
-		return &CollectResult{Device: Hostname(), Source: "OpenClaw", Cached: true}, nil
+		return &CollectResult{Device: c.Device(), Source: "OpenClaw", Cached: true}, nil
 	}
 	debuglog.Perf("OpenClaw AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
@@ -289,7 +290,11 @@ func (c *OpenClawCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 			records := c.parseFile(fp)
 			totalRecords += len(records)
 			for _, rec := range records {
-				date := LocalDateFromTimestamp(rec.timestamp, time.Now().Format("2006-01-02"))
+				date := UTCDateFromTimestamp(rec.timestamp, time.Now().Format("2006-01-02"))
+				eventTime := rec.timestamp
+				if u, ok := ToUTCRFC3339(rec.timestamp); ok {
+					eventTime = u
+				}
 				model := NormalizeModelForGrouping(rec.model)
 				t := struct{ Input, Output, CacheRead, CacheWrite, Reasoning int64 }{
 					rec.input, rec.output, rec.cacheRead, 0, rec.reasoning,
@@ -298,7 +303,7 @@ func (c *OpenClawCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 
 			events = append(events, EventRow{
 				EventKey:   fmt.Sprintf("%s:%s:%d", fp, rec.timestamp, rec.input+rec.output),
-				EventTime:  rec.timestamp, UsageDate: date, Model: model,
+				EventTime:  eventTime, UsageDate: date, Model: model,
 				InputTokens: rec.input, OutputTokens: rec.output,
 				CacheReadTokens: rec.cacheRead, ReasoningTokens: rec.reasoning, CostUSD: cost,
 			})
@@ -316,7 +321,7 @@ func (c *OpenClawCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	log.Printf("[collector] OpenClaw done files=%d records=%d daily=%d sessions=%d events=%d",
 		totalFiles, totalRecords, len(dailyMap), len(sessionMap), len(events))
 
-	return buildResult("openclaw", "OpenClaw", dailyMap, sessionMap, events), nil
+	return buildResult(c.Device(), "openclaw", "OpenClaw", dailyMap, sessionMap, events), nil
 }
 
 type openclawRecord struct {
@@ -385,12 +390,12 @@ func (c *OpenClawCollector) parseFile(fp string) []openclawRecord {
 // Common helpers
 // ---------------------------------------------------------------------------
 
-func emptyResult(id, source string) *CollectResult {
-	return &CollectResult{Device: Hostname(), Source: source}
+func emptyResult(device, id, source string) *CollectResult {
+	return &CollectResult{Device: device, Source: source}
 }
 
-func buildResult(id, source string, dailyMap map[string]*dailyAgg, sessionMap map[string]*sessionAgg, events []EventRow) *CollectResult {
-	r := &CollectResult{Device: Hostname(), Source: source}
+func buildResult(device, id, source string, dailyMap map[string]*dailyAgg, sessionMap map[string]*sessionAgg, events []EventRow) *CollectResult {
+	r := &CollectResult{Device: device, Source: source}
 
 	for _, agg := range dailyMap {
 		r.Daily = append(r.Daily, DailyRow{

@@ -78,6 +78,17 @@ export function detectCCSwitchDB() {
   return window.go.main.App.DetectCCSwitchDB();
 }
 
+// ── 设备 API ──
+
+/** 获取设备注册表（device_id → hostname/display_name/is_local） */
+export function getDevices() { return window.go.main.App.GetDevices(); }
+
+/** 重命名设备展示名 */
+export function renameDevice(deviceId, displayName) { return window.go.main.App.RenameDevice(deviceId, displayName); }
+
+/** 导出用量数据到 JSON 文件，返回保存路径（取消返回空串） */
+export function exportData() { return window.go.main.App.ExportData(); }
+
 // ── 用量查询 API ──
 
 /** 获取所有用量查询配置 */

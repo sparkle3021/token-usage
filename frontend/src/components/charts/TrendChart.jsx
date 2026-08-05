@@ -30,11 +30,15 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
         if (m.has(key)) continue;
         m.set(key, (m.get(key) || 0) + r.totalTokens);
       }
+      // 纯日级来源（当天无任何 hour/time 数据）才把日总量兜底到当前小时；
+      // 有小时数据的来源当前小时为空时保持 0，避免当前小时被全天总量污染
       const currentHour = String(new Date().getHours()).padStart(2, '0');
+      const hourlySources = new Set();
+      for (const r of hourRows || []) if (r.usageDate === todayStr) hourlySources.add(r.source);
+      for (const r of timeRows || []) if (r.usageDate === todayStr) hourlySources.add(r.source);
       for (const r of rows) {
-        if (r.usageDate !== todayStr) continue;
+        if (r.usageDate !== todayStr || hourlySources.has(r.source)) continue;
         const key = `${currentHour}::${r.source}`;
-        if (m.has(key)) continue;
         m.set(key, (m.get(key) || 0) + r.totalTokens);
       }
     } else {

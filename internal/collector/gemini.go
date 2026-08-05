@@ -16,7 +16,10 @@ import (
 
 const geminiCacheVersion = 1
 
-type GeminiCollector struct{ cache *ParseCache }
+type GeminiCollector struct {
+	DeviceIdentity
+	cache *ParseCache
+}
 
 func NewGeminiCollector() *GeminiCollector {
 	return &GeminiCollector{cache: NewParseCache(geminiCacheVersion)}
@@ -81,7 +84,7 @@ func (c *GeminiCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 	if c.cache.AllCached(allFiles) {
 		debuglog.Perf("Gemini AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] Gemini all files cached, skipping")
-		return &CollectResult{Device: Hostname(), Source: "Gemini CLI", Cached: true}, nil
+		return &CollectResult{Device: c.Device(), Source: "Gemini CLI", Cached: true}, nil
 	}
 	debuglog.Perf("Gemini AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
@@ -106,7 +109,7 @@ func (c *GeminiCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 	log.Printf("[collector] Gemini done files=%d daily=%d sessions=%d events=%d",
 		fileCount, len(dailyMap), len(sessionMap), len(events))
 
-	return buildResult("gemini", "Gemini CLI", dailyMap, sessionMap, events), nil
+	return buildResult(c.Device(), "gemini", "Gemini CLI", dailyMap, sessionMap, events), nil
 }
 
 func (c *GeminiCollector) collectFile(fp string,
@@ -152,9 +155,14 @@ func (c *GeminiCollector) accumulate(ev geminiEvent,
 	}
 	cost := pricing.CalculateCost(model, t)
 
+	eventTime := ev.timestamp
+	if u, ok := ToUTCRFC3339(ev.timestamp); ok {
+		eventTime = u
+	}
+
 	*events = append(*events, EventRow{
 		EventKey: fmt.Sprintf("%s:%s:%d", ev.sessionID, ev.timestamp, ev.input+ev.output),
-		EventTime: ev.timestamp, UsageDate: date, Model: model,
+		EventTime: eventTime, UsageDate: date, Model: model,
 		SessionID: ev.sessionID, ProjectPath: ev.sessionID,
 		InputTokens: ev.input, OutputTokens: ev.output,
 		CacheReadTokens: ev.cacheRead, ReasoningTokens: ev.reasoning, CostUSD: cost,
@@ -226,7 +234,7 @@ func (c *GeminiCollector) parseSessionMessages(sessionID string, raw json.RawMes
 		if msg.Type != "gemini" || msg.Model == "" || msg.Tokens == nil {
 			continue
 		}
-		date := LocalDateFromTimestamp(msg.Timestamp, time.Now().Format("2006-01-02"))
+		date := UTCDateFromTimestamp(msg.Timestamp, time.Now().Format("2006-01-02"))
 		input := posIntFromJSON(msg.Tokens.Input)
 		output := posIntFromJSON(msg.Tokens.Output)
 		cached := posIntFromJSON(msg.Tokens.Cached)
@@ -368,7 +376,7 @@ func (c *GeminiCollector) parseJSONL(fp string, offset int64, incremental bool) 
 			tool := posIntFromJSON(tks.Tool)
 			total := posIntFromJSON(tks.Total)
 			netInput, cacheRead := normalizeGeminiCache(input, cached, output, reasoning, tool, total)
-			date := LocalDateFromTimestamp(obj.Timestamp, time.Now().Format("2006-01-02"))
+			date := UTCDateFromTimestamp(obj.Timestamp, time.Now().Format("2006-01-02"))
 
 			ev := geminiEvent{
 				timestamp: obj.Timestamp, date: date, model: currentModel,
@@ -394,7 +402,7 @@ func (c *GeminiCollector) parseJSONL(fp string, offset int64, incremental bool) 
 			stats = obj.Result.Stats
 		}
 		if stats != nil {
-			date := LocalDateFromTimestamp(obj.Timestamp, time.Now().Format("2006-01-02"))
+			date := UTCDateFromTimestamp(obj.Timestamp, time.Now().Format("2006-01-02"))
 			parsed := c.parseHeadlessStats(stats, currentModel, date, sessionID)
 			results = append(results, parsed...)
 		}

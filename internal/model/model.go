@@ -98,11 +98,15 @@ type DashboardData struct {
 	Daily    []DailyUsage    `json:"daily"`
 	Sessions []SessionUsage `json:"sessions"`
 	Runs     []CollectionRun `json:"runs"`
+	// DeviceNames 设备身份 → 展示名映射，前端据此渲染可读设备名。
+	DeviceNames map[string]string `json:"deviceNames"`
 }
 
 type TimeSeriesData struct {
 	Time []TimeUsage `json:"time"`
 	Hour []HourUsage `json:"hour"`
+	// DeviceNames 设备身份 → 展示名映射。
+	DeviceNames map[string]string `json:"deviceNames"`
 }
 
 type CollectStatus struct {
@@ -212,4 +216,12 @@ type HourUsage struct {
 	TotalTokens           int64   `json:"totalTokens"`
 	CostUSD               float64 `json:"costUSD"`
 	UpdatedAt             string  `json:"-"`
+}
+
+// DeviceInfo 设备注册表记录：身份（UUID）与事实（hostname）与展示名（display_name）解耦。
+type DeviceInfo struct {
+	DeviceID    string `json:"deviceId"`
+	Hostname    string `json:"hostname"`
+	DisplayName string `json:"displayName"`
+	IsLocal     bool   `json:"isLocal"`
 }

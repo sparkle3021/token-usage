@@ -16,7 +16,10 @@ import (
 
 const codexCacheVersion = 1
 
-type CodexCollector struct{ cache *ParseCache }
+type CodexCollector struct {
+	DeviceIdentity
+	cache *ParseCache
+}
 
 func NewCodexCollector() *CodexCollector {
 	return &CodexCollector{cache: NewParseCache(codexCacheVersion)}
@@ -56,7 +59,7 @@ func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*Colle
 	if c.cache.AllCached(allFiles) {
 		debuglog.Perf("Codex AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] Codex all files cached, skipping")
-		return &CollectResult{Device: Hostname(), Source: "Codex CLI", Cached: true}, nil
+		return &CollectResult{Device: c.Device(), Source: "Codex CLI", Cached: true}, nil
 	}
 	debuglog.Perf("Codex AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
@@ -79,7 +82,11 @@ func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*Colle
 			totalRecords += len(records)
 			sessionID := strings.TrimSuffix(filepath.Base(fp), ".jsonl")
 			for _, rec := range records {
-				date := LocalDateFromTimestamp(rec.timestamp, "unknown")
+				date := UTCDateFromTimestamp(rec.timestamp, "unknown")
+				eventTime := rec.timestamp
+				if u, ok := ToUTCRFC3339(rec.timestamp); ok {
+					eventTime = u
+				}
 				model := NormalizeModelForGrouping(rec.model)
 
 				t := struct{ Input, Output, CacheRead, CacheWrite, Reasoning int64 }{
@@ -93,7 +100,7 @@ func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*Colle
 
 				events = append(events, EventRow{
 				EventKey:   fmt.Sprintf("%s::%s::%d", fp, rec.timestamp, rec.input+rec.output),
-				EventTime: rec.timestamp, UsageDate: date, Model: model,
+				EventTime: eventTime, UsageDate: date, Model: model,
 				SessionID: sessionID, ProjectPath: workspaceKey,
 				InputTokens: rec.input, OutputTokens: rec.output,
 				CacheReadTokens: rec.cacheRead, ReasoningTokens: rec.reasoning, CostUSD: cost,
@@ -118,7 +125,7 @@ func (c *CodexCollector) Collect(ctx context.Context, pricing TokenCalc) (*Colle
 	log.Printf("[collector] Codex done files=%d records=%d daily=%d sessions=%d events=%d",
 		totalFiles, totalRecords, len(dailyMap), len(sessionMap), len(events))
 
-	return buildResult("codex", "Codex CLI", dailyMap, sessionMap, events), nil
+	return buildResult(c.Device(), "codex", "Codex CLI", dailyMap, sessionMap, events), nil
 }
 
 type codexEvent struct {

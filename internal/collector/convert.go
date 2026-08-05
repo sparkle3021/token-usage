@@ -2,54 +2,95 @@ package collector
 
 import (
 	"os"
+	"strconv"
 	"time"
 )
 
-// LocalDateFromTimestamp extracts a YYYY-MM-DD local date from a timestamp.
-func LocalDateFromTimestamp(value interface{}, fallback string) string {
+// ToUTCRFC3339 将采集来源的时间值规范化为 RFC3339 UTC 绝对时刻。
+// 数字按 Unix 毫秒（<1e12 视为秒）、字符串按多种格式解析：
+// 带时区/UTC 指示的字符串为绝对时刻直接解析；无时区字符串按采集机本地时区解释。
+func ToUTCRFC3339(value interface{}) (string, bool) {
 	if value == nil {
-		return fallback
+		return "", false
 	}
-
-	var ms int64
 	switch v := value.(type) {
 	case int64:
-		ms = v
+		ms := v
+		if ms <= 0 {
+			return "", false
+		}
+		if ms < 1e12 {
+			ms *= 1000
+		}
+		return time.UnixMilli(ms).UTC().Format(time.RFC3339), true
 	case float64:
-		ms = int64(v)
+		ms := int64(v)
+		if ms <= 0 {
+			return "", false
+		}
+		if ms < 1e12 {
+			ms *= 1000
+		}
+		return time.UnixMilli(ms).UTC().Format(time.RFC3339), true
 	case string:
 		if v == "" {
-			return fallback
+			return "", false
 		}
-		t, err := parseTime(v)
-		if err != nil {
-			return fallback
+		if t, err := parseTime(v); err == nil {
+			return t.UTC().Format(time.RFC3339), true
 		}
-		return t.Local().Format("2006-01-02")
+		if ms, err := strconv.ParseInt(v, 10, 64); err == nil && ms > 0 {
+			if ms < 1e12 {
+				ms *= 1000
+			}
+			return time.UnixMilli(ms).UTC().Format(time.RFC3339), true
+		}
+		return "", false
 	default:
-		return fallback
+		return "", false
 	}
+}
 
-	if ms > 1e12 {
-		// already ms
-	} else {
-		ms *= 1000
+// UTCDateFromTimestamp 提取 UTC 日期（YYYY-MM-DD）；解析失败返回 fallback。
+func UTCDateFromTimestamp(value interface{}, fallback string) string {
+	if rfc, ok := ToUTCRFC3339(value); ok {
+		if t, err := time.Parse(time.RFC3339, rfc); err == nil {
+			return t.UTC().Format("2006-01-02")
+		}
 	}
+	return fallback
+}
 
-	return time.UnixMilli(ms).Local().Format("2006-01-02")
+// UTCHour 从 RFC3339 UTC 串提取 UTC 小时；失败返回 -1。
+func UTCHour(rfc3339 string) int {
+	if rfc3339 == "" {
+		return -1
+	}
+	t, err := time.Parse(time.RFC3339, rfc3339)
+	if err != nil {
+		return -1
+	}
+	return t.UTC().Hour()
 }
 
 func parseTime(s string) (time.Time, error) {
-	formats := []string{
-		time.RFC3339,
+	// 带时区指示的格式优先（绝对时刻，保留原始时区偏移）
+	for _, f := range []string{
 		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05Z07:00",
+	} {
+		if t, err := time.Parse(f, s); err == nil {
+			return t, nil
+		}
+	}
+	// 无时区格式按采集机本地时区解释（原始数据为本地时间语义）
+	for _, f := range []string{
 		"2006-01-02T15:04:05",
 		"2006-01-02 15:04:05",
-		"2006-01-02T15:04:05Z",
 		"2006-01-02",
-	}
-	for _, f := range formats {
-		if t, err := time.Parse(f, s); err == nil {
+	} {
+		if t, err := time.ParseInLocation(f, s, time.Local); err == nil {
 			return t, nil
 		}
 	}

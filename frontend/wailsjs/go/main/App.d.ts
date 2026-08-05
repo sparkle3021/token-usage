@@ -14,6 +14,8 @@ export function DeleteQuotaConfig(arg1:number):Promise<void>;
 
 export function DetectCCSwitchDB():Promise<string>;
 
+export function ExportData():Promise<string>;
+
 export function FetchAllQuota():Promise<Array<model.QuotaData>>;
 
 export function FetchQuota(arg1:number):Promise<model.QuotaData>;
@@ -21,6 +23,8 @@ export function FetchQuota(arg1:number):Promise<model.QuotaData>;
 export function GetAutoSyncInterval():Promise<number>;
 
 export function GetDashboardData():Promise<model.DashboardData>;
+
+export function GetDevices():Promise<Array<model.DeviceInfo>>;
 
 export function GetProviderSchemas():Promise<Array<model.ProviderSchema>>;
 
@@ -33,6 +37,8 @@ export function GetSettings():Promise<model.AppConfig>;
 export function GetTimeSeriesData(arg1:number):Promise<model.TimeSeriesData>;
 
 export function ListQuotaConfigs():Promise<Array<model.QuotaConfig>>;
+
+export function RenameDevice(arg1:string,arg2:string):Promise<void>;
 
 export function SaveSettings(arg1:model.AppConfig):Promise<void>;
 

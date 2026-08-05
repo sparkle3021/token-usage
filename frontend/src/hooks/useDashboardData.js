@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as api from '@/api/client.js';
 import { daysAgo } from '@/lib/formatters.js';
+import { deviceNamesFromList } from '@/lib/devices.js';
 
 /**
  * 仪表盘数据获取 Hook。
@@ -15,6 +16,7 @@ export function useDashboardData() {
   const [hour, setHour] = useState([]);
   const [sessionAgg, setSessionAgg] = useState([]);
   const [runs, setRuns] = useState([]);
+  const [deviceNames, setDeviceNames] = useState({});
   const [loadError, setLoadError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -22,12 +24,20 @@ export function useDashboardData() {
   // 请求序号池：快速连切/连刷时丢弃过期响应
   const fetchIdRef = useRef(0);
 
+  // 设备映射：后端附带映射优先，启动时补拉 GetDevices 兜底（sessions 等无附带的数据源）
+  useEffect(() => {
+    api.getDevices().then(list => {
+      setDeviceNames(prev => ({ ...deviceNamesFromList(list), ...prev }));
+    }).catch(() => {});
+  }, []);
+
   const setData = useCallback((data, tsData, sessionAggData) => {
     setDaily(data.daily || []);
     setTime(tsData.time || []);
     setHour(tsData.hour || []);
     setSessionAgg(sessionAggData || []);
     setRuns(data.runs || []);
+    setDeviceNames(prev => ({ ...prev, ...(data.deviceNames || {}), ...(tsData.deviceNames || {}) }));
     setLoaded(true);
     setLoadError(null);
   }, []);
@@ -78,8 +88,8 @@ export function useDashboardData() {
   // M 按字段聚合；daily/sessionAgg/runs 未变时引用稳定，下游 useMemo 不失效
   const M = useMemo(() => {
     if (!loaded) return null;
-    return { daily, time, hour, sessionAgg, runs, today: daysAgo(0) };
-  }, [loaded, daily, time, hour, sessionAgg, runs]);
+    return { daily, time, hour, sessionAgg, runs, deviceNames, today: daysAgo(0) };
+  }, [loaded, daily, time, hour, sessionAgg, runs, deviceNames]);
 
   const allSources = useMemo(() => [...new Set(daily.map(r => r.source))].sort(), [daily]);
   const allModels = useMemo(() => [...new Set(daily.map(r => r.model))].filter(Boolean).sort(), [daily]);

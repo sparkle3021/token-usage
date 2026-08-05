@@ -26,6 +26,10 @@ export function DetectCCSwitchDB() {
   return window['go']['main']['App']['DetectCCSwitchDB']();
 }
 
+export function ExportData() {
+  return window['go']['main']['App']['ExportData']();
+}
+
 export function FetchAllQuota() {
   return window['go']['main']['App']['FetchAllQuota']();
 }
@@ -40,6 +44,10 @@ export function GetAutoSyncInterval() {
 
 export function GetDashboardData() {
   return window['go']['main']['App']['GetDashboardData']();
+}
+
+export function GetDevices() {
+  return window['go']['main']['App']['GetDevices']();
 }
 
 export function GetProviderSchemas() {
@@ -64,6 +72,10 @@ export function GetTimeSeriesData(arg1) {
 
 export function ListQuotaConfigs() {
   return window['go']['main']['App']['ListQuotaConfigs']();
+}
+
+export function RenameDevice(arg1, arg2) {
+  return window['go']['main']['App']['RenameDevice'](arg1, arg2);
 }
 
 export function SaveSettings(arg1) {

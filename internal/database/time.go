@@ -74,8 +74,8 @@ func (m *Manager) QueryTimeUsage(days int) ([]model.TimeUsage, error) {
 
 	since := ""
 	if days > 0 {
-		// 用 event_time（RFC3339）过滤，走 idx_time_usage_time 索引顺序扫描即有序，避免全表临时排序
-		since = time.Now().AddDate(0, 0, -days).Format("2006-01-02T00:00:00")
+		// 用 UTC 事件时间下限（按本地窗口换算），走 idx_time_usage_time 索引顺序扫描即有序，避免全表临时排序
+		since = localWindowStartUTC(days).Format("2006-01-02T15:04:05Z07:00")
 	}
 
 	var rows *sql.Rows

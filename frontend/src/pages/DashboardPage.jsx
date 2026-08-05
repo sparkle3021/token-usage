@@ -30,23 +30,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
   const filteredTime = useMemo(() => filterTimeSeries(M?.time || [], f), [f, M]);
   const filteredHour = useMemo(() => filterTimeSeries(M?.hour || [], f), [f, M]);
 
-  const totals = useMemo(() => aggregateTotals(filtered), [filtered]);
-
   const dates = useMemo(() => rangeDates(f.startDate, f.endDate), [f]);
-
-  const compareData = useMemo(() => {
-    if (!f.compare) return { totals: null };
-    const days = dates.length;
-    const endStr = addDays(f.startDate, -1);
-    const startStr = addDays(endStr, -(days - 1));
-    return { totals: aggregateTotals(filterDaily(M?.daily || [], { ...f, startDate: startStr, endDate: endStr })) };
-  }, [f, dates, M]);
-
-  const dailyMap = useMemo(() => {
-    const m = new Map();
-    for (const r of filtered) m.set(r.usageDate, (m.get(r.usageDate) || 0) + r.totalTokens);
-    return m;
-  }, [filtered]);
 
   const isHourly = f.rangeId === 'today';
 
@@ -69,9 +53,12 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
     }
 
     for (const r of filteredTime) {
-      if (r.usageDate !== todayStr) continue;
       const d = new Date(r.eventTime);
       if (isNaN(d.getTime())) continue;
+      // event_time 为 RFC3339 UTC（新数据）或本地串（存量单机），
+      // 统一按展示机本地时区解析出本地日/时，与后端平移后的 hour 桶对齐
+      const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (localDate !== todayStr) continue;
       const h = d.getHours();
       if (covered.has(`${r.source}::${h}`)) continue;
       hd[h].total += r.totalTokens || 0; hd[h].input += r.inputTokens || 0;
@@ -80,13 +67,17 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       covered.add(`${r.source}::${h}`);
     }
 
+    // 纯日级来源（当天无任何 hour/time 数据）才把日总量兜底到当前小时；
+    // 有小时数据的来源当前小时为空时保持 0，避免当前小时被全天总量污染
     const curHour = new Date().getHours();
+    const hourlySources = new Set();
+    for (const r of filteredHour) if (r.usageDate === todayStr) hourlySources.add(r.source);
+    for (const r of filteredTime) if (r.usageDate === todayStr) hourlySources.add(r.source);
     for (const r of filtered) {
-      if (r.usageDate !== todayStr || covered.has(`${r.source}::${curHour}`)) continue;
+      if (r.usageDate !== todayStr || hourlySources.has(r.source)) continue;
       hd[curHour].total += r.totalTokens || 0; hd[curHour].input += r.inputTokens || 0;
       hd[curHour].output += r.outputTokens || 0; hd[curHour].cacheRd += r.cacheReadTokens || 0;
       hd[curHour].reason += r.reasoningOutputTokens || 0; hd[curHour].cost += r.costUSD || 0;
-      covered.add(`${r.source}::${curHour}`);
     }
 
     return {
@@ -95,6 +86,43 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       reasoning: hd.map(h => h.reason), cost: hd.map(h => h.cost),
     };
   }, [isHourly, dates, M, filtered, filteredTime, filteredHour]);
+
+  // KPI 总量：今天（isHourly）用小时级数据精确聚合（hour 按本地时区平移后含本地今天全天，
+  // 避免 daily 表按 UTC 日拆分导致本地今天凌晨数据漏算）；非今天用 daily 聚合。
+  // 字段与 aggregateTotals 对齐（cacheHitRate / reasoningTokens 等）。
+  const totals = useMemo(() => {
+    if (isHourly && hourlySpark) {
+      const sum = arr => arr.reduce((a, b) => a + b, 0);
+      const total = sum(hourlySpark.total);
+      const cacheRd = sum(hourlySpark.cacheRead);
+      return {
+        totalTokens: total,
+        inputTokens: sum(hourlySpark.input),
+        outputTokens: sum(hourlySpark.output),
+        cacheReadTokens: cacheRd,
+        cacheCreationTokens: 0,
+        cacheTokens: cacheRd,
+        reasoningTokens: sum(hourlySpark.reasoning),
+        costUSD: sum(hourlySpark.cost),
+        cacheHitRate: total ? (cacheRd / total) * 100 : 0,
+      };
+    }
+    return aggregateTotals(filtered);
+  }, [isHourly, hourlySpark, filtered]);
+
+  const compareData = useMemo(() => {
+    if (!f.compare) return { totals: null };
+    const days = dates.length;
+    const endStr = addDays(f.startDate, -1);
+    const startStr = addDays(endStr, -(days - 1));
+    return { totals: aggregateTotals(filterDaily(M?.daily || [], { ...f, startDate: startStr, endDate: endStr })) };
+  }, [f, dates, M]);
+
+  const dailyMap = useMemo(() => {
+    const m = new Map();
+    for (const r of filtered) m.set(r.usageDate, (m.get(r.usageDate) || 0) + r.totalTokens);
+    return m;
+  }, [filtered]);
 
   const sparkValues = useMemo(
     () => hourlySpark ? hourlySpark.total

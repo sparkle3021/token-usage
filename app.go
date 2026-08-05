@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"token-dashboard/internal/collector/orchestrator"
 	"token-dashboard/internal/config"
@@ -13,6 +14,8 @@ import (
 	"token-dashboard/internal/pricing"
 	"token-dashboard/internal/quota"
 	"token-dashboard/internal/service"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App Wails 应用主结构体，持有各服务实例，并将方法绑定到前端 window.go.main.App.*。
@@ -23,6 +26,8 @@ type App struct {
 	collectionSvc *service.CollectionService
 	importSvc     *service.ImportService
 	settingSvc    *service.SettingService
+	deviceSvc     *service.DeviceService
+	exportSvc     *service.ExportService
 	quotaSvc      *quota.Service
 	pricingSvc    *service.PricingService
 	dataDir       string
@@ -55,6 +60,8 @@ func NewApp() *App {
 	collectionSvc := service.NewCollectionService(db, eng)
 	importSvc := service.NewImportService()
 	settingSvc := service.NewSettingService(db, collectionSvc)
+	deviceSvc := service.NewDeviceService(db)
+	exportSvc := service.NewExportService(db)
 	quotaSvc := quota.NewService(db)
 	pricingSvc := service.NewPricingService(pr, cfg.DataDir)
 
@@ -63,6 +70,8 @@ func NewApp() *App {
 		collectionSvc: collectionSvc,
 		importSvc:     importSvc,
 		settingSvc:    settingSvc,
+		deviceSvc:     deviceSvc,
+		exportSvc:     exportSvc,
 		quotaSvc:      quotaSvc,
 		pricingSvc:    pricingSvc,
 		dataDir:       cfg.DataDir,
@@ -130,7 +139,14 @@ func (a *App) CurrentOp() string {
 }
 
 func (a *App) ClearAllData() error {
-	return a.collectionSvc.ClearAllData()
+	if err := a.collectionSvc.ClearAllData(); err != nil {
+		return err
+	}
+	// 清空数据库后失效仪表盘/会话缓存，否则前端拿到旧缓存数据，表现"清空无效"。
+	if a.dashboardSvc != nil {
+		a.dashboardSvc.InvalidateCaches()
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +171,62 @@ func (a *App) GetSettings() model.AppConfig {
 
 func (a *App) SaveSettings(cfg model.AppConfig) error {
 	return a.settingSvc.SaveSettings(cfg)
+}
+
+// ---------------------------------------------------------------------------
+// Device API
+// ---------------------------------------------------------------------------
+
+func (a *App) GetDevices() []model.DeviceInfo {
+	return a.deviceSvc.ListDevices()
+}
+
+func (a *App) RenameDevice(deviceID, displayName string) error {
+	return a.deviceSvc.RenameDevice(deviceID, displayName)
+}
+
+// ---------------------------------------------------------------------------
+// Transfer API（导出）
+// ---------------------------------------------------------------------------
+
+// ExportData 导出用量数据（hour_usage + session_usage + 设备映射）到用户选择的 JSON 文件。
+// 返回保存路径；用户取消时返回空字符串。
+func (a *App) ExportData() (string, error) {
+	if a.exportSvc == nil {
+		return "", fmt.Errorf("导出服务未初始化")
+	}
+	payload, err := a.exportSvc.BuildExport()
+	if err != nil {
+		return "", err
+	}
+	payload.ExportedAt = time.Now().Format(time.RFC3339)
+	data, err := payload.Marshal()
+	if err != nil {
+		return "", fmt.Errorf("序列化导出数据失败: %w", err)
+	}
+
+	host, _ := os.Hostname()
+	deviceID := "unknown"
+	if a.exportSvc != nil {
+		deviceID = a.exportSvc.LocalDeviceID()
+	}
+	ts := time.Now().Format("20060102-150405")
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultFilename: fmt.Sprintf("token-usage-export-%s-%s-%s.json", host, deviceID, ts),
+		Title:           "导出用量数据",
+		Filters:         []runtime.FileFilter{{DisplayName: "JSON 文件", Pattern: "*.json"}},
+	})
+	if err != nil {
+		return "", err
+	}
+	if path == "" {
+		return "", nil // 用户取消
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return "", fmt.Errorf("写入导出文件失败: %w", err)
+	}
+	log.Printf("[app] ExportData written path=%s size=%d", path, len(data))
+	return path, nil
 }
 
 // ---------------------------------------------------------------------------

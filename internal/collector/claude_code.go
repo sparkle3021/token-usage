@@ -22,6 +22,7 @@ const (
 )
 
 type ClaudeCodeCollector struct {
+	DeviceIdentity
 	cache *ParseCache
 }
 
@@ -72,7 +73,7 @@ func (c *ClaudeCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*
 	if c.cache.AllCached(allFiles) {
 		debuglog.Perf("ClaudeCode AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] ClaudeCode all files cached, skipping")
-		return &CollectResult{Device: Hostname(), Source: claudeSourceLabel, Cached: true}, nil
+		return &CollectResult{Device: c.Device(), Source: claudeSourceLabel, Cached: true}, nil
 	}
 	debuglog.Perf("ClaudeCode AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
@@ -93,7 +94,7 @@ func (c *ClaudeCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*
 		}
 	}
 
-	result := &CollectResult{Device: Hostname(), Source: claudeSourceLabel}
+	result := &CollectResult{Device: c.Device(), Source: claudeSourceLabel}
 	for _, agg := range dailyMap {
 		result.Daily = append(result.Daily, DailyRow{
 			UsageDate: agg.date, Model: agg.model,
@@ -134,9 +135,13 @@ func (c *ClaudeCodeCollector) scanAndParse(dir string,
 		records := c.parseFile(filePath)
 		recordCount += len(records)
 		for _, rec := range records {
-			date := LocalDateFromTimestamp(rec.timestamp, "unknown")
+			date := UTCDateFromTimestamp(rec.timestamp, "unknown")
 			if date == "unknown" {
 				continue
+			}
+			eventTime := rec.timestamp
+			if u, ok := ToUTCRFC3339(rec.timestamp); ok {
+				eventTime = u
 			}
 			model := NormalizeModelForGrouping(rec.model)
 			t := struct{ Input, Output, CacheRead, CacheWrite, Reasoning int64 }{
@@ -149,7 +154,7 @@ func (c *ClaudeCodeCollector) scanAndParse(dir string,
 
 			*events = append(*events, EventRow{
 				EventKey:   fmt.Sprintf("%s:%s:%s:%d", filePath, rec.timestamp, model, rec.input+rec.output),
-				EventTime: rec.timestamp, UsageDate: date, Model: model,
+				EventTime: eventTime, UsageDate: date, Model: model,
 				SessionID: strings.TrimSuffix(filepath.Base(filePath), ".jsonl"), ProjectPath: workspaceLabel,
 				InputTokens: rec.input, OutputTokens: rec.output,
 				CacheReadTokens: rec.cacheRead, CacheWriteTokens: rec.cacheWrite,

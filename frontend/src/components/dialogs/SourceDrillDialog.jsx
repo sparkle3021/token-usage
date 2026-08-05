@@ -1,6 +1,7 @@
 import { aggregateTotals } from '@/lib/aggregators.js';
 import { compactCN } from '@/lib/formatters.js';
 import { getModelIconUrl, getSourceColor } from '@/lib/iconMap.js';
+import { deviceName } from '@/lib/devices.js';
 import { useMemo } from 'react';
 import { Modal } from 'antd';
 import SourceIcon from '@/components/common/SourceIcon.jsx';
@@ -10,7 +11,7 @@ import SourceIcon from '@/components/common/SourceIcon.jsx';
  * 展示该来源（source+device）在过滤时间范围内的模型分布，
  * 与看板 TopModels 同款进度条：来源细分堆叠条 + 总 Token + 占比。
  */
-export default function SourceDrillDialog({ drill, daily, allDaily = [], onClose }) {
+export default function SourceDrillDialog({ drill, daily, allDaily = [], deviceNames = {}, onClose }) {
   const { row } = drill;
 
   const detail = useMemo(() => {
@@ -41,11 +42,11 @@ export default function SourceDrillDialog({ drill, daily, allDaily = [], onClose
       footer={null}
     >
       <h3 className="sr-only">{row.source} 模型分布</h3>
-      <p className="sr-only">{row.device} 模型用量分布</p>
+      <p className="sr-only">{deviceName(deviceNames, row.device)} 模型用量分布</p>
 
       <div className="mb-4 shrink-0">
         <div className="text-xs text-muted-foreground mb-0.5">模型分布</div>
-        <h3 className="text-sm font-semibold flex items-center gap-1.5"><SourceIcon name={row.source} className="w-4 h-4" />{row.source}<span className="text-xs text-muted-foreground font-normal">{row.device}</span></h3>
+        <h3 className="text-sm font-semibold flex items-center gap-1.5"><SourceIcon name={row.source} className="w-4 h-4" />{row.source}<span className="text-xs text-muted-foreground font-normal">{deviceName(deviceNames, row.device)}</span></h3>
       </div>
 
       <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 shrink-0 flex-wrap">
