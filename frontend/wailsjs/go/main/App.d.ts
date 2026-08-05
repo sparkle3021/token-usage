@@ -36,6 +36,8 @@ export function GetSettings():Promise<model.AppConfig>;
 
 export function GetTimeSeriesData(arg1:number):Promise<model.TimeSeriesData>;
 
+export function ImportData():Promise<model.ImportResult>;
+
 export function ListQuotaConfigs():Promise<Array<model.QuotaConfig>>;
 
 export function RenameDevice(arg1:string,arg2:string):Promise<void>;

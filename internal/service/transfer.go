@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"token-dashboard/internal/database"
 	"token-dashboard/internal/model"
@@ -45,29 +46,31 @@ func (s *ExportService) LocalDeviceID() string {
 }
 
 // BuildExport 组装导出数据（hour_usage + daily_usage + session_usage 全量 + 设备映射）。
+// 失败阶段记录日志；成功日志含各层行数与总耗时，供导出链路性能排查。
 func (s *ExportService) BuildExport() (*ExportPayload, error) {
+	start := time.Now()
 	if s.db == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
 	hours, err := s.db.QueryHourUsage(0)
 	if err != nil {
-		return nil, fmt.Errorf("查询 hour_usage: %w", err)
+		return s.exportFail("hour_usage", err, start)
 	}
 	daily, err := s.db.QueryDaily()
 	if err != nil {
-		return nil, fmt.Errorf("查询 daily_usage: %w", err)
+		return s.exportFail("daily_usage", err, start)
 	}
 	sessions, err := s.db.QuerySessions()
 	if err != nil {
-		return nil, fmt.Errorf("查询 session_usage: %w", err)
+		return s.exportFail("session_usage", err, start)
 	}
 	names, err := s.db.DeviceNames()
 	if err != nil {
-		return nil, fmt.Errorf("查询设备映射: %w", err)
+		return s.exportFail("设备映射", err, start)
 	}
 
-	log.Printf("[service] BuildExport hours=%d daily=%d sessions=%d", len(hours), len(daily), len(sessions))
+	log.Printf("[service] BuildExport ok hours=%d daily=%d sessions=%d elapsed=%v", len(hours), len(daily), len(sessions), time.Since(start))
 	return &ExportPayload{
 		Format:       "token-usage-export",
 		Version:      1,
@@ -76,6 +79,12 @@ func (s *ExportService) BuildExport() (*ExportPayload, error) {
 		DailyUsage:   daily,
 		SessionUsage: sessions,
 	}, nil
+}
+
+// exportFail 记录导出构建失败日志（含阶段与耗时）并返回包装错误。
+func (s *ExportService) exportFail(stage string, err error, start time.Time) (*ExportPayload, error) {
+	log.Printf("[service] BuildExport %s failed: %v elapsed=%v", stage, err, time.Since(start))
+	return nil, fmt.Errorf("查询 %s: %w", stage, err)
 }
 
 // Marshal 序列化为格式化 JSON。

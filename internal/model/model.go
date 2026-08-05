@@ -133,6 +133,15 @@ type CCSwitchImportResult struct {
 	Message  string `json:"message,omitempty"`
 }
 
+// ImportResult 数据导入结果：各层写入行数与新增设备数，供前端反馈合并规模。
+type ImportResult struct {
+	Hours      int    `json:"hours"`
+	Daily      int    `json:"daily"`
+	Sessions   int    `json:"sessions"`
+	Devices    int    `json:"devices"`
+	ImportedAt string `json:"importedAt"`
+}
+
 // PricingUpdateResult is returned by UpdatePricing.
 type PricingUpdateResult struct {
 	Litellm int    `json:"litellm"`

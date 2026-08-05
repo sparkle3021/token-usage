@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Modal, Select, Button } from 'antd';
 import { getMessage } from '@/lib/message.js';
 import { SettingsIcon, TriangleAlertIcon } from 'lucide-react';
-import { getSettings, saveSettings, detectCCSwitchDB, updatePricing, clearAllData, getDevices, renameDevice, exportData } from '@/api/client.js';
+import { getSettings, saveSettings, detectCCSwitchDB, updatePricing, clearAllData, getDevices, renameDevice, exportData, importData } from '@/api/client.js';
 
 const DEFAULTS = { autoSyncMinutes: 5, ccSwitchDBPath: '', ccSwitchEnabled: false, ccSwitchAutoSync: false };
 
@@ -37,7 +37,7 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
   const [savingAutoSync, setSavingAutoSync] = useState(false);
   const [savingPath, setSavingPath] = useState(false);
 
-  // 当前待确认的操作：null | 'fullSync' | 'updatePricing' | 'clear'
+  // 当前待确认的操作：null | 'fullSync' | 'updatePricing' | 'clear' | 'import'
   const [confirmAction, setConfirmAction] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -179,6 +179,13 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
           toast?.success('已清除所有历史数据');
           break;
         }
+        case 'import': {
+          const result = await importData();
+          if (result) {
+            toast?.success(`已导入：${result.hours} 小时行 / ${result.daily} 日行 / ${result.sessions} 会话行，新增 ${result.devices} 个设备`);
+          }
+          break;
+        }
       }
       setConfirmAction(null);
     } catch (err) {
@@ -210,6 +217,13 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
       confirmText: '确认清除',
       busyText: '清除中…',
       description: '将清除所有用量数据、采集记录和缓存（含 CC-Switch 检查点），此操作不可撤销。确定继续？',
+    },
+    import: {
+      title: '导入数据',
+      danger: false,
+      confirmText: '选择文件导入',
+      busyText: '导入中…',
+      description: '将选择导出的 JSON 文件，合并其用量数据与设备映射到本机。重复导入不会重复计数。确定继续？',
     },
   };
 
@@ -322,6 +336,15 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
                   </div>
                   <Button size="small" className="h-8 text-xs shrink-0" onClick={handleExport} disabled={exporting}>
                     {exporting ? '导出中…' : '导出'}
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-medium">导入数据</p>
+                    <p className="text-xs text-muted-foreground">从导出 JSON 合并用量与设备</p>
+                  </div>
+                  <Button size="small" className="h-8 text-xs shrink-0" onClick={() => setConfirmAction('import')}>
+                    导入
                   </Button>
                 </div>
                 <div className="flex items-center justify-between gap-2">

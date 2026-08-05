@@ -89,6 +89,9 @@ export function renameDevice(deviceId, displayName) { return window.go.main.App.
 /** 导出用量数据到 JSON 文件，返回保存路径（取消返回空串） */
 export function exportData() { return window.go.main.App.ExportData(); }
 
+/** 从导出 JSON 文件导入用量数据，返回合并规模（取消返回 null） */
+export function importData() { return window.go.main.App.ImportData(); }
+
 // ── 用量查询 API ──
 
 /** 获取所有用量查询配置 */

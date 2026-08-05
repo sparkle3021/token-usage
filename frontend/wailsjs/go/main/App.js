@@ -70,6 +70,10 @@ export function GetTimeSeriesData(arg1) {
   return window['go']['main']['App']['GetTimeSeriesData'](arg1);
 }
 
+export function ImportData() {
+  return window['go']['main']['App']['ImportData']();
+}
+
 export function ListQuotaConfigs() {
   return window['go']['main']['App']['ListQuotaConfigs']();
 }

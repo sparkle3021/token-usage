@@ -258,6 +258,26 @@ export namespace model {
 	        this.costUSD = source["costUSD"];
 	    }
 	}
+	export class ImportResult {
+	    hours: number;
+	    daily: number;
+	    sessions: number;
+	    devices: number;
+	    importedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hours = source["hours"];
+	        this.daily = source["daily"];
+	        this.sessions = source["sessions"];
+	        this.devices = source["devices"];
+	        this.importedAt = source["importedAt"];
+	    }
+	}
 	export class PricingUpdateResult {
 	    litellm: number;
 	    message: string;
