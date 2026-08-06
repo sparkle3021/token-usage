@@ -21,7 +21,7 @@ func (m *Manager) RecordRun(device, source, status, message, command string) err
 func (m *Manager) RecordRunWithMtime(device, source, status, message, command string, lastFileMtime int64) error {
 	_, err := m.db.Exec(`
 		INSERT INTO collection_runs(device, source, status, message, collected_at, command, last_file_mtime)
-		VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
+		VALUES (?, ?, ?, ?, datetime('now','localtime'), ?, ?)
 	`, device, source, status, nullIfEmpty(message), nullIfEmpty(command), lastFileMtime)
 	if err != nil {
 		log.Printf("[db] RecordRunWithMtime error source=%s mtime=%d err=%v", source, lastFileMtime, err)

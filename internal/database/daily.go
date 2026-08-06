@@ -88,46 +88,50 @@ func (m *Manager) QueryDaily() ([]model.DailyUsage, error) {
 	return results, rows.Err()
 }
 
+// BuildDailyFromHourUsage 从 hour_usage 重建 daily_usage（权威聚合层投影）。
+// 每个 UTC 小时桶按本机时区平移为本地 (date, hour) 后按本地日期聚合，
+// 使 daily_usage.usage_date 为本地日语义，与展示层及直写来源（Hermes/CC-Switch rollup）对齐。
+// token 类字段以本地日聚合值直接覆盖（消除旧 MAX 冻结），cost 与定价锁定沿用 upsert 逻辑。
 func (m *Manager) BuildDailyFromHourUsage() error {
+	rows, err := m.QueryHourUsage(0)
+	if err != nil {
+		return fmt.Errorf("query hour usage: %w", err)
+	}
+
+	type dailyKey struct{ device, source, date, model string }
+	acc := make(map[dailyKey]*model.DailyUsage)
+	for _, r := range rows {
+		localDate, _ := UTCBucketToLocal(r.UsageDate, r.Hour)
+		k := dailyKey{r.Device, r.Source, localDate, r.Model}
+		e, ok := acc[k]
+		if !ok {
+			e = &model.DailyUsage{Device: r.Device, Source: r.Source, UsageDate: localDate, Model: r.Model}
+			acc[k] = e
+		}
+		e.InputTokens += r.InputTokens
+		e.OutputTokens += r.OutputTokens
+		e.CacheCreationTokens += r.CacheCreationTokens
+		e.CacheReadTokens += r.CacheReadTokens
+		e.ReasoningOutputTokens += r.ReasoningOutputTokens
+		e.TotalTokens += r.TotalTokens
+		e.CostUSD += r.CostUSD
+	}
+
+	if len(acc) == 0 {
+		return nil
+	}
+	batch := make([]model.DailyUsage, 0, len(acc))
+	for _, e := range acc {
+		batch = append(batch, *e)
+	}
+
 	tx, err := m.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback()
-
-	_, err = tx.Exec(`
-		INSERT INTO daily_usage (device, source, usage_date, model,
-			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-			reasoning_output_tokens, total_tokens, cost_usd, pricing_locked_at, updated_at)
-		SELECT device, source, usage_date, model,
-			SUM(input_tokens), SUM(output_tokens),
-			SUM(cache_creation_tokens), SUM(cache_read_tokens),
-			SUM(reasoning_output_tokens), SUM(total_tokens), SUM(cost_usd),
-			NULL, datetime('now','localtime')
-		FROM hour_usage
-		GROUP BY device, source, usage_date, model
-		ON CONFLICT(device, source, usage_date, model) DO UPDATE SET
-			input_tokens=MAX(excluded.input_tokens, daily_usage.input_tokens),
-			output_tokens=MAX(excluded.output_tokens, daily_usage.output_tokens),
-			cache_creation_tokens=MAX(excluded.cache_creation_tokens, daily_usage.cache_creation_tokens),
-			cache_read_tokens=MAX(excluded.cache_read_tokens, daily_usage.cache_read_tokens),
-			reasoning_output_tokens=MAX(excluded.reasoning_output_tokens, daily_usage.reasoning_output_tokens),
-			total_tokens=MAX(excluded.total_tokens, daily_usage.total_tokens),
-			cost_usd=CASE
-				WHEN daily_usage.usage_date < date('now','localtime') THEN daily_usage.cost_usd
-				WHEN excluded.cost_usd = 0 THEN daily_usage.cost_usd
-				ELSE excluded.cost_usd
-			END,
-			pricing_locked_at=CASE
-				WHEN daily_usage.usage_date < date('now','localtime')
-				THEN COALESCE(daily_usage.pricing_locked_at, datetime('now','localtime'))
-				ELSE NULL
-			END,
-			updated_at=datetime('now','localtime')
-	`)
-	if err != nil {
-		return fmt.Errorf("build daily from hour_usage: %w", err)
+	if err := m.bulkUpsertDailyExec(tx, batch); err != nil {
+		return fmt.Errorf("upsert daily from hour: %w", err)
 	}
-
 	return tx.Commit()
 }

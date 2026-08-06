@@ -182,8 +182,9 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 				modelID = "unknown"
 			}
 
-			eventTime := time.UnixMilli(timeCreated).Format(time.RFC3339)
-			date := time.UnixMilli(timeCreated).Format("2006-01-02")
+			created := time.UnixMilli(timeCreated)
+			eventTime := created.UTC().Format(time.RFC3339)
+			date := created.UTC().Format("2006-01-02")
 
 			t := struct{ Input, Output, CacheRead, CacheWrite, Reasoning int64 }{
 				msg.Tokens.Input, msg.Tokens.Output, msg.Tokens.Cache.Read, msg.Tokens.Cache.Write, msg.Tokens.Reasoning,

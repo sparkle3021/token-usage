@@ -190,7 +190,7 @@ func (m *Manager) initPreparedStmts() error {
 
 	m.stmtRecordRun, err = m.db.Prepare(`
 		INSERT INTO collection_runs(device, source, status, message, collected_at, command)
-		VALUES (?, ?, ?, ?, datetime('now'), ?)
+		VALUES (?, ?, ?, ?, datetime('now','localtime'), ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("prepare recordRun: %w", err)

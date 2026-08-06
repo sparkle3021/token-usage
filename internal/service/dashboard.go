@@ -60,16 +60,14 @@ func (s *DashboardService) GetDashboardData() *model.DashboardData {
 		return &model.DashboardData{}
 	}
 
-	// 日视图读 daily_usage 表（含 hour 重建 + CC-Switch rollup + Hermes 全部来源），
-	// 按 UTC 日 → 本机时区平移为本地日。
+	// 日视图读 daily_usage 表（含 hour 重建 + CC-Switch rollup + Hermes 全部来源）。
+	// daily_usage.usage_date 为本地日语义（BuildDailyFromHourUsage 按本地日聚合，
+	// 直写来源亦按本地日写入），无需二次时区平移。
 	// 回归修复：改为从 hour_usage 现场聚合会遗漏 CC-Switch rollup（仅日级、只写 daily_usage、
 	// 且与 hour 重建同 key 时取 MAX 增大），导致 token 总量显著减少（v0.2.0 ~113 亿 → 80 亿）。
 	dbDaily, derr := s.db.QueryDaily()
 	if derr != nil {
 		log.Printf("[service] GetDashboardData QueryDaily err=%v", derr)
-	}
-	for i := range dbDaily {
-		dbDaily[i].UsageDate = localizeDate(dbDaily[i].UsageDate)
 	}
 	daily := dbDaily
 	sessions, err := s.db.QuerySessions()
@@ -185,17 +183,14 @@ func (s *DashboardService) GetTimeSeriesData(days int) *model.TimeSeriesData {
 }
 
 // localizeUTCDateHour 将 UTC (date, hour) 平移为本机时区 (date, hour)。
+// 复用 database.UTCBucketToLocal，避免两套平移实现漂移。
 func localizeUTCDateHour(utcDate string, utcHour int) (string, int) {
-	t, err := time.ParseInLocation("2006-01-02", utcDate, time.UTC)
-	if err != nil {
-		return utcDate, utcHour
-	}
-	t = t.Add(time.Duration(utcHour) * time.Hour).In(time.Local)
-	return t.Format("2006-01-02"), t.Hour()
+	return database.UTCBucketToLocal(utcDate, utcHour)
 }
 
 // localizeDate 将 UTC 日期按"UTC 中午代表点"平移为本机时区日期，
 // 用于无小时粒度来源（Hermes Agent）日级的近似本地化。
+// 注意：仅适用于尚未本地化的 UTC 日来源；本地日来源勿调用（会二次平移）。
 func localizeDate(utcDate string) string {
 	t, err := time.ParseInLocation("2006-01-02", utcDate, time.UTC)
 	if err != nil {

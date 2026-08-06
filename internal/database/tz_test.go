@@ -28,6 +28,21 @@ func TestLocalBucketToUTCRoundTrip(t *testing.T) {
 	}
 }
 
+// TestUTCBucketToLocalRoundTrip 验证 UTC 桶平移本机后，反向（本机→UTC）能还原。
+func TestUTCBucketToLocalRoundTrip(t *testing.T) {
+	for _, c := range []struct{ date string; hour int }{
+		{"2026-08-01", 0}, {"2026-08-01", 12}, {"2026-08-01", 23},
+		{"2026-08-02", 1}, {"2026-12-31", 23},
+	} {
+		lDate, lHour := UTCBucketToLocal(c.date, c.hour)
+		uDate, uHour := localBucketToUTC(lDate, lHour)
+		if uDate != c.date || uHour != c.hour {
+			t.Fatalf("round trip mismatch: utc %s:%d -> local %s:%d -> utc %s:%d",
+				c.date, c.hour, lDate, lHour, uDate, uHour)
+		}
+	}
+}
+
 // TestMigrateHourTimezone 验证存量本地桶 hour 迁移为 UTC 桶：平移一致 + 幂等（标记后跳过）。
 func TestMigrateHourTimezone(t *testing.T) {
 	m, err := New(filepath.Join(t.TempDir(), "tz.db"))

@@ -129,6 +129,7 @@ No HTTP API — Wails handles IPC bridge between WebView2 JS context and Go.
 4. **Rebuild**: `BuildDailyFromHourUsage()` runs after all collectors, summarizing `hour_usage → daily_usage`
 5. **Presentation**: Frontend calls `GetDashboardData` → filters by date/source/model → renders charts + tables
 6. **权威聚合**: `hour_usage` 是权威层（time_usage 汇总 + CC-Switch 直接写入），`daily_usage` 由它重建；图表渲染 hour 优先、time 兜底（`TrendChart byKey` / `DashboardPage hourlySpark` 均此逻辑）
+   - **daily 口径**: `daily_usage.usage_date` 一律为**本地日**（`BuildDailyFromHourUsage` 将 hour 的 UTC 桶按本机时区平移后聚合；Hermes/CC-Switch rollup 直写亦按本地日），服务层不再二次平移（`localizeDate` 仅限未本地化的 UTC 日来源）
 
 ### Collection Architecture
 

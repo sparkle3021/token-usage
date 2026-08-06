@@ -93,6 +93,18 @@ func localBucketToUTC(date string, hour int) (string, int) {
 	return t.Format("2006-01-02"), t.Hour()
 }
 
+// UTCBucketToLocal 将 UTC 桶 (date, hour) 平移为本机时区桶 (date, hour)。
+// 与 localBucketToUTC 互为逆运算；解析失败兜底返回原值。
+// 供 hour_usage 读取层与 daily 重建共用，避免多套平移实现漂移。
+func UTCBucketToLocal(utcDate string, utcHour int) (string, int) {
+	t, err := time.ParseInLocation("2006-01-02", utcDate, time.UTC)
+	if err != nil {
+		return utcDate, utcHour
+	}
+	t = t.Add(time.Duration(utcHour) * time.Hour).In(time.Local)
+	return t.Format("2006-01-02"), t.Hour()
+}
+
 // localWindowStartUTC 返回"本地今天 00:00 往前 daysAgo 天"对应窗口起点的 UTC 时刻。
 // 用于 days 过滤的 UTC 口径：本地当天数据可能落在前一 UTC 日，须按本地窗口换算下限，
 // 避免用本地日期字符串当 UTC 下限导致本地凌晨数据被滤掉。
