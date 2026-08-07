@@ -77,7 +77,6 @@ Files: `internal/database/` — split by table (same `package database`).
 | `session_usage` | `(device,source,session_id)` | Per-session rollups (unused by CC-Switch) |
 | `app_config` | `key` | CK storage, CC-Switch DB path, settings |
 | `parse_cache` | `(source,file_path)` | `mtime:size` fingerprint cache |
-| `collection_runs` | `id` | Sync history (backend only; frontend UI removed) |
 
 ## Key Conventions
 

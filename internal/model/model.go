@@ -1,15 +1,5 @@
 package model
 
-type CollectionRun struct {
-	ID          int64  `json:"id"`
-	Device      string `json:"device"`
-	Source      string `json:"source"`
-	Status      string `json:"status"`
-	Message     string `json:"message"`
-	CollectedAt string `json:"collectedAt"`
-	Command     string `json:"command,omitempty"`
-}
-
 type DailyUsage struct {
 	Device                   string  `json:"device"`
 	Source                   string  `json:"source"`
@@ -97,7 +87,6 @@ type TimeUsage struct {
 type DashboardData struct {
 	Daily    []DailyUsage    `json:"daily"`
 	Sessions []SessionUsage `json:"sessions"`
-	Runs     []CollectionRun `json:"runs"`
 	// DeviceNames 设备身份 → 展示名映射，前端据此渲染可读设备名。
 	DeviceNames map[string]string `json:"deviceNames"`
 }

@@ -5,7 +5,7 @@ package service
 // + session_usage（会话汇总）+ 设备映射。
 // 不导出：
 //   - time_usage：明细体积大、event_key 含本地路径且为 json:"-" 隐藏字段，导入无意义
-//   - parse_cache / collection_runs / app_config / quota_configs（含密钥）：本地状态
+//   - parse_cache / app_config / quota_configs（含密钥）：本地状态
 import (
 	"encoding/json"
 	"fmt"

@@ -56,7 +56,7 @@ func (m *Manager) ClearAllUsageData() error {
 	}
 	defer tx.Rollback()
 
-	tables := []string{"daily_usage", "hour_usage", "time_usage", "session_usage", "collection_runs", "parse_cache"}
+	tables := []string{"daily_usage", "hour_usage", "time_usage", "session_usage", "parse_cache"}
 	var total int64
 	for _, table := range tables {
 		result, err := tx.Exec(`DELETE FROM ` + table)

@@ -47,7 +47,7 @@ main.go          → Wails app config (title, size, asset embed) + setupLogging 
 app.go           → App struct: 纯绑定转发（无 db/engine 裸引用，业务全部委托 service）
 internal/
   model/         → 纯数据类型（无任何 internal 依赖）: DailyUsage, SessionUsage, TimeUsage,
-  |                HourUsage, CollectionRun, DashboardData, QuotaData, AppConfig
+  |                HourUsage, DashboardData, QuotaData, AppConfig
   database/      → SQLite manager: 7 表 schema、WAL pragmas、prepared 复用、按表拆分 DAO
   pricing/       → Token cost engine: model resolution chain (exact → prefix → fuzzy → overrides)
   collector/     → Collector interface + 7 implementations:
@@ -93,7 +93,7 @@ src/pages/                         → 页面壳: DashboardPage/TablePage/QuotaP
 - **文件组织**: 单文件不承载多类职责（>400 行且多职责须拆分）；工具函数不跨包重复实现；quota 相关代码必须位于 `internal/quota`
 - **import 路径**: 前端统一 `@/` alias（vite 配置），禁止相对路径跨目录引用
 
-### Database Schema (8 tables in SQLite)
+### Database Schema (7 tables in SQLite)
 
 | Table | PK | Purpose |
 |---|---|---|
@@ -101,7 +101,6 @@ src/pages/                         → 页面壳: DashboardPage/TablePage/QuotaP
 | `hour_usage` | `(device, source, usage_date, hour, model)` | Hourly aggregates — **权威聚合层**（time_usage 汇总 + CC-Switch 直接写入） |
 | `daily_usage` | `(device, source, usage_date, model)` | Daily totals, rebuilt from hour_usage after each collection |
 | `session_usage` | `(device, source, session_id)` | Per-session rollups |
-| `collection_runs` | `id` (auto-increment) | Sync history with status/message |
 | `app_config` | `key` | Key-value config (CCSwitch checkpoints, DB path, auto-sync interval) |
 | `parse_cache` | `(source, file_path)` | File fingerprint cache (`mtime:size` + last_parsed_offset) |
 | `quota_configs` | `id` | 用量查询配置（provider/plan/display_name/seq/config_json） |

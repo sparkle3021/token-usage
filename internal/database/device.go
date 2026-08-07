@@ -13,8 +13,8 @@ import (
 // app_config key：本机设备身份（UUID）。
 const localDeviceIDKey = "device_id"
 
-// deviceUsageTables 四张用量表 + 运行历史，device 列需迁移的集合。
-var deviceUsageTables = []string{"time_usage", "hour_usage", "daily_usage", "session_usage", "collection_runs"}
+// deviceUsageTables 四张用量表，device 列需迁移的集合。
+var deviceUsageTables = []string{"time_usage", "hour_usage", "daily_usage", "session_usage"}
 
 // machineHostname 返回本机主机名，供设备注册事实记录。
 func machineHostname() string {
@@ -25,7 +25,7 @@ func machineHostname() string {
 	return h
 }
 
-// migrateDeviceIdentity 迁移存量身份：将四张用量表与 collection_runs 中每个
+// migrateDeviceIdentity 迁移存量身份：将四张用量表中每个
 // 非 UUID 的旧 device 值（hostname）映射为独立 UUID，UPDATE 替换并注册进 devices 表。
 // 幂等锚点：devices.hostname 已有记录则复用其 device_id；app_config.device_id 缺失时
 // 由本机 hostname 映射补齐。整体包在单事务内，失败回滚。
@@ -37,7 +37,7 @@ func (m *Manager) migrateDeviceIdentity() error {
 	}
 	defer tx.Rollback()
 
-	// 1. 收集所有 distinct device 值（四表 + collection_runs + 既有本机身份）
+	// 1. 收集所有 distinct device 值（四表 + 既有本机身份）
 	distinct := map[string]bool{}
 	for _, table := range deviceUsageTables {
 		rows, err := tx.Query(`SELECT DISTINCT device FROM ` + table)
@@ -100,7 +100,7 @@ func (m *Manager) migrateDeviceIdentity() error {
 		mapping[old] = id
 	}
 
-	// 3. UPDATE 替换四表 + collection_runs
+	// 3. UPDATE 替换四表
 	//    四表 device 是 PK 成分：UPDATE 可能撞 UNIQUE（同 PK 组合已存在目标 UUID 行，
 	//    即同一事件的重复写入，如老版本采集器以 hostname 写入后新版又以 UUID 写入）。
 	//    用 UPDATE OR IGNORE 迁移非重复行，再 DELETE 残留 hostname（重复事件，去重）。
@@ -109,12 +109,6 @@ func (m *Manager) migrateDeviceIdentity() error {
 			continue
 		}
 		for _, table := range deviceUsageTables {
-			if table == "collection_runs" {
-				if _, err := tx.Exec(`UPDATE collection_runs SET device = ? WHERE device = ?`, id, old); err != nil {
-					return fmt.Errorf("migrate device: update %s: %w", table, err)
-				}
-				continue
-			}
 			if _, err := tx.Exec(`UPDATE OR IGNORE `+table+` SET device = ? WHERE device = ?`, id, old); err != nil {
 				return fmt.Errorf("migrate device: update %s: %w", table, err)
 			}

@@ -27,14 +27,23 @@ function AppContent({ dark, onToggleDark }) {
   const [page, setPage] = useState('dashboard');
 
   const { M, loadError, refreshing, fetchData, fetchTimeSeries, allSources, allModels, heatmapData } = useDashboardData();
-  const { collecting, runCollect, runFullCollect } = useCollection(fetchData);
-  const { handleSettingsChange } = useSettings(fetchData);
+  const [lastSyncTs, setLastSyncTs] = useState(null);
+
+  // 同步完成（手动采集轮询结束 / 后端自动同步 collection:done）统一在此记录时间，
+  // 作为 Header「最后同步」显示来源，不查库。
+  const onDataChange = useCallback(() => {
+    setLastSyncTs(Date.now());
+    fetchData(true);
+  }, [fetchData]);
+
+  const { collecting, runCollect, runFullCollect } = useCollection(onDataChange);
+  const { handleSettingsChange } = useSettings(onDataChange);
 
   const onClearData = useCallback(() => {
     clearAllData().then(() => fetchData(true)).catch(() => {});
   }, [fetchData]);
 
-  const lastSync = M?.runs?.[0]?.collectedAt ? formatTs(M.runs[0].collectedAt) : '—';
+  const lastSync = lastSyncTs ? formatTs(new Date(lastSyncTs).toISOString()) : '—';
 
   if (loadError) return (
     <div className="flex flex-col items-center justify-center h-screen gap-4 text-muted-foreground">

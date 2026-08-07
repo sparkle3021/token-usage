@@ -21,7 +21,6 @@ type Manager struct {
 	stmtDaily   *sql.Stmt
 	stmtSession *sql.Stmt
 	stmtTime    *sql.Stmt
-	stmtRecordRun *sql.Stmt
 }
 
 func New(dbPath string) (*Manager, error) {
@@ -82,9 +81,6 @@ func (m *Manager) Close() error {
 	}
 	if m.stmtTime != nil {
 		m.stmtTime.Close()
-	}
-	if m.stmtRecordRun != nil {
-		m.stmtRecordRun.Close()
 	}
 	return m.db.Close()
 }
@@ -188,30 +184,12 @@ func (m *Manager) initPreparedStmts() error {
 		return fmt.Errorf("prepare upsertTime: %w", err)
 	}
 
-	m.stmtRecordRun, err = m.db.Prepare(`
-		INSERT INTO collection_runs(device, source, status, message, collected_at, command)
-		VALUES (?, ?, ?, ?, datetime('now','localtime'), ?)
-	`)
-	if err != nil {
-		return fmt.Errorf("prepare recordRun: %w", err)
-	}
-
-	log.Printf("[db] initPreparedStmts ok (4 statements)")
+	log.Printf("[db] initPreparedStmts ok (3 statements)")
 	return nil
 }
 
 func (m *Manager) initSchema() error {
 	schema := `
-	CREATE TABLE IF NOT EXISTS collection_runs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		device TEXT NOT NULL,
-		source TEXT NOT NULL,
-		status TEXT NOT NULL,
-		message TEXT,
-		collected_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-		command TEXT
-	);
-
 	CREATE TABLE IF NOT EXISTS daily_usage (
 		device TEXT NOT NULL,
 		source TEXT NOT NULL,
@@ -346,7 +324,6 @@ func (m *Manager) initSchema() error {
 		created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
 		updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 	);`)
-	m.db.Exec("ALTER TABLE collection_runs ADD COLUMN last_file_mtime INTEGER")
 	m.db.Exec("ALTER TABLE parse_cache ADD COLUMN last_parsed_offset INTEGER NOT NULL DEFAULT 0")
 	m.db.Exec("ALTER TABLE quota_configs ADD COLUMN is_valid INTEGER NOT NULL DEFAULT 1")
 	m.db.Exec("DELETE FROM app_config WHERE key IN ('cc_switch_enabled', 'cc_switch_auto_sync')")
@@ -356,6 +333,5 @@ func (m *Manager) initSchema() error {
 	}
 
 	m.migrateTotalTokens()
-	m.pruneCollectionRuns(500)
 	return nil
 }

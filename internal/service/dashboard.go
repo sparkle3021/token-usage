@@ -22,7 +22,7 @@ type DashboardService struct {
 	sessionsCacheMu sync.Mutex
 
 	// 仪表盘汇总缓存：GetDashboardData 首次计算后缓存，采集完成时失效。
-	// daily/runs 在数据源未更新时不变，切时间范围无需重查。
+	// daily 在数据源未更新时不变，切时间范围无需重查。
 	dailyCache   *model.DashboardData
 	dailyCacheMu sync.Mutex
 }
@@ -74,10 +74,6 @@ func (s *DashboardService) GetDashboardData() *model.DashboardData {
 	if err != nil {
 		log.Printf("[service] GetDashboardData QuerySessions err=%v", err)
 	}
-	runs, err := s.db.QueryRuns(500)
-	if err != nil {
-		log.Printf("[service] GetDashboardData QueryRuns err=%v", err)
-	}
 
 	projMap := make(map[string]string)
 	for _, s := range sessions {
@@ -98,19 +94,14 @@ func (s *DashboardService) GetDashboardData() *model.DashboardData {
 		}
 	}
 
-	for i := range runs {
-		runs[i].Message = strings.ReplaceAll(runs[i].Message, "\n", " ")
-	}
-
-	log.Printf("[service] GetDashboardData daily=%d sessions=%d runs=%d elapsed=%v",
-		len(daily), len(sessions), len(runs), time.Since(start))
+	log.Printf("[service] GetDashboardData daily=%d sessions=%d elapsed=%v",
+		len(daily), len(sessions), time.Since(start))
 
 	names, _ := s.db.DeviceNames()
 
 	result := &model.DashboardData{
 		Daily:       daily,
 		Sessions:    sessions,
-		Runs:        runs,
 		DeviceNames: names,
 	}
 	s.dailyCache = result

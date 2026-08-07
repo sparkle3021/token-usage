@@ -6,7 +6,7 @@ import { deviceNamesFromList } from '@/lib/devices.js';
 /**
  * 仪表盘数据获取 Hook。
  * 自动在挂载时拉取数据，返回原始数据及计算后的来源/模型列表和热力图数据。
- * 数据分字段存储（daily/time/hour/sessionAgg/runs），未变化字段复用旧引用，
+ * 数据分字段存储（daily/time/hour/sessionAgg），未变化字段复用旧引用，
  * 避免切时间范围时全树 useMemo 失效重算。
  * @returns {{ M, loadError, refreshing, fetchData, fetchTimeSeries, allSources, allModels, heatmapData }}
  */
@@ -15,7 +15,6 @@ export function useDashboardData() {
   const [time, setTime] = useState([]);
   const [hour, setHour] = useState([]);
   const [sessionAgg, setSessionAgg] = useState([]);
-  const [runs, setRuns] = useState([]);
   const [deviceNames, setDeviceNames] = useState({});
   const [loadError, setLoadError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,7 +35,6 @@ export function useDashboardData() {
     setTime(tsData.time || []);
     setHour(tsData.hour || []);
     setSessionAgg(sessionAggData || []);
-    setRuns(data.runs || []);
     setDeviceNames(prev => ({ ...prev, ...(data.deviceNames || {}), ...(tsData.deviceNames || {}) }));
     setLoaded(true);
     setLoadError(null);
@@ -88,8 +86,8 @@ export function useDashboardData() {
   // M 按字段聚合；daily/sessionAgg/runs 未变时引用稳定，下游 useMemo 不失效
   const M = useMemo(() => {
     if (!loaded) return null;
-    return { daily, time, hour, sessionAgg, runs, deviceNames, today: daysAgo(0) };
-  }, [loaded, daily, time, hour, sessionAgg, runs, deviceNames]);
+    return { daily, time, hour, sessionAgg, deviceNames, today: daysAgo(0) };
+  }, [loaded, daily, time, hour, sessionAgg, deviceNames]);
 
   const allSources = useMemo(() => [...new Set(daily.map(r => r.source))].sort(), [daily]);
   const allModels = useMemo(() => [...new Set(daily.map(r => r.model))].filter(Boolean).sort(), [daily]);

@@ -15,7 +15,7 @@ func TestMigrateDeviceIdentity(t *testing.T) {
 	}
 	defer m.Close()
 
-	// 模拟升级前存量：hostname 身份的数据行（四表 + collection_runs 各插一条）
+	// 模拟升级前存量：hostname 身份的数据行（四表各插一条）
 	_, err = m.Exec(`INSERT INTO time_usage
 		(device, source, event_key, event_time, usage_date, model,
 		 input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
@@ -50,17 +50,12 @@ func TestMigrateDeviceIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert session_usage: %v", err)
 	}
-	_, err = m.Exec(`INSERT INTO collection_runs(device, source, status) VALUES ('OldHost', 'Claude Code', 'ok')`)
-	if err != nil {
-		t.Fatalf("insert collection_runs: %v", err)
-	}
-
 	// 执行迁移
 	if err := m.migrateDeviceIdentity(); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	// 断言：四表 + collection_runs 的 device 全部替换为合法 UUID
+	// 断言：四表的 device 全部替换为合法 UUID
 	for _, table := range deviceUsageTables {
 		var device string
 		if err := m.db.QueryRow(`SELECT device FROM `+table+` WHERE source = 'Claude Code' LIMIT 1`).Scan(&device); err != nil {

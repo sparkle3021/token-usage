@@ -308,7 +308,6 @@ func (e *Engine) runCollection() {
 			errMsg := fmt.Sprintf("[%s] %v", r.col.Source(), r.err)
 			stderr += errMsg + "\n"
 			log.Printf("[collector] %s", errMsg)
-			e.db.RecordRun(e.db.LocalDeviceID(), r.col.Source(), "error", r.err.Error(), "go-collector:"+r.col.ID())
 			e.emit("collector:done", map[string]interface{}{
 				"source": r.col.Source(), "status": "error", "error": r.err.Error(),
 			})
@@ -361,7 +360,6 @@ func (e *Engine) runCollection() {
 func (e *Engine) processCollector(result *collector.CollectResult, col collector.Collector) bool {
 	// Skip SQL writes when nothing changed
 	if result.Cached {
-		e.db.RecordRun(result.Device, col.Source(), "ok", "cached (no changes)", "go-collector:"+col.ID())
 		e.emit("collector:done", map[string]interface{}{
 			"source": col.Source(), "status": "cached",
 		})
@@ -403,8 +401,6 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 	// Bulk upsert session (session data not in hour_usage, write directly)
 	if err := e.db.BulkUpsertSessionTx(tx, sessionToModel(result.Device, col.Source(), result.Session)); err != nil {
 		e.discardCollectorCache(col)
-		e.db.RecordRun(result.Device, col.Source(), "error",
-			fmt.Sprintf("[%s] bulk session: %v", col.Source(), err), "go-collector:"+col.ID())
 		return false
 	}
 
@@ -413,8 +409,6 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 	if len(filteredEvents) > 0 {
 		if err := e.db.BulkUpsertTimeUsageTx(tx, eventsToModel(result.Device, col.Source(), filteredEvents)); err != nil {
 			e.discardCollectorCache(col)
-			e.db.RecordRun(result.Device, col.Source(), "error",
-				fmt.Sprintf("[%s] bulk time: %v", col.Source(), err), "go-collector:"+col.ID())
 			return false
 		}
 		debuglog.Perf("write source=%s sub=bulk_time rows=%d elapsed=%v", col.Source(), len(filteredEvents), time.Since(writeStart))
@@ -435,8 +429,6 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 		// Non-event collectors (e.g. Hermes, OpenCode): write daily directly
 		if err := e.db.BulkUpsertDailyTx(tx, dailyToModel(result.Device, col.Source(), filteredDaily)); err != nil {
 			e.discardCollectorCache(col)
-			e.db.RecordRun(result.Device, col.Source(), "error",
-				fmt.Sprintf("[%s] bulk daily: %v", col.Source(), err), "go-collector:"+col.ID())
 			return false
 		}
 		debuglog.Perf("write source=%s sub=bulk_daily rows=%d elapsed=%v", col.Source(), len(filteredDaily), time.Since(writeStart))
@@ -446,8 +438,6 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 	if len(result.HourRows) > 0 {
 		if err := e.db.BulkUpsertHourUsageTx(tx, result.HourRows); err != nil {
 			e.discardCollectorCache(col)
-			e.db.RecordRun(result.Device, col.Source(), "error",
-				fmt.Sprintf("[%s] bulk hour: %v", col.Source(), err), "go-collector:"+col.ID())
 			return false
 		}
 		debuglog.Perf("write source=%s sub=bulk_hour rows=%d elapsed=%v", col.Source(), len(result.HourRows), time.Since(writeStart))
@@ -456,8 +446,6 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 	// Commit the transaction — if this fails, the rollback happens automatically
 	if err := tx.Commit(); err != nil {
 		e.discardCollectorCache(col)
-		e.db.RecordRun(result.Device, col.Source(), "error",
-			fmt.Sprintf("[%s] commit tx: %v", col.Source(), err), "go-collector:"+col.ID())
 		return false
 	}
 	rollback = false
@@ -471,7 +459,6 @@ func (e *Engine) processCollector(result *collector.CollectResult, col collector
 	debuglog.Perf("cache-persist source=%s elapsed=%v", col.Source(), time.Since(cacheStart))
 
 	summary := fmt.Sprintf("daily=%d, time=%d, workspace_model=%d", len(result.Daily), len(result.Events), len(result.Session))
-	e.db.RecordRun(result.Device, col.Source(), "ok", summary, "go-collector:"+col.ID())
 	e.emit("collector:done", map[string]interface{}{
 		"source": col.Source(), "status": "ok", "summary": summary,
 	})

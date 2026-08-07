@@ -56,30 +56,6 @@ export namespace model {
 	        this.stderr = source["stderr"];
 	    }
 	}
-	export class CollectionRun {
-	    id: number;
-	    device: string;
-	    source: string;
-	    status: string;
-	    message: string;
-	    collectedAt: string;
-	    command?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new CollectionRun(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.device = source["device"];
-	        this.source = source["source"];
-	        this.status = source["status"];
-	        this.message = source["message"];
-	        this.collectedAt = source["collectedAt"];
-	        this.command = source["command"];
-	    }
-	}
 	export class ConfigField {
 	    key: string;
 	    label: string;
@@ -173,7 +149,6 @@ export namespace model {
 	export class DashboardData {
 	    daily: DailyUsage[];
 	    sessions: SessionUsage[];
-	    runs: CollectionRun[];
 	    deviceNames: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
@@ -184,7 +159,6 @@ export namespace model {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.daily = this.convertValues(source["daily"], DailyUsage);
 	        this.sessions = this.convertValues(source["sessions"], SessionUsage);
-	        this.runs = this.convertValues(source["runs"], CollectionRun);
 	        this.deviceNames = source["deviceNames"];
 	    }
 	
