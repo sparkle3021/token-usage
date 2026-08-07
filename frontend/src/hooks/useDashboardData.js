@@ -6,7 +6,7 @@ import { deviceNamesFromList } from '@/lib/devices.js';
 /**
  * 仪表盘数据获取 Hook。
  * 自动在挂载时拉取数据，返回原始数据及计算后的来源/模型列表和热力图数据。
- * 数据分字段存储（daily/time/hour/sessionAgg），未变化字段复用旧引用，
+ * 数据分字段存储（daily/time/hour），未变化字段复用旧引用，
  * 避免切时间范围时全树 useMemo 失效重算。
  * @returns {{ M, loadError, refreshing, fetchData, fetchTimeSeries, allSources, allModels, heatmapData }}
  */
@@ -14,7 +14,6 @@ export function useDashboardData() {
   const [daily, setDaily] = useState([]);
   const [time, setTime] = useState([]);
   const [hour, setHour] = useState([]);
-  const [sessionAgg, setSessionAgg] = useState([]);
   const [deviceNames, setDeviceNames] = useState({});
   const [loadError, setLoadError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -30,11 +29,10 @@ export function useDashboardData() {
     }).catch(() => {});
   }, []);
 
-  const setData = useCallback((data, tsData, sessionAggData) => {
+  const setData = useCallback((data, tsData) => {
     setDaily(data.daily || []);
     setTime(tsData.time || []);
     setHour(tsData.hour || []);
-    setSessionAgg(sessionAggData || []);
     setDeviceNames(prev => ({ ...prev, ...(data.deviceNames || {}), ...(tsData.deviceNames || {}) }));
     setLoaded(true);
     setLoadError(null);
@@ -51,11 +49,10 @@ export function useDashboardData() {
     return Promise.all([
       api.getDashboardData(),
       api.getTimeSeriesData(days === undefined ? 90 : days),
-      api.getSessionsData(),
     ])
-      .then(([data, tsData, sessionAggData]) => {
+      .then(([data, tsData]) => {
         if (latestId !== fetchIdRef.current) return; // 过期响应丢弃
-        setData(data, tsData, sessionAggData);
+        setData(data, tsData);
         // 后端 getTimeSeriesData 仅 days==1 返回 time_usage；days!=1 时补拉一次最新 time，
         // 否则今天视图 sparkline 一直用同步前缓存的旧 time 数组
         if (todayFetchId !== null && todayFetchId === fetchIdRef.current) {
@@ -83,11 +80,11 @@ export function useDashboardData() {
 
   useEffect(() => { fetchData(false); }, [fetchData]);
 
-  // M 按字段聚合；daily/sessionAgg/runs 未变时引用稳定，下游 useMemo 不失效
+  // M 按字段聚合；daily/time/hour 未变时引用稳定，下游 useMemo 不失效
   const M = useMemo(() => {
     if (!loaded) return null;
-    return { daily, time, hour, sessionAgg, deviceNames, today: daysAgo(0) };
-  }, [loaded, daily, time, hour, sessionAgg, deviceNames]);
+    return { daily, time, hour, deviceNames, today: daysAgo(0) };
+  }, [loaded, daily, time, hour, deviceNames]);
 
   const allSources = useMemo(() => [...new Set(daily.map(r => r.source))].sort(), [daily]);
   const allModels = useMemo(() => [...new Set(daily.map(r => r.model))].filter(Boolean).sort(), [daily]);

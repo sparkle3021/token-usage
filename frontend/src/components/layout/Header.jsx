@@ -17,7 +17,6 @@ export default function Header({ page, setPage, lastSync, onCollect, collecting,
         <div className="ml-6 flex items-center gap-1 bg-muted rounded-lg p-0.5">
           <button className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${page === 'dashboard' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setPage('dashboard')}>看板</button>
           <button className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${page === 'quota' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setPage('quota')}>用量查询</button>
-          <button className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${page === 'table' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setPage('table')}>数据明细</button>
         </div>
       </div>
       <div className="flex items-center gap-2">

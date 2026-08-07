@@ -109,14 +109,6 @@ func (a *App) GetTimeSeriesData(days int) *model.TimeSeriesData {
 	return a.dashboardSvc.GetTimeSeriesData(days)
 }
 
-func (a *App) GetSessionsData() []model.SessionAgg {
-	return a.dashboardSvc.GetSessionsData()
-}
-
-func (a *App) GetSessionModelBreakdown(sessionID string) []model.SessionModelRow {
-	return a.dashboardSvc.GetSessionModelBreakdown(sessionID)
-}
-
 // ---------------------------------------------------------------------------
 // Collection API
 // ---------------------------------------------------------------------------

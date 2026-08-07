@@ -34,37 +34,6 @@ type SessionUsage struct {
 	UpdatedAt             string  `json:"-"`
 }
 
-// SessionModelRow 单个会话内按模型聚合的一行，供会话详情弹窗展示。
-type SessionModelRow struct {
-	Model                 string  `json:"model"`
-	InputTokens           int64   `json:"inputTokens"`
-	OutputTokens          int64   `json:"outputTokens"`
-	CacheCreationTokens   int64   `json:"cacheCreationTokens"`
-	CacheReadTokens       int64   `json:"cacheReadTokens"`
-	ReasoningOutputTokens int64   `json:"reasoningOutputTokens"`
-	TotalTokens           int64   `json:"totalTokens"`
-	CostUSD               float64 `json:"costUSD"`
-}
-
-// SessionAgg 会话聚合：由 time_usage 按 session_id 聚合而来，作为会话 Tab 数据源。
-type SessionAgg struct {
-	Device                string   `json:"device"`
-	Source                string   `json:"source"`
-	SessionID             string   `json:"sessionId"`
-	ProjectPath           string   `json:"projectPath"`
-	Models                []string `json:"models"`
-	EventCount            int64    `json:"eventCount"`
-	FirstTs               string   `json:"firstTs"`
-	LastTs                string   `json:"lastTs"`
-	InputTokens           int64    `json:"inputTokens"`
-	OutputTokens          int64    `json:"outputTokens"`
-	CacheCreationTokens   int64    `json:"cacheCreationTokens"`
-	CacheReadTokens       int64    `json:"cacheReadTokens"`
-	ReasoningOutputTokens int64    `json:"reasoningOutputTokens"`
-	TotalTokens           int64    `json:"totalTokens"`
-	CostUSD               float64  `json:"costUSD"`
-}
-
 type TimeUsage struct {
 	Device                string  `json:"device"`
 	Source                string  `json:"source"`

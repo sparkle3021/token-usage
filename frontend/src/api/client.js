@@ -13,16 +13,6 @@ export function getTimeSeriesData(days) {
   return window.go.main.App.GetTimeSeriesData(days);
 }
 
-/** 获取会话聚合数据（time_usage 按 session_id 聚合），对应 Go 后端 GetSessionsData */
-export function getSessionsData() {
-  return window.go.main.App.GetSessionsData();
-}
-
-/** 获取单个会话的模型拆分明细，对应 Go 后端 GetSessionModelBreakdown */
-export function getSessionModelBreakdown(sessionId) {
-  return window.go.main.App.GetSessionModelBreakdown(sessionId);
-}
-
 /** 触发增量采集，返回 false 表示采集已在运行 */
 export function startCollection() {
   return window.go.main.App.StartCollection();

@@ -16,11 +16,6 @@ import (
 type DashboardService struct {
 	db *database.Manager
 
-	// 会话聚合缓存：GetSessionsData 首次计算后缓存，采集完成时失效。
-	// time_usage 全表聚合较慢（~2.5s），缓存避免每次拉取都重算。
-	sessionsCache   []model.SessionAgg
-	sessionsCacheMu sync.Mutex
-
 	// 仪表盘汇总缓存：GetDashboardData 首次计算后缓存，采集完成时失效。
 	// daily 在数据源未更新时不变，切时间范围无需重查。
 	dailyCache   *model.DashboardData
@@ -32,11 +27,8 @@ func NewDashboardService(db *database.Manager) *DashboardService {
 	return &DashboardService{db: db}
 }
 
-// InvalidateCaches 清空仪表盘与会话聚合缓存，采集完成后由 App 调用。
+// InvalidateCaches 清空仪表盘缓存，采集完成后由 App 调用。
 func (s *DashboardService) InvalidateCaches() {
-	s.sessionsCacheMu.Lock()
-	s.sessionsCache = nil
-	s.sessionsCacheMu.Unlock()
 	s.dailyCacheMu.Lock()
 	s.dailyCache = nil
 	s.dailyCacheMu.Unlock()
@@ -106,39 +98,6 @@ func (s *DashboardService) GetDashboardData() *model.DashboardData {
 	}
 	s.dailyCache = result
 	return result
-}
-
-// GetSessionsData 按 session_id 聚合 time_usage 返回会话明细，作为会话 Tab 数据源。
-// 结果缓存于内存，首次计算后复用，采集完成后由 InvalidateCaches 失效。
-func (s *DashboardService) GetSessionsData() []model.SessionAgg {
-	if s.db == nil {
-		return nil
-	}
-	s.sessionsCacheMu.Lock()
-	defer s.sessionsCacheMu.Unlock()
-	if s.sessionsCache != nil {
-		return s.sessionsCache
-	}
-	sessions, err := s.db.QuerySessionsFromTimeUsage()
-	if err != nil {
-		log.Printf("[service] GetSessionsData QuerySessionsFromTimeUsage err=%v", err)
-		return nil
-	}
-	s.sessionsCache = sessions
-	return sessions
-}
-
-// GetSessionModelBreakdown 按 session_id 返回该会话的模型拆分明细。
-func (s *DashboardService) GetSessionModelBreakdown(sessionID string) []model.SessionModelRow {
-	if s.db == nil || sessionID == "" {
-		return nil
-	}
-	rows, err := s.db.QuerySessionModelBreakdown(sessionID)
-	if err != nil {
-		log.Printf("[service] GetSessionModelBreakdown err=%v", err)
-		return nil
-	}
-	return rows
 }
 
 // GetTimeSeriesData 获取时间序列数据，包含原始事件和小时聚合两层的用量。
