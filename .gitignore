@@ -12,6 +12,7 @@ $CLAUDE_JOB_DIR/
 frontend/package.json.md5
 .playwright-mcp/
 openspec/
+.claude/
 
 # Serena MCP 本地状态
 .serena/
