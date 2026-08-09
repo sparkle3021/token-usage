@@ -26,6 +26,8 @@ export function GetDashboardData():Promise<model.DashboardData>;
 
 export function GetDevices():Promise<Array<model.DeviceInfo>>;
 
+export function GetHourSeries(arg1:number):Promise<Array<model.HourUsage>>;
+
 export function GetModelRanking():Promise<Array<model.ModelRanking>>;
 
 export function GetModelSeries(arg1:string):Promise<model.ModelSeriesData>;
@@ -34,7 +36,7 @@ export function GetProviderSchemas():Promise<Array<model.ProviderSchema>>;
 
 export function GetSettings():Promise<model.AppConfig>;
 
-export function GetTimeSeriesData(arg1:number):Promise<model.TimeSeriesData>;
+export function GetTodayEvents():Promise<Array<model.TimeUsage>>;
 
 export function ImportData():Promise<model.ImportResult>;
 

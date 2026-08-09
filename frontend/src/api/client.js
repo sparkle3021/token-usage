@@ -20,9 +20,14 @@ export function getDashboardData() {
   return invoke('GetDashboardData');
 }
 
-/** 获取时间序列数据（原始事件 + 小时聚合），对应 Go 后端 GetTimeSeriesData(days) */
-export function getTimeSeriesData(days) {
-  return invoke('GetTimeSeriesData', days);
+/** 获取指定范围小时聚合序列，对应 Go 后端 GetHourSeries(days) */
+export function getHourSeries(days) {
+  return invoke('GetHourSeries', days);
+}
+
+/** 获取今天原始事件（恒定，不随范围变化），对应 Go 后端 GetTodayEvents */
+export function getTodayEvents() {
+  return invoke('GetTodayEvents');
 }
 
 /** 获取模型维度聚合排行（总用量/费用/请求次数），对应 Go 后端 GetModelRanking */

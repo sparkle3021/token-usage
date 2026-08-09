@@ -63,17 +63,7 @@ type TimeUsage struct {
 }
 
 type DashboardData struct {
-	Daily    []DailyUsage    `json:"daily"`
-	Sessions []SessionUsage `json:"sessions"`
-	// DeviceNames 设备身份 → 展示名映射，前端据此渲染可读设备名。
-	DeviceNames map[string]string `json:"deviceNames"`
-}
-
-type TimeSeriesData struct {
-	Time []TimeUsage `json:"time"`
-	Hour []HourUsage `json:"hour"`
-	// DeviceNames 设备身份 → 展示名映射。
-	DeviceNames map[string]string `json:"deviceNames"`
+	Daily []DailyUsage `json:"daily"`
 }
 
 // ModelSeriesData 单模型时间序列数据（日级 + 小时级），供模型详情页独立拉取。

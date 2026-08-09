@@ -105,8 +105,12 @@ func (a *App) GetDashboardData() *model.DashboardData {
 	return a.dashboardSvc.GetDashboardData()
 }
 
-func (a *App) GetTimeSeriesData(days int) *model.TimeSeriesData {
-	return a.dashboardSvc.GetTimeSeriesData(days)
+func (a *App) GetHourSeries(days int) []model.HourUsage {
+	return a.dashboardSvc.GetHourSeries(days)
+}
+
+func (a *App) GetTodayEvents() []model.TimeUsage {
+	return a.dashboardSvc.GetTodayEvents()
 }
 
 func (a *App) GetModelRanking() []model.ModelRanking {

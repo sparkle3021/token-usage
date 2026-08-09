@@ -50,6 +50,10 @@ export function GetDevices() {
   return window['go']['main']['App']['GetDevices']();
 }
 
+export function GetHourSeries(arg1) {
+  return window['go']['main']['App']['GetHourSeries'](arg1);
+}
+
 export function GetModelRanking() {
   return window['go']['main']['App']['GetModelRanking']();
 }
@@ -66,8 +70,8 @@ export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
 
-export function GetTimeSeriesData(arg1) {
-  return window['go']['main']['App']['GetTimeSeriesData'](arg1);
+export function GetTodayEvents() {
+  return window['go']['main']['App']['GetTodayEvents']();
 }
 
 export function ImportData() {

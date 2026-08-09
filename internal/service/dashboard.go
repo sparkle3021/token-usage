@@ -4,7 +4,6 @@ package service
 // 该层不依赖 Wails 运行时，便于独立测试。
 import (
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -57,45 +56,14 @@ func (s *DashboardService) GetDashboardData() *model.DashboardData {
 	// 直写来源亦按本地日写入），无需二次时区平移。
 	// 回归修复：改为从 hour_usage 现场聚合会遗漏 CC-Switch rollup（仅日级、只写 daily_usage、
 	// 且与 hour 重建同 key 时取 MAX 增大），导致 token 总量显著减少（v0.2.0 ~113 亿 → 80 亿）。
-	dbDaily, derr := s.db.QueryDaily()
+	daily, derr := s.db.QueryDaily()
 	if derr != nil {
 		log.Printf("[service] GetDashboardData QueryDaily err=%v", derr)
 	}
-	daily := dbDaily
-	sessions, err := s.db.QuerySessions()
-	if err != nil {
-		log.Printf("[service] GetDashboardData QuerySessions err=%v", err)
-	}
 
-	projMap := make(map[string]string)
-	for _, s := range sessions {
-		proj := s.ProjectPath
-		if proj == "" {
-			parts := strings.Split(s.SessionID, "/")
-			proj = parts[len(parts)-1]
-		}
-		key := s.Device + "::" + s.Source
-		if _, ok := projMap[key]; !ok {
-			projMap[key] = proj
-		}
-	}
+	log.Printf("[service] GetDashboardData daily=%d elapsed=%v", len(daily), time.Since(start))
 
-	for i := range daily {
-		if key, ok := projMap[daily[i].Device+"::"+daily[i].Source]; ok {
-			daily[i].ProjectPath = key
-		}
-	}
-
-	log.Printf("[service] GetDashboardData daily=%d sessions=%d elapsed=%v",
-		len(daily), len(sessions), time.Since(start))
-
-	names, _ := s.db.DeviceNames()
-
-	result := &model.DashboardData{
-		Daily:       daily,
-		Sessions:    sessions,
-		DeviceNames: names,
-	}
+	result := &model.DashboardData{Daily: daily}
 	s.dailyCache = result
 	return result
 }
@@ -115,7 +83,7 @@ func (s *DashboardService) GetModelRanking() []model.ModelRanking {
 }
 
 // GetModelSeries 返回单模型的日级 + 小时级时间序列数据，供模型详情页独立拉取。
-// hour 由 UTC 桶平移为本地日 + 本地小时（与 GetTimeSeriesData 一致）。
+// hour 由 UTC 桶平移为本地日 + 本地小时（与 GetHourSeries 一致）。
 func (s *DashboardService) GetModelSeries(modelName string) *model.ModelSeriesData {
 	if s.db == nil || modelName == "" {
 		log.Printf("[service] GetModelSeries db=nil or model empty")
@@ -138,36 +106,41 @@ func (s *DashboardService) GetModelSeries(modelName string) *model.ModelSeriesDa
 	return &model.ModelSeriesData{Daily: daily, Hour: hour}
 }
 
-// GetTimeSeriesData 获取时间序列数据，包含原始事件和小时聚合两层的用量。
-// 前端按 timeRows → hourRows → dailyRows 三级回退渲染趋势图。
-func (s *DashboardService) GetTimeSeriesData(days int) *model.TimeSeriesData {
+// GetHourSeries 返回指定范围（最近 days 天）的小时聚合序列，供趋势图/钻取按范围渲染。
+// hour 由 UTC 桶平移为本地日 + 本地小时（与 GetModelSeries 一致）。
+func (s *DashboardService) GetHourSeries(days int) []model.HourUsage {
 	start := time.Now()
 	if s.db == nil {
-		log.Printf("[service] GetTimeSeriesData db=nil")
-		return &model.TimeSeriesData{}
-	}
-	var timeRows []model.TimeUsage
-	// time_usage 仅在"今天"小时视图需要（days=1），其他时间范围前端只用 daily 数据
-	if days == 1 {
-		var err error
-		timeRows, err = s.db.QueryTimeUsage(days)
-		if err != nil {
-			log.Printf("[service] GetTimeSeriesData(%d) QueryTimeUsage ERR: %v", days, err)
-		}
+		log.Printf("[service] GetHourSeries db=nil")
+		return nil
 	}
 	hourRows, _ := s.db.QueryHourUsage(days)
 	for i := range hourRows {
 		hourRows[i].UsageDate, hourRows[i].Hour = localizeUTCDateHour(hourRows[i].UsageDate, hourRows[i].Hour)
 	}
-	// time rows 的 usageDate 统一为本地日语义：新数据为 UTC 日 → 转本机日；旧数据为本地日原样保留。
+	log.Printf("[service] GetHourSeries(%d) hourRows=%d elapsed=%v", days, len(hourRows), time.Since(start))
+	return hourRows
+}
+
+// GetTodayEvents 返回今天的原始事件（time_usage），恒定不随时间范围选择变化，
+// 供今天视图 sparkline 与小时兜底。usageDate 统一为本地日语义：新数据为 UTC 日 → 转本机日；旧数据为本地日原样保留。
+func (s *DashboardService) GetTodayEvents() []model.TimeUsage {
+	start := time.Now()
+	if s.db == nil {
+		log.Printf("[service] GetTodayEvents db=nil")
+		return nil
+	}
+	timeRows, err := s.db.QueryTimeUsage(1)
+	if err != nil {
+		log.Printf("[service] GetTodayEvents QueryTimeUsage ERR: %v", err)
+	}
 	for i := range timeRows {
 		if t, perr := time.Parse(time.RFC3339, timeRows[i].EventTime); perr == nil {
 			timeRows[i].UsageDate = t.In(time.Local).Format("2006-01-02")
 		}
 	}
-	names, _ := s.db.DeviceNames()
-	log.Printf("[service] GetTimeSeriesData(%d) timeRows=%d hourRows=%d elapsed=%v", days, len(timeRows), len(hourRows), time.Since(start))
-	return &model.TimeSeriesData{Time: timeRows, Hour: hourRows, DeviceNames: names}
+	log.Printf("[service] GetTodayEvents timeRows=%d elapsed=%v", len(timeRows), time.Since(start))
+	return timeRows
 }
 
 // localizeUTCDateHour 将 UTC (date, hour) 平移为本机时区 (date, hour)。
