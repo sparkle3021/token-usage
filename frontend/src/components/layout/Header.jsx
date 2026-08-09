@@ -20,6 +20,7 @@ export default function Header({ page, setPage, lastSync, onCollect, collecting,
             onChange={setPage}
             options={[
               { label: '看板', value: 'dashboard' },
+              { label: '模型数据', value: 'model' },
               { label: '用量查询', value: 'quota' },
             ]}
           />

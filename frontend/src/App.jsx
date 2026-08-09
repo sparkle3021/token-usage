@@ -15,6 +15,7 @@ import { setMessageApi } from '@/lib/message.js';
 import { clearAllData } from '@/api/client.js';
 import Header from '@/components/layout/Header.jsx';
 import DashboardPage from '@/pages/DashboardPage.jsx';
+import ModelPage from '@/pages/ModelPage.jsx';
 import QuotaPage from '@/pages/QuotaPage.jsx';
 import SettingsPage from '@/pages/SettingsPage.jsx';
 import { WindowSetDarkTheme, WindowSetLightTheme, WindowSetBackgroundColour } from '../wailsjs/runtime/runtime.js';
@@ -146,6 +147,8 @@ function AppContent({ dark, pref, setPref }) {
             heatmapData={heatmapData}
             onRangeSwitch={fetchTimeSeries}
           />
+        ) : page === 'model' ? (
+          <ModelPage />
         ) : (
           <QuotaPage />
         )}
