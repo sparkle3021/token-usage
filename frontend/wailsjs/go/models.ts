@@ -1,7 +1,7 @@
 export namespace model {
 	
 	export class AppConfig {
-	    autoSyncMinutes: number;
+	    autoSyncSeconds: number;
 	    ccSwitchDBPath: string;
 	
 	    static createFrom(source: any = {}) {
@@ -10,7 +10,7 @@ export namespace model {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.autoSyncMinutes = source["autoSyncMinutes"];
+	        this.autoSyncSeconds = source["autoSyncSeconds"];
 	        this.ccSwitchDBPath = source["ccSwitchDBPath"];
 	    }
 	}

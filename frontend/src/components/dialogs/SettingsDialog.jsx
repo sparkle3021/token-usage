@@ -4,7 +4,7 @@ import { getMessage } from '@/lib/message.js';
 import { SettingsIcon, TriangleAlertIcon } from 'lucide-react';
 import { getSettings, saveSettings, detectCCSwitchDB, updatePricing, clearAllData, getDevices, renameDevice, exportData, importData } from '@/api/client.js';
 
-const DEFAULTS = { autoSyncMinutes: 5, ccSwitchDBPath: '', ccSwitchEnabled: false, ccSwitchAutoSync: false };
+const DEFAULTS = { autoSyncSeconds: 30, ccSwitchDBPath: '', ccSwitchEnabled: false, ccSwitchAutoSync: false };
 
 // 操作确认弹窗：统一交互——说明 + 取消/确认，确认后执行并 toast 反馈。
 function ConfirmDialog({ title, description, danger, confirmText, busyText, busy, onConfirm, onCancel }) {
@@ -86,7 +86,7 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
   // 自动同步间隔：选择即保存
   const saveAutoSync = useCallback(async (v) => {
     setSavingAutoSync(true);
-    await persist({ autoSyncMinutes: Number(v) });
+    await persist({ autoSyncSeconds: Number(v) });
     setSavingAutoSync(false);
   }, [persist]);
 
@@ -257,17 +257,16 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground">自动同步间隔</label>
                   <Select
-                    value={String(cfg.autoSyncMinutes)}
+                    value={String(cfg.autoSyncSeconds)}
                     onChange={saveAutoSync}
                     disabled={savingAutoSync}
                     style={{ width: '100%' }}
                     size="small"
                     options={[
-                      { value: '1', label: '每 1 分钟' },
-                      { value: '5', label: '每 5 分钟' },
-                      { value: '10', label: '每 10 分钟' },
-                      { value: '15', label: '每 15 分钟' },
-                      { value: '30', label: '每 30 分钟' },
+                      { value: '10', label: '10 秒' },
+                      { value: '30', label: '30 秒' },
+                      { value: '60', label: '1 分钟' },
+                      { value: '300', label: '5 分钟' },
                       { value: '0', label: '不同步' },
                     ]}
                   />

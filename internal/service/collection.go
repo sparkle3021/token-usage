@@ -26,7 +26,7 @@ type CollectionService struct {
 
 	autoSyncMu      sync.Mutex
 	autoSyncCancel  context.CancelFunc
-	autoSyncMinutes int // 自动同步间隔（分钟），≤0 表示禁用
+	autoSyncSeconds int // 自动同步间隔（秒），≤0 表示禁用
 }
 
 // NewCollectionService 创建采集服务实例。
@@ -106,7 +106,7 @@ func (s *CollectionService) ClearAllData() error {
 	return s.engine.ClearAllData()
 }
 
-func (s *CollectionService) SetAutoSyncInterval(minutes int) {
+func (s *CollectionService) SetAutoSyncInterval(seconds int) {
 	s.autoSyncMu.Lock()
 	defer s.autoSyncMu.Unlock()
 
@@ -114,9 +114,9 @@ func (s *CollectionService) SetAutoSyncInterval(minutes int) {
 		s.autoSyncCancel()
 		s.autoSyncCancel = nil
 	}
-	s.autoSyncMinutes = minutes
+	s.autoSyncSeconds = seconds
 
-	if minutes <= 0 {
+	if seconds <= 0 {
 		log.Println("[service] Auto-sync disabled")
 		return
 	}
@@ -125,9 +125,9 @@ func (s *CollectionService) SetAutoSyncInterval(minutes int) {
 	s.autoSyncCancel = cancel
 
 	go func() {
-		ticker := time.NewTicker(time.Duration(minutes) * time.Minute)
+		ticker := time.NewTicker(time.Duration(seconds) * time.Second)
 		defer ticker.Stop()
-		log.Printf("[service] Auto-sync started interval=%dm", minutes)
+		log.Printf("[service] Auto-sync started interval=%ds", seconds)
 		for {
 			select {
 			case <-ticker.C:
@@ -144,7 +144,7 @@ func (s *CollectionService) SetAutoSyncInterval(minutes int) {
 func (s *CollectionService) GetAutoSyncInterval() int {
 	s.autoSyncMu.Lock()
 	defer s.autoSyncMu.Unlock()
-	return s.autoSyncMinutes
+	return s.autoSyncSeconds
 }
 
 // Shutdown 停止自动同步定时器并关闭数据库连接。

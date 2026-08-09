@@ -9,14 +9,14 @@ import { EventsOn } from '../../wailsjs/runtime/runtime.js';
  * @returns {{ autoSync: number, handleSettingsChange: (cfg) => void }}
  */
 export function useSettings(onDataChange) {
-  const [autoSync, setAutoSync] = useState(5);
+  const [autoSync, setAutoSync] = useState(30);
 
   useEffect(() => {
     api.getSettings().then(cfg => {
-      setAutoSync(cfg.autoSyncMinutes || 5);
-      api.setAutoSyncInterval(cfg.autoSyncMinutes || 5);
+      setAutoSync(cfg.autoSyncSeconds || 30);
+      api.setAutoSyncInterval(cfg.autoSyncSeconds || 30);
     }).catch(() => {
-      api.setAutoSyncInterval(5);
+      api.setAutoSyncInterval(30);
     });
   }, []);
 
@@ -28,7 +28,7 @@ export function useSettings(onDataChange) {
   }, [onDataChange]);
 
   const handleSettingsChange = useCallback((cfg) => {
-    setAutoSync(cfg.autoSyncMinutes);
+    setAutoSync(cfg.autoSyncSeconds);
   }, []);
 
   return { autoSync, handleSettingsChange };

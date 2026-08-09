@@ -27,11 +27,11 @@ func NewSettingService(db *database.Manager, collectionSvc *CollectionService) *
 func (s *SettingService) GetSettings() model.AppConfig {
 	cfg, err := s.db.GetAllConfigs()
 	if err != nil {
-		return model.AppConfig{AutoSyncMinutes: 5}
+		return model.AppConfig{AutoSyncSeconds: 30}
 	}
 
 	result := model.AppConfig{
-		AutoSyncMinutes: config.AtoiDef(cfg["auto_sync_minutes"], 5),
+		AutoSyncSeconds: s.migrateAutoSyncSeconds(cfg),
 		CCSwitchDBPath:  cfg["cc_switch_db_path"],
 	}
 
@@ -46,10 +46,26 @@ func (s *SettingService) GetSettings() model.AppConfig {
 	}
 
 	if s.collectionSvc != nil {
-		s.collectionSvc.SetAutoSyncInterval(result.AutoSyncMinutes)
+		s.collectionSvc.SetAutoSyncInterval(result.AutoSyncSeconds)
 	}
 
 	return result
+}
+
+// migrateAutoSyncSeconds 读取自动同步间隔（秒）。首次遇到旧「分钟」配置时迁移为秒并清旧 key。
+func (s *SettingService) migrateAutoSyncSeconds(cfg map[string]string) int {
+	if v, ok := cfg["auto_sync_seconds"]; ok && v != "" {
+		return config.AtoiDef(v, 30)
+	}
+	seconds := 30 // 默认 30s
+	if v, ok := cfg["auto_sync_minutes"]; ok && v != "" {
+		if m := config.AtoiDef(v, 0); m > 0 {
+			seconds = m * 60
+		}
+	}
+	s.db.SetConfig("auto_sync_seconds", strconv.Itoa(seconds))
+	s.db.SetConfig("auto_sync_minutes", "")
+	return seconds
 }
 
 // EnsureDefaultCCSwitchPath 启动时检测 CC-Switch 默认路径并写入配置（若未配置）。
@@ -73,7 +89,7 @@ func (s *SettingService) EnsureDefaultCCSwitchPath() {
 // SaveSettings 持久化设置并立即应用自动同步间隔。
 func (s *SettingService) SaveSettings(cfg model.AppConfig) error {
 	pairs := map[string]string{
-		"auto_sync_minutes": strconv.Itoa(cfg.AutoSyncMinutes),
+		"auto_sync_seconds": strconv.Itoa(cfg.AutoSyncSeconds),
 		"cc_switch_db_path": cfg.CCSwitchDBPath,
 	}
 	for k, v := range pairs {
@@ -83,9 +99,9 @@ func (s *SettingService) SaveSettings(cfg model.AppConfig) error {
 	}
 
 	if s.collectionSvc != nil {
-		s.collectionSvc.SetAutoSyncInterval(cfg.AutoSyncMinutes)
+		s.collectionSvc.SetAutoSyncInterval(cfg.AutoSyncSeconds)
 	}
 
-	log.Printf("[service] SaveSettings ok autoSync=%d", cfg.AutoSyncMinutes)
+	log.Printf("[service] SaveSettings ok autoSync=%ds", cfg.AutoSyncSeconds)
 	return nil
 }

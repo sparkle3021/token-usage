@@ -67,7 +67,7 @@ func (m *Manager) ClearAllUsageData() error {
 		total += n
 	}
 
-	// Clear sync-state checkpoints (keep user configs: cc_switch_db_path, auto_sync_minutes, etc.)
+	// Clear sync-state checkpoints (keep user configs: cc_switch_db_path, auto_sync_seconds, etc.)
 	_, err = tx.Exec(`DELETE FROM app_config WHERE key LIKE 'cc_switch_cursor_%' OR key LIKE 'cc_switch_rollup_%'`)
 	if err != nil {
 		return fmt.Errorf("delete checkpoints: %w", err)

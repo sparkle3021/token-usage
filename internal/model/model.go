@@ -79,7 +79,7 @@ type CollectStatus struct {
 
 // AppConfig holds persistent application settings.
 type AppConfig struct {
-	AutoSyncMinutes int    `json:"autoSyncMinutes"`
+	AutoSyncSeconds int    `json:"autoSyncSeconds"`
 	CCSwitchDBPath  string `json:"ccSwitchDBPath"`
 }
 
