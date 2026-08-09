@@ -1,8 +1,9 @@
-import { compactCN } from '@/lib/formatters.js';
+import { compact, compactCN } from '@/lib/formatters.js';
 import { getSourceColor } from '@/lib/iconMap.js';
-import { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Modal, Card } from 'antd';
+import { oklchToHex } from '@/lib/oklch.js';
+import { useMemo, useRef } from 'react';
+import { Modal, Card, Skeleton } from 'antd';
+import useECharts, { getChartTheme } from '@/lib/useECharts.js';
 
 const OTHER_KEY = '__other__';
 const TOP_N = 6;
@@ -69,10 +70,13 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
     const hourlySources = new Set();
     for (const r of timeRows || []) if (r.usageDate === date) hourlySources.add(r.source);
     for (const r of hourRows || []) if (r.usageDate === date) hourlySources.add(r.source);
-    const currentHour = new Date().getHours();
+    // 纯日级来源兜底：今天归当前小时（进行中）；历史日期（昨天等）已结束归 23 点
+    const now = new Date();
+    const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const fallbackHour = date === todayLocal ? now.getHours() : 23;
     for (const r of dayDaily) {
       if (hourlySources.has(r.source)) continue;
-      add(currentHour, r.model, r.totalTokens || 0);
+      add(fallbackHour, r.model, r.totalTokens || 0);
     }
 
     const topSet = new Set(seriesModels.filter(m => m.key !== OTHER_KEY).map(m => m.key));
@@ -91,8 +95,57 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
     });
   }, [timeRows, hourRows, date, seriesModels, dayDaily]);
 
-  const palette = seriesModels.map(m => getSourceColor(m.key));
+  const palette = seriesModels.map(m => oklchToHex(getSourceColor(m.key)));
   const hasHourly = hourlyData.some(pt => seriesModels.some(m => (pt[m.key] || 0) > 0));
+
+  const optionRef = useRef(null);
+  const { chartRef, setChartEl, dark, ready } = useECharts(optionRef, [hourlyData, seriesModels, palette, date]);
+  const theme = getChartTheme(dark);
+
+  const option = useMemo(() => {
+    const xData = hourlyData.map(pt => pt.hour);
+    const series = seriesModels.map((m, i) => ({
+      name: m.label,
+      type: 'bar',
+      stack: 'a',
+      data: hourlyData.map(pt => pt[m.key] || 0),
+      itemStyle: { color: palette[i], borderRadius: [2, 2, 0, 0] },
+      barMaxWidth: 16,
+    }));
+    return {
+      grid: { top: 8, right: 8, bottom: 22, left: 48 },
+      xAxis: {
+        type: 'category',
+        data: xData,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { fontSize: 10, color: theme.axisText, interval: 3 },
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { lineStyle: { color: theme.grid } },
+        // 与看板 TrendChart 一致：compact 缩写 + 字号 10.5；弹窗高度小，减少刻度颗粒度
+        axisLabel: { fontSize: 10.5, color: theme.axisTick, formatter: (v) => compact(v) },
+        splitNumber: 3,
+      },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: 'var(--popover)',
+        borderColor: 'var(--border)',
+        borderRadius: 8,
+        textStyle: { color: 'var(--popover-foreground)', fontSize: 12 },
+        formatter: (params) => {
+          const label = params[0]?.axisValue ?? '';
+          const rows = params.filter(p => p.seriesName != null).map(p => `${p.marker}${p.seriesName}：${compactCN(p.value)}`).join('<br/>');
+          return `<div style="color:var(--popover-foreground);font-size:12px">${date} ${label}<br/>${rows}</div>`;
+        },
+      },
+      series,
+    };
+  }, [hourlyData, seriesModels, palette, theme, date]);
+  optionRef.current = option;
 
   return (
     <Modal
@@ -103,6 +156,7 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
       width={{ xs: 640, md: 720, lg: 800, xl: 880 }}
       styles={{ body: { maxHeight: 'calc(85vh - 120px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' } }}
       footer={null}
+      afterOpenChange={(open) => { if (open) chartRef.current?.resize(); }}
     >
       <div className="text-xs text-muted-foreground mb-2 shrink-0">
         来源数 <strong className="text-foreground">{daySources.length}</strong>
@@ -111,36 +165,20 @@ export default function HeatmapDrillDialog({ date, daily, timeRows, hourRows, on
       </div>
 
       <Card className="flex-1 min-h-0" styles={{ body: { padding: 16, height: '100%' } }}>
-        <h4 className="text-sm font-medium mb-3">Token 使用趋势（24 小时）</h4>
-        {hasHourly ? (
-          <div style={{ minHeight: 160, height: 'clamp(160px, 25vh, 250px)' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hourlyData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="hour" tick={{ fontSize: 10 }} interval={3} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => compactCN(v)} width={50} />
-                <Tooltip
-                  formatter={(v, name) => [compactCN(v), name]}
-                  labelFormatter={label => `${date} ${label}`}
-                  contentStyle={{
-                    background: 'var(--popover)',
-                    color: 'var(--popover-foreground)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                />
-                {seriesModels.map((m, i) => (
-                  <Bar key={m.key} name={m.label} dataKey={m.key} stackId="a" fill={palette[i % palette.length]} radius={[2, 2, 0, 0]} />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-            暂无小时级数据
-          </div>
-        )}
+        {/* 图表 div 自身带尺寸（height:100% 在父 clamp 下可能解析失败→0 高→空白），并始终渲染避免 removeChild 冲突 */}
+        <div className="relative" style={{ minHeight: 160, height: 'clamp(160px, 25vh, 250px)' }}>
+          <div ref={setChartEl} style={{ minHeight: 160, height: 'clamp(160px, 25vh, 250px)' }} />
+          {!ready && (
+            <div className="absolute inset-0 overflow-hidden bg-background/50">
+              <Skeleton active paragraph={{ rows: 3 }} />
+            </div>
+          )}
+          {!hasHourly && (
+            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+              暂无小时级数据
+            </div>
+          )}
+        </div>
       </Card>
     </Modal>
   );

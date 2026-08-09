@@ -6,7 +6,7 @@
 import { aggregateField, aggregateMapToArray, addDays, compactCN, deltaPct, rangeDates } from '@/lib/formatters.js';
 import { getSourceColor } from '@/lib/iconMap.js';
 import { useMemo, useState } from 'react';
-import { useFilter, rangeDays } from '@/store/filterStore.jsx';
+import { useFilter, getRangeDays, getCompareSpan } from '@/store/filterStore.jsx';
 import { filterDaily, filterTimeSeries } from '@/lib/filters.js';
 import { aggregateTotals } from '@/lib/aggregators.js';
 import KPI from '@/components/common/KPI.jsx';
@@ -30,9 +30,11 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
   const filteredTime = useMemo(() => filterTimeSeries(M?.time || [], f), [f, M]);
   const filteredHour = useMemo(() => filterTimeSeries(M?.hour || [], f), [f, M]);
 
-  const dates = useMemo(() => rangeDates(f.startDate, f.endDate), [f]);
+  const dates = useMemo(() => rangeDates(f.startDate, f.endDate), [f.startDate, f.endDate]);
 
-  const isHourly = f.rangeId === 'today';
+  const isToday = f.rangeId === 'today';
+  // 小时视图：今天 + 昨天（昨天也看 24h 分布）
+  const isHourly = isToday || f.rangeId === 'yesterday';
 
   const hourlySpark = useMemo(() => {
     if (!isHourly || !M) return null;
@@ -67,17 +69,16 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       covered.add(`${r.source}::${h}`);
     }
 
-    // 纯日级来源（当天无任何 hour/time 数据）才把日总量兜底到当前小时；
-    // 有小时数据的来源当前小时为空时保持 0，避免当前小时被全天总量污染
-    const curHour = new Date().getHours();
+    // 纯日级来源兜底：今天归到当前小时（进行中）；昨天已结束归到 23 点（有小时数据的来源不兜底）
+    const fallbackHour = isToday ? new Date().getHours() : 23;
     const hourlySources = new Set();
     for (const r of filteredHour) if (r.usageDate === todayStr) hourlySources.add(r.source);
     for (const r of filteredTime) if (r.usageDate === todayStr) hourlySources.add(r.source);
     for (const r of filtered) {
       if (r.usageDate !== todayStr || hourlySources.has(r.source)) continue;
-      hd[curHour].total += r.totalTokens || 0; hd[curHour].input += r.inputTokens || 0;
-      hd[curHour].output += r.outputTokens || 0; hd[curHour].cacheRd += r.cacheReadTokens || 0;
-      hd[curHour].reason += r.reasoningOutputTokens || 0; hd[curHour].cost += r.costUSD || 0;
+      hd[fallbackHour].total += r.totalTokens || 0; hd[fallbackHour].input += r.inputTokens || 0;
+      hd[fallbackHour].output += r.outputTokens || 0; hd[fallbackHour].cacheRd += r.cacheReadTokens || 0;
+      hd[fallbackHour].reason += r.reasoningOutputTokens || 0; hd[fallbackHour].cost += r.costUSD || 0;
     }
 
     return {
@@ -85,13 +86,13 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       output: hd.map(h => h.output), cacheRead: hd.map(h => h.cacheRd),
       reasoning: hd.map(h => h.reason), cost: hd.map(h => h.cost),
     };
-  }, [isHourly, dates, M, filtered, filteredTime, filteredHour]);
+  }, [isToday, isHourly, dates, M, filtered, filteredTime, filteredHour]);
 
-  // KPI 总量：今天（isHourly）用小时级数据精确聚合（hour 按本地时区平移后含本地今天全天，
-  // 避免 daily 表按 UTC 日拆分导致本地今天凌晨数据漏算）；非今天用 daily 聚合。
-  // 字段与 aggregateTotals 对齐（cacheHitRate / reasoningTokens 等）。
+  // KPI 总量：今天用小时级数据精确聚合（hour 按本地时区平移后含本地今天全天，
+  // 避免 daily 表按 UTC 日拆分导致本地今天凌晨数据漏算）；昨天/其他范围用 daily 聚合
+  // （昨天的 daily 含无小时粒度的来源，用 hourlySpark 会少算，保持 daily 为准）。
   const totals = useMemo(() => {
-    if (isHourly && hourlySpark) {
+    if (isToday && hourlySpark) {
       const sum = arr => arr.reduce((a, b) => a + b, 0);
       const total = sum(hourlySpark.total);
       const cacheRd = sum(hourlySpark.cacheRead);
@@ -108,14 +109,21 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
       };
     }
     return aggregateTotals(filtered);
-  }, [isHourly, hourlySpark, filtered]);
+  }, [isToday, hourlySpark, filtered]);
 
   const compareData = useMemo(() => {
     if (!f.compare) return { totals: null };
-    const days = dates.length;
-    const endStr = addDays(f.startDate, -1);
-    const startStr = addDays(endStr, -(days - 1));
-    return { totals: aggregateTotals(filterDaily(M?.daily || [], { ...f, startDate: startStr, endDate: endStr })) };
+    // 对比周期按范围语义：昨天→前天、近7天→前7天、本月→上月、上月→上上月；全部按等长平移
+    let span;
+    if (f.rangeId === 'all') {
+      const days = dates.length;
+      const endStr = addDays(f.startDate, -1);
+      span = { start: addDays(endStr, -(days - 1)), end: endStr };
+    } else {
+      span = getCompareSpan(f.rangeId, f.startDate);
+    }
+    if (!span) return { totals: null };
+    return { totals: aggregateTotals(filterDaily(M?.daily || [], { ...f, startDate: span.start, endDate: span.end })) };
   }, [f, dates, M]);
 
   const dailyMap = useMemo(() => {
@@ -147,9 +155,9 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
   const setRange = (rangeId) => {
     dispatch({ type: 'SET_RANGE', rangeId, daily: M?.daily || [] });
     // 切时间：本地立即渲染（dispatch 已触发），后台异步补拉时间序列
-    onRangeSwitch?.(rangeDays[rangeId]);
+    let days = getRangeDays(rangeId);
+    onRangeSwitch?.(days);
     // Compute expected range length for granularity recommendation
-    let days = rangeDays[rangeId];
     if (!days && rangeId === 'all' && M?.daily?.length) {
       const sorted = M.daily.map(x => x.usageDate).filter(Boolean).sort();
       if (sorted.length > 0) days = Math.max(1, Math.round((Date.now() - new Date(sorted[0]).getTime()) / 86400000));
@@ -183,7 +191,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
 
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="flex-1 min-w-0">
-          <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={filteredTime} hourRows={filteredHour} isHourly={f.rangeId === 'today'} granularity={granularity} onGranularityChange={setGranularity} />
+          <TrendChart rows={filtered} dates={dates} sources={presentSources} mode={trendMode} onModeChange={setTrendMode} totals={totals} timeRows={filteredTime} hourRows={filteredHour} isHourly={isHourly} showGranularity={f.rangeId === 'all'} granularity={granularity} onGranularityChange={setGranularity} />
         </div>
         <div className="lg:w-80 2xl:w-96 shrink-0 max-lg:min-h-0 lg:relative">
           <div className="flex flex-col min-h-0 max-lg:h-auto lg:absolute lg:inset-0">

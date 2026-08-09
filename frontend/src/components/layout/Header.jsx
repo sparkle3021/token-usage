@@ -2,7 +2,7 @@
  * 顶栏组件：标题、页面切换、最后同步时间、同步按钮、设置对话框。
  */
 
-import { Button } from 'antd';
+import { Button, Segmented } from 'antd';
 import SettingsDialog from '@/components/dialogs/SettingsDialog.jsx';
 import { Sun, Moon } from 'lucide-react';
 
@@ -14,9 +14,16 @@ export default function Header({ page, setPage, lastSync, onCollect, collecting,
           <h1 className="text-base font-semibold">Token Usage</h1>
           <p className="text-xs text-muted-foreground">Token 消耗看板</p>
         </div>
-        <div className="ml-6 flex items-center gap-1 bg-muted rounded-lg p-0.5">
-          <button className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${page === 'dashboard' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setPage('dashboard')}>看板</button>
-          <button className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${page === 'quota' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setPage('quota')}>用量查询</button>
+        <div className="ml-6">
+          <Segmented
+            size="small"
+            value={page}
+            onChange={setPage}
+            options={[
+              { label: '看板', value: 'dashboard' },
+              { label: '用量查询', value: 'quota' },
+            ]}
+          />
         </div>
       </div>
       <div className="flex items-center gap-2">

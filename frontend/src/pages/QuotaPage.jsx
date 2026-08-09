@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Button } from 'antd';
+import { Button, App } from 'antd';
 import { PlusIcon } from 'lucide-react';
 import {
   listQuotaConfigs, getProviderSchemas, createQuotaConfig, updateQuotaConfig,
@@ -9,6 +9,7 @@ import QuotaCard from '@/components/common/QuotaCard.jsx';
 import QuotaDialog from '@/components/dialogs/QuotaDialog.jsx';
 
 export default function QuotaPage() {
+  const { modal } = App.useApp();
   const [configs, setConfigs] = useState([]);
   const [schemas, setSchemas] = useState([]);
   const [quotaData, setQuotaData] = useState({}); // configId → QuotaData
@@ -107,13 +108,23 @@ export default function QuotaPage() {
 
   const handleEdit = (cfg) => { setEditCfg(cfg); setDlgOpen(true); };
 
-  const handleDelete = async (cfg) => {
-    if (!window.confirm(`确定删除 "${cfg.displayName || cfg.provider + '-' + cfg.plan + '-' + cfg.seq}"？`)) return;
-    try {
-      await deleteQuotaConfig(cfg.id);
-      setQuotaData(prev => { const n = { ...prev }; delete n[cfg.id]; return n; });
-      setConfigs(prev => prev.filter(c => c.id !== cfg.id));
-    } catch { /* ignore */ }
+  const handleDelete = (cfg) => {
+    const name = cfg.displayName || `${cfg.provider}-${cfg.plan}-${cfg.seq}`;
+    modal.confirm({
+      title: '删除用量查询',
+      content: `确定删除 "${name}"？此操作不可撤销。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      centered: true,
+      onOk: async () => {
+        try {
+          await deleteQuotaConfig(cfg.id);
+          setQuotaData(prev => { const n = { ...prev }; delete n[cfg.id]; return n; });
+          setConfigs(prev => prev.filter(c => c.id !== cfg.id));
+        } catch { /* ignore */ }
+      },
+    });
   };
 
   const handleAdd = () => { setEditCfg(null); setDlgOpen(true); };

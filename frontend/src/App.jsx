@@ -4,7 +4,7 @@
  * ConfigProvider 由 dark 状态驱动 antd 明暗主题（默认主题，仅 algorithm 切换）。
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { Component, useState, useCallback, useEffect } from 'react';
 import { App as AntdApp, Button, ConfigProvider, theme as antdTheme } from 'antd';
 import { useDashboardData } from '@/hooks/useDashboardData.js';
 import { useCollection } from '@/hooks/useCollection.js';
@@ -19,6 +19,41 @@ import QuotaPage from '@/pages/QuotaPage.jsx';
 import { WindowSetDarkTheme, WindowSetLightTheme, WindowSetBackgroundColour } from '../wailsjs/runtime/runtime.js';
 
 const THEME_KEY = 'app-theme';
+
+// 全局错误边界：渲染异常时展示错误而非白屏，便于定位（频繁切时间范围等场景）。
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null, stack: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, errorInfo) {
+    this.setState({ stack: errorInfo.componentStack });
+  }
+  render() {
+    if (this.state.error) {
+      const msg = this.state.error && (this.state.error.stack || this.state.error.message || String(this.state.error));
+      return (
+        <div className="flex flex-col items-center justify-center h-screen gap-3 p-8 text-center">
+          <h2 className="text-base font-semibold text-red-600">页面渲染出错</h2>
+          <pre className="text-xs text-muted-foreground whitespace-pre-wrap text-left max-w-2xl bg-muted/40 p-4 rounded-lg overflow-auto max-h-48">{msg}</pre>
+          {this.state.stack && (
+            <pre className="text-xs text-foreground/70 whitespace-pre-wrap text-left max-w-2xl bg-muted/40 p-4 rounded-lg overflow-auto max-h-48">组件栈：{this.state.stack}</pre>
+          )}
+          <button
+            className="px-3 py-1 text-xs rounded-md bg-foreground/90 text-background"
+            onClick={() => { this.setState({ error: null, stack: null }); window.location.reload(); }}
+          >
+            重新加载
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function AppContent({ dark, onToggleDark }) {
   const { message } = AntdApp.useApp();
@@ -110,7 +145,9 @@ export default function App() {
     <ConfigProvider theme={{ algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }} button={{ autoInsertSpace: false }}>
       <AntdApp>
         <FilterProvider>
-          <AppContent dark={dark} onToggleDark={() => setDark(d => !d)} />
+          <ErrorBoundary>
+            <AppContent dark={dark} onToggleDark={() => setDark(d => !d)} />
+          </ErrorBoundary>
         </FilterProvider>
       </AntdApp>
     </ConfigProvider>

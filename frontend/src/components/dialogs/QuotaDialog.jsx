@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, Select } from 'antd';
+import { Modal, Select, Input, Popover } from 'antd';
 import { HelpCircleIcon } from 'lucide-react';
 
 /** 各供应商的帮助提示 */
@@ -106,32 +106,46 @@ export default function QuotaDialog({ open, onOpenChange, schemas, editCfg, onSa
         {currentSchema?.fields?.map(f => (
           <div key={f.key} className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">{f.label}</label>
-            <input
-              type={f.type === 'password' ? 'password' : 'text'}
-              value={fields[f.key] || ''}
-              onChange={e => handleFieldChange(f.key, e.target.value)}
-              placeholder={f.placeholder}
-              className="w-full h-8 px-2 text-xs rounded-lg border border-input bg-transparent outline-none focus-visible:border-ring font-mono"
-            />
+            {f.type === 'password' ? (
+              <Input.Password
+                value={fields[f.key] || ''}
+                onChange={e => handleFieldChange(f.key, e.target.value)}
+                placeholder={f.placeholder}
+                className="font-mono"
+              />
+            ) : (
+              <Input
+                value={fields[f.key] || ''}
+                onChange={e => handleFieldChange(f.key, e.target.value)}
+                placeholder={f.placeholder}
+                className="font-mono"
+              />
+            )}
           </div>
         ))}
 
         {/* 帮助提示 */}
         {!isEdit && PROVIDER_HINTS[provider] && (
-          <details className="group">
-            <summary className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+          <Popover
+            title={PROVIDER_HINTS[provider].title}
+            content={
+              <div className="space-y-2 text-xs text-muted-foreground" style={{ maxWidth: 320 }}>
+                {PROVIDER_HINTS[provider].steps.map((s, i) => (
+                  <div key={i}>
+                    <span className="font-medium text-foreground">{i + 1}. {s.label}：</span>
+                    {s.detail}
+                  </div>
+                ))}
+              </div>
+            }
+            trigger="click"
+            placement="bottomLeft"
+          >
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
               <HelpCircleIcon className="size-3.5" />
               如何获取这些信息？
-            </summary>
-            <div className="mt-2 p-3 rounded-lg bg-muted/50 space-y-2 text-xs text-muted-foreground">
-              {PROVIDER_HINTS[provider].steps.map((s, i) => (
-                <div key={i}>
-                  <span className="font-medium text-foreground">{i + 1}. {s.label}：</span>
-                  {s.detail}
-                </div>
-              ))}
-            </div>
-          </details>
+            </span>
+          </Popover>
         )}
 
         {/* 别名 */}
@@ -140,11 +154,10 @@ export default function QuotaDialog({ open, onOpenChange, schemas, editCfg, onSa
             别名
             <span className="text-muted-foreground/60 ml-1">（可选，不填自动编号）</span>
           </label>
-          <input
+          <Input
             value={displayName}
             onChange={e => setDisplayName(e.target.value)}
             placeholder="例：公司项目"
-            className="w-full h-8 px-2 text-xs rounded-lg border border-input bg-transparent outline-none focus-visible:border-ring"
           />
         </div>
       </div>

@@ -1,14 +1,33 @@
 import { aggregateRows, compact, compactCN, computeActivityStats } from '@/lib/formatters.js';
-import { getSourceColor } from '@/lib/iconMap.js';
-import { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Card, Button } from 'antd';
-import SourceIcon from '@/components/common/SourceIcon.jsx';
+import { getSourceColor, getSourceIconUrl } from '@/lib/iconMap.js';
+import { oklchToHex } from '@/lib/oklch.js';
+import { useMemo, useRef } from 'react';
+import { Card, Button, Skeleton } from 'antd';
+import useECharts, { getChartTheme } from '@/lib/useECharts.js';
 
 const MODES = [{ id: 'stacked', label: '堆叠' }, { id: 'line', label: '折线' }, { id: 'bar', label: '柱状' }];
 const GRANULARITIES = [{ id: 'daily', label: '日' }, { id: 'weekly', label: '周' }, { id: 'monthly', label: '月' }, { id: 'yearly', label: '年' }];
 
-export default function TrendChart({ rows, dates, sources, mode, onModeChange, totals, timeRows, hourRows, isHourly, granularity = 'daily', onGranularityChange }) {
+/** ECharts tooltip formatter：复刻 recharts CTooltip（来源图标 + 值 + 合计行） */
+function tooltipHtml(params) {
+  const label = params[0]?.axisValue ?? '';
+  const total = params.reduce((s, p) => s + (p.value || 0), 0);
+  const rows = params
+    .filter(p => p.seriesName != null)
+    .map(p => `
+      <div class="flex items-center gap-2 mt-0.5">
+        <img src="${getSourceIconUrl(p.seriesName)}" class="w-3 h-3 shrink-0" alt="" />
+        <span class="text-muted-foreground">${p.seriesName}</span>
+        <span class="font-semibold ml-auto tabular-nums">${compactCN(p.value)}</span>
+      </div>`)
+    .join('');
+  const totalRow = params.length > 1
+    ? `<div class="flex items-center justify-between gap-2 mt-1.5 pt-1.5 border-t font-semibold"><span>合计</span><span class="tabular-nums">${compactCN(total)}</span></div>`
+    : '';
+  return `<div class="bg-popover text-popover-foreground shadow-lg border rounded-lg p-2.5 text-xs"><div class="font-semibold mb-1.5">${label}</div>${rows}${totalRow}</div>`;
+}
+
+export default function TrendChart({ rows, dates, sources, mode, onModeChange, totals, timeRows, hourRows, isHourly, showGranularity = false, granularity = 'daily', onGranularityChange }) {
   const byKey = useMemo(() => {
     const m = new Map();
     if (isHourly && (timeRows?.length || hourRows?.length)) {
@@ -30,15 +49,16 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
         if (m.has(key)) continue;
         m.set(key, (m.get(key) || 0) + r.totalTokens);
       }
-      // 纯日级来源（当天无任何 hour/time 数据）才把日总量兜底到当前小时；
-      // 有小时数据的来源当前小时为空时保持 0，避免当前小时被全天总量污染
-      const currentHour = String(new Date().getHours()).padStart(2, '0');
+      // 纯日级来源兜底：今天归当前小时（进行中）；昨天已结束归 23 点（有小时数据的来源不兜底）
+      const now = new Date();
+      const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const fallbackHour = String(todayStr === todayLocal ? now.getHours() : 23).padStart(2, '0');
       const hourlySources = new Set();
       for (const r of hourRows || []) if (r.usageDate === todayStr) hourlySources.add(r.source);
       for (const r of timeRows || []) if (r.usageDate === todayStr) hourlySources.add(r.source);
       for (const r of rows) {
         if (r.usageDate !== todayStr || hourlySources.has(r.source)) continue;
-        const key = `${currentHour}::${r.source}`;
+        const key = `${fallbackHour}::${r.source}`;
         m.set(key, (m.get(key) || 0) + r.totalTokens);
       }
     } else {
@@ -105,7 +125,7 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
     [sources, chartData],
   );
 
-  const palette = activeSources.map(s => getSourceColor(s));
+  const palette = activeSources.map(s => oklchToHex(getSourceColor(s)));
   const dataKey = chartData[0]?.hour != null ? 'hour' : chartData[0]?.week != null ? 'week' : chartData[0]?.month != null ? 'month' : chartData[0]?.year != null ? 'year' : 'date';
 
   const descParts = [
@@ -116,6 +136,53 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
     !hasHourly && activityStats.longestGap > 0 ? `最长空白 ${activityStats.longestGap} ${aggUnit}` : '',
   ].filter(Boolean).join(' · ');
 
+  const optionRef = useRef(null);
+  const { setChartEl, dark, ready } = useECharts(optionRef, [chartData, palette, activeSources, mode, dataKey]);
+  const theme = getChartTheme(dark);
+
+  const option = useMemo(() => {
+    const xData = chartData.map(pt => pt[dataKey]);
+    const series = activeSources.map((s, i) => ({
+      name: s,
+      type: mode === 'line' ? 'line' : 'bar',
+      stack: mode === 'stacked' ? 'total' : undefined,
+      data: chartData.map(pt => pt[s] || 0),
+      itemStyle: { color: palette[i], borderRadius: mode === 'line' ? undefined : [2, 2, 0, 0] },
+      barMaxWidth: 24,
+      lineStyle: { width: 2 },
+      smooth: mode === 'line',
+      showSymbol: false,
+    }));
+    return {
+      grid: { top: 8, right: 8, bottom: 22, left: 44 },
+      xAxis: {
+        type: 'category',
+        data: xData,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { fontSize: 10.5, color: theme.axisText },
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { lineStyle: { color: theme.grid } },
+        axisLabel: { fontSize: 10.5, color: theme.axisTick, formatter: (v) => compact(v) },
+        splitNumber: 4,
+      },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+        padding: 0,
+        formatter: (params) => tooltipHtml(params),
+        extraCssText: 'box-shadow:none;',
+      },
+      series,
+    };
+  }, [chartData, palette, activeSources, mode, dataKey, theme]);
+  optionRef.current = option;
+
   return (
     <Card styles={{ body: { padding: 16 } }}>
       <div className="flex flex-col gap-2 mb-4">
@@ -125,8 +192,8 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
             <div className="text-xs text-muted-foreground">{descParts}</div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {/* Granularity selector (hidden in hourly mode) */}
-            {!hasHourly && (
+            {/* Granularity selector：仅在「全部」范围显示（日/周/月/年聚合只对长跨度有意义），其余范围固定日粒度 */}
+            {!hasHourly && showGranularity && (
               <div className="flex gap-0.5 bg-muted rounded-lg p-0.5">
                 {GRANULARITIES.filter(g => {
                   if (g.id === 'yearly') return dates.length > 730;
@@ -145,58 +212,20 @@ export default function TrendChart({ rows, dates, sources, mode, onModeChange, t
           </div>
         </div>
       </div>
-      <div>
-        {activeSources.length === 0 ? (
-          <div className="flex items-center justify-center" style={{ minHeight: 280, height: 'clamp(280px, 35vh, 400px)' }}>
+      <div className="relative" style={{ minHeight: 280, height: 'clamp(280px, 35vh, 400px)' }}>
+        {/* 图表 div 自身带尺寸（height:100% 在父 clamp 下可能解析失败→0 高→空白），并始终渲染避免 removeChild 冲突 */}
+        <div ref={setChartEl} style={{ minHeight: 280, height: 'clamp(280px, 35vh, 400px)' }} />
+        {!ready && (
+          <div className="absolute inset-0 overflow-hidden bg-background/50">
+            <Skeleton active paragraph={{ rows: 5 }} />
+          </div>
+        )}
+        {activeSources.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-sm text-muted-foreground">当前时间范围内无数据</span>
           </div>
-        ) : (
-        <div style={{ minHeight: 280, height: 'clamp(280px, 35vh, 400px)' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            {mode === 'line' ? (
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.93 0.004 80)" />
-                <XAxis dataKey={dataKey} tick={{ fontSize: 10.5, fill: 'oklch(0.55 0.005 80)' }} />
-                <YAxis tick={{ fontSize: 10.5, fill: 'oklch(0.62 0.004 80)' }} tickFormatter={v => compact(v)} />
-                <Tooltip content={<CTooltip />} />
-                {activeSources.map((s, i) => (<Line key={s} type="monotone" dataKey={s} stroke={palette[i]} strokeWidth={2} dot={false} />))}
-              </LineChart>
-            ) : (
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.93 0.004 80)" />
-                <XAxis dataKey={dataKey} tick={{ fontSize: 10.5, fill: 'oklch(0.55 0.005 80)' }} />
-                <YAxis tick={{ fontSize: 10.5, fill: 'oklch(0.62 0.004 80)' }} tickFormatter={v => compact(v)} />
-                <Tooltip content={<CTooltip />} />
-                {activeSources.map((s, i) => (<Bar key={s} dataKey={s} stackId={mode === 'stacked' ? 'total' : undefined} fill={palette[i]} />))}
-              </BarChart>
-            )}
-          </ResponsiveContainer>
-        </div>
         )}
       </div>
     </Card>
-  );
-}
-
-function CTooltip({ active, payload, label }) {
-  if (!active || !payload) return null;
-  const total = payload.reduce((s, p) => s + (p.value || 0), 0);
-  return (
-    <div className="bg-popover text-popover-foreground shadow-lg border rounded-lg p-2.5 text-xs">
-      <div className="font-semibold mb-1.5">{label}</div>
-      {payload.map(p => (
-        <div key={p.name} className="flex items-center gap-2 mt-0.5">
-          <SourceIcon name={p.name} className="w-3 h-3" />
-          <span className="text-muted-foreground">{p.name}</span>
-          <span className="font-semibold ml-auto tabular-nums">{compactCN(p.value)}</span>
-        </div>
-      ))}
-      {payload.length > 1 && (
-        <div className="flex items-center justify-between gap-2 mt-1.5 pt-1.5 border-t font-semibold">
-          <span>合计</span>
-          <span className="tabular-nums">{compactCN(total)}</span>
-        </div>
-      )}
-    </div>
   );
 }

@@ -33,9 +33,10 @@ func New(dbPath string) (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
-	// SQLite 单写者：限制连接池为 1，避免并发写触发 database is locked。
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	// SQLite WAL 多读一写：放宽连接池，让采集写事务期间读查询不被阻塞。
+	// 写者由 orchestrator.mu / autoSyncMu 保证单写 + busy_timeout 兜底，不会写写冲突。
+	db.SetMaxOpenConns(8)
+	db.SetMaxIdleConns(4)
 
 	pragmas := []string{
 		"PRAGMA busy_timeout = 10000",

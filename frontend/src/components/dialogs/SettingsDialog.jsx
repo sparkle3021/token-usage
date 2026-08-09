@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, Select, Button } from 'antd';
+import { Modal, Select, Button, Input } from 'antd';
 import { getMessage } from '@/lib/message.js';
 import { SettingsIcon, TriangleAlertIcon } from 'lucide-react';
 import { getSettings, saveSettings, detectCCSwitchDB, updatePricing, clearAllData, getDevices, renameDevice, exportData, importData } from '@/api/client.js';
@@ -276,11 +276,11 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground">CC-Switch 数据库路径</label>
                   <div className="flex gap-2">
-                    <input
+                    <Input
                       value={cfg.ccSwitchDBPath}
                       onChange={e => setCfg(c => ({ ...c, ccSwitchDBPath: e.target.value }))}
                       placeholder="例: C:\Users\用户名\.cc-switch\cc-switch.db"
-                      className="flex-1 h-8 px-2 text-xs rounded-lg border border-input bg-transparent outline-none focus-visible:border-ring"
+                      className="flex-1"
                     />
                     <Button size="small" className="h-8 text-xs shrink-0" onClick={detectDB} disabled={detecting}>
                       {detecting ? '检测中…' : '检测'}
@@ -302,11 +302,11 @@ export default function SettingsDialog({ onSettingsChange, onClear, onFullSync, 
                 <div className="space-y-2">
                   {devices.map(d => (
                     <div key={d.deviceId} className="flex items-center gap-2">
-                      <input
+                      <Input
                         value={nameDrafts[d.deviceId] ?? ''}
                         onChange={e => setNameDrafts(dr => ({ ...dr, [d.deviceId]: e.target.value }))}
                         placeholder={d.hostname || '设备名'}
-                        className="flex-1 h-8 min-w-0 px-2 text-xs rounded-lg border border-input bg-transparent outline-none focus-visible:border-ring"
+                        className="flex-1 min-w-0"
                       />
                       <span className="text-[11px] text-muted-foreground whitespace-nowrap">
                         {d.hostname}{d.isLocal ? ' · 本机' : ''}
