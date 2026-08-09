@@ -16,9 +16,20 @@ import { clearAllData } from '@/api/client.js';
 import Header from '@/components/layout/Header.jsx';
 import DashboardPage from '@/pages/DashboardPage.jsx';
 import QuotaPage from '@/pages/QuotaPage.jsx';
+import SettingsPage from '@/pages/SettingsPage.jsx';
 import { WindowSetDarkTheme, WindowSetLightTheme, WindowSetBackgroundColour } from '../wailsjs/runtime/runtime.js';
 
 const THEME_KEY = 'app-theme';
+
+// 主题偏好三态：'light' | 'dark' | 'system'。旧值 'dark'/'light' 兼容，非法值回退 'light'。
+function readThemePref() {
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    return v === 'dark' || v === 'light' || v === 'system' ? v : 'light';
+  } catch {
+    return 'light';
+  }
+}
 
 // 全局错误边界：渲染异常时展示错误而非白屏，便于定位（频繁切时间范围等场景）。
 class ErrorBoundary extends Component {
@@ -55,10 +66,12 @@ class ErrorBoundary extends Component {
   }
 }
 
-function AppContent({ dark, onToggleDark }) {
+function AppContent({ dark, pref, setPref }) {
   const { message } = AntdApp.useApp();
   setMessageApi(message);
   const [page, setPage] = useState('dashboard');
+  // 进入设置页前的来源页，返回时恢复
+  const [prevPage, setPrevPage] = useState('dashboard');
 
   const { M, loadError, refreshing, fetchData, fetchTimeSeries, allSources, allModels, heatmapData } = useDashboardData();
   const [lastSyncTs, setLastSyncTs] = useState(null);
@@ -78,6 +91,23 @@ function AppContent({ dark, onToggleDark }) {
   }, [fetchData]);
 
   const lastSync = lastSyncTs ? formatTs(new Date(lastSyncTs).toISOString()) : '—';
+
+  // 设置页：独立于看板数据加载，直接渲染，返回时恢复来源页
+  if (page === 'settings') {
+    return (
+      <div className="max-w-[1440px] mx-auto p-4 md:p-6 pb-16 font-sans flex flex-col h-screen overflow-hidden">
+        <SettingsPage
+          onBack={() => setPage(prevPage)}
+          pref={pref}
+          setPref={setPref}
+          handleSettingsChange={handleSettingsChange}
+          onClear={onClearData}
+          onFullSync={runFullCollect}
+          fullSyncing={collecting}
+        />
+      </div>
+    );
+  }
 
   if (loadError) return (
     <div className="flex flex-col items-center justify-center h-screen gap-4 text-muted-foreground">
@@ -103,12 +133,9 @@ function AppContent({ dark, onToggleDark }) {
         collecting={collecting}
         refreshing={refreshing}
         onRefresh={fetchData}
-        onClearData={onClearData}
-        onSettingsChange={handleSettingsChange}
-        onFullSync={runFullCollect}
-        fullSyncing={collecting}
+        onOpenSettings={() => { setPrevPage(page); setPage('settings'); }}
         dark={dark}
-        onToggleDark={onToggleDark}
+        setPref={setPref}
       />
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none pt-4">
         {page === 'dashboard' ? (
@@ -128,25 +155,44 @@ function AppContent({ dark, onToggleDark }) {
 }
 
 export default function App() {
-  const [dark, setDark] = useState(() => {
-    try { return localStorage.getItem(THEME_KEY) === 'dark'; } catch { return false; }
+  // 偏好：三态，用户选择（浅色 / 深色 / 跟随系统）
+  const [pref, setPref] = useState(readThemePref);
+  // 系统外观：prefers-color-scheme 当前值
+  const [sysDark, setSysDark] = useState(() => {
+    try { return window.matchMedia('(prefers-color-scheme: dark)').matches; } catch { return false; }
   });
+
+  // 常驻监听系统外观变化，跟随系统模式时实时响应；pref 离开 system 时仍更新 sysDark 但无副作用
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch { /* ignore */ }
-    // 同步 Wails 窗口标题栏主题与背景色（#f3f3f3 亮 / #202020 暗）
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = e => setSysDark(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  // 实际明暗：system 时跟随系统，否则按偏好
+  const resolvedDark = pref === 'system' ? sysDark : pref === 'dark';
+
+  // 偏好变更持久化
+  useEffect(() => {
+    try { localStorage.setItem(THEME_KEY, pref); } catch { /* ignore */ }
+  }, [pref]);
+
+  // 实际明暗驱动界面与 Wails 窗口标题栏主题/背景色（#f3f3f3 亮 / #202020 暗）
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', resolvedDark);
     try {
-      if (dark) WindowSetDarkTheme(); else WindowSetLightTheme();
-      WindowSetBackgroundColour(dark ? 32 : 243, dark ? 32 : 243, dark ? 32 : 243, 1);
+      if (resolvedDark) WindowSetDarkTheme(); else WindowSetLightTheme();
+      WindowSetBackgroundColour(resolvedDark ? 32 : 243, resolvedDark ? 32 : 243, resolvedDark ? 32 : 243, 1);
     } catch { /* ignore */ }
-  }, [dark]);
+  }, [resolvedDark]);
 
   return (
-    <ConfigProvider theme={{ algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }} button={{ autoInsertSpace: false }}>
+    <ConfigProvider theme={{ algorithm: resolvedDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }} button={{ autoInsertSpace: false }}>
       <AntdApp>
         <FilterProvider>
           <ErrorBoundary>
-            <AppContent dark={dark} onToggleDark={() => setDark(d => !d)} />
+            <AppContent dark={resolvedDark} pref={pref} setPref={setPref} />
           </ErrorBoundary>
         </FilterProvider>
       </AntdApp>

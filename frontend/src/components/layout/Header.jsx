@@ -3,10 +3,9 @@
  */
 
 import { Button, Segmented } from 'antd';
-import SettingsDialog from '@/components/dialogs/SettingsDialog.jsx';
-import { Sun, Moon } from 'lucide-react';
+import { SettingsIcon, Sun, Moon } from 'lucide-react';
 
-export default function Header({ page, setPage, lastSync, onCollect, collecting, refreshing, onClearData, onSettingsChange, onFullSync, fullSyncing, dark, onToggleDark }) {
+export default function Header({ page, setPage, lastSync, onCollect, collecting, refreshing, onOpenSettings, dark, setPref }) {
   return (
     <div className="flex items-center justify-between gap-4 pb-4 border-b flex-wrap">
       <div className="flex items-center gap-3">
@@ -31,8 +30,8 @@ export default function Header({ page, setPage, lastSync, onCollect, collecting,
         <Button type="primary" size="small" onClick={onCollect} disabled={collecting || refreshing}>
           {collecting ? '同步中' : '同步'}
         </Button>
-        <Button size="small" className="h-8 w-8 p-0" icon={dark ? <Sun className="size-4" /> : <Moon className="size-4" />} onClick={onToggleDark} title={dark ? '切换到亮色' : '切换到暗色'} />
-        <SettingsDialog onSettingsChange={onSettingsChange} onClear={onClearData} onFullSync={onFullSync} fullSyncing={fullSyncing} />
+        <Button size="small" className="h-8 w-8 p-0" icon={dark ? <Sun className="size-4" /> : <Moon className="size-4" />} onClick={() => setPref(dark ? 'light' : 'dark')} title={dark ? '切换到亮色' : '切换到暗色'} />
+        <Button size="small" className="h-8 w-8 p-0" icon={<SettingsIcon className="size-4" />} onClick={onOpenSettings} title="设置" />
       </div>
     </div>
   );
