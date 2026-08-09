@@ -97,7 +97,7 @@ function genSeries(days, seed) {
 }
 
 /** 单模型趋势图卡片（echarts 封装） */
-function MiniTrendCard({ title, xData, values, color, valueFmt, areaColor, areaOpacity = 0.08, lineColor }) {
+function MiniTrendCard({ title, xData, values, color, valueFmt, areaColor, areaOpacity = 0.08, lineColor, tooltipLabel, tooltipFmt }) {
   const optionRef = useRef(null);
   const { setChartEl, dark, ready } = useECharts(optionRef, [xData, values]);
   const theme = getChartTheme(dark);
@@ -118,9 +118,19 @@ function MiniTrendCard({ title, xData, values, color, valueFmt, areaColor, areaO
     },
     tooltip: {
       trigger: 'axis',
+      confine: true,
       backgroundColor: 'transparent', borderWidth: 0, padding: 0,
       formatter: (params) => {
         const p = params[0];
+        if (tooltipLabel) {
+          return `<div class="bg-popover text-popover-foreground shadow-lg border rounded-lg p-2.5 text-xs">
+            <div class="font-semibold mb-1">${p.axisValue}</div>
+            <div class="flex items-center justify-between gap-6">
+              <span class="text-muted-foreground">${tooltipLabel}</span>
+              <span class="font-semibold tabular-nums">${(tooltipFmt || valueFmt)(p.value)}</span>
+            </div>
+          </div>`;
+        }
         return `<div class="bg-popover text-popover-foreground shadow-lg border rounded-lg p-2 text-xs"><span class="font-semibold">${p.axisValue}</span><span class="ml-2 tabular-nums font-semibold">${valueFmt(p.value)}</span></div>`;
       },
     },
@@ -129,7 +139,7 @@ function MiniTrendCard({ title, xData, values, color, valueFmt, areaColor, areaO
       lineStyle: { width: 2, color: lineColor || color }, itemStyle: { color: lineColor || color },
       areaStyle: { color: areaColor || color, opacity: areaOpacity },
     }],
-  }), [xData, values, theme, color, valueFmt, areaColor, areaOpacity, lineColor]);
+  }), [xData, values, theme, color, valueFmt, areaColor, areaOpacity, lineColor, tooltipLabel, tooltipFmt]);
   optionRef.current = option;
 
   return (
@@ -176,6 +186,7 @@ function TokenBarCard({ xData, inputCache, inputNoCache, output }) {
       },
       tooltip: {
         trigger: 'axis',
+        confine: true,
         backgroundColor: 'transparent', borderWidth: 0, padding: 0,
         formatter: (params) => {
           const date = params[0]?.axisValue ?? '';
@@ -203,7 +214,7 @@ function TokenBarCard({ xData, inputCache, inputNoCache, output }) {
         stack: 'total',
         data: s.key === 'inputCache' ? inputCache : s.key === 'inputNoCache' ? inputNoCache : output,
         itemStyle: { color: s.color },
-        barMaxWidth: 24,
+        barMaxWidth: 32,
       })),
     };
   }, [xData, inputCache, inputNoCache, output, theme]);
@@ -242,23 +253,22 @@ function ModelDetail({ model, onBack }) {
 
   return (
     <div className="flex flex-col gap-4 h-full min-h-0">
-      <div className="flex items-center gap-2">
-        <Button size="small" className="h-8" icon={<ArrowLeftIcon className="size-4" />} onClick={onBack}>返回</Button>
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <img src={getModelIconUrl(model)} alt="" className="size-5 shrink-0 brightness-0 dark:brightness-0 dark:invert" />
-          <h2 className="text-sm font-semibold">{model}</h2>
+          <Button icon={<ArrowLeftIcon className="size-4" />} onClick={onBack}>返回</Button>
+          <div className="flex items-center gap-2">
+            <img src={getModelIconUrl(model)} alt="" className="size-5 shrink-0 brightness-0 dark:brightness-0 dark:invert" />
+            <h2 className="text-sm font-semibold">{model}</h2>
+          </div>
         </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">时间范围</span>
-        <Select
-          size="small"
-          value={days}
-          onChange={setDays}
-          options={RANGE_OPTIONS}
-          style={{ width: 140 }}
-        />
+        <div className="flex items-center gap-2">
+          <Select
+            value={days}
+            onChange={setDays}
+            options={RANGE_OPTIONS}
+            style={{ width: 160 }}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -267,11 +277,11 @@ function ModelDetail({ model, onBack }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <MiniTrendCard title="调用次数" xData={xData} values={requests} color={color} valueFmt={(v) => compact(v)} areaColor="#a1c6f9" areaOpacity={0.4} lineColor="#417ceb" />
+        <MiniTrendCard title="请求次数" xData={xData} values={requests} color={color} valueFmt={(v) => compact(v)} areaColor="#a1c6f9" areaOpacity={0.4} lineColor="#417ceb" tooltipLabel="请求次数" tooltipFmt={numFmt.format} />
         <TokenBarCard xData={xData} inputCache={inputCache} inputNoCache={inputNoCache} output={output} />
       </div>
 
-      <MiniTrendCard title="费用" xData={xData} values={cost} color="oklch(0.72 0.14 75)" valueFmt={(v) => '$' + Number(v).toFixed(2)} />
+      <MiniTrendCard title="费用" xData={xData} values={cost} color={oklchToHex('oklch(0.72 0.14 75)')} valueFmt={(v) => '$' + Number(v ?? 0).toFixed(2)} tooltipLabel="费用" tooltipFmt={(v) => '$' + Number(v ?? 0).toFixed(2)} />
     </div>
   );
 }
