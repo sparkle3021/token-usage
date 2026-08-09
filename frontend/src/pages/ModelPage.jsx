@@ -4,7 +4,8 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, Select, Skeleton } from 'antd';
+import { Button, Card, DatePicker, Select, Skeleton } from 'antd';
+import dayjs from 'dayjs';
 import { ArrowLeftIcon } from 'lucide-react';
 import { getModelIconUrl, getSourceColor } from '@/lib/iconMap.js';
 import { oklchToHex } from '@/lib/oklch.js';
@@ -22,13 +23,37 @@ function fmtUsage(v) {
   return String(v);
 }
 
-// 时间范围筛选项（细节待老大确认）
+// 时间维度筛选项
 const RANGE_OPTIONS = [
-  { label: '近 7 天', value: 7 },
-  { label: '近 30 天', value: 30 },
-  { label: '近 90 天', value: 90 },
-  { label: '近 1 年', value: 365 },
+  { label: '今天', value: 'today' },
+  { label: '昨天', value: 'yesterday' },
+  { label: '近 7 天', value: 'last7' },
+  { label: '近 30 天', value: 'last30' },
+  { label: '近 90 天', value: 'last90' },
+  { label: '自定义跨度', value: 'custom' },
+  { label: '全部', value: 'all' },
 ];
+
+// 解析时间维度 → { days, end }：days 数据点数；end 结束日期距今天的天数偏移（今天 0、昨天 1）
+function resolveRange(id, custom) {
+  switch (id) {
+    case 'today': return { days: 1, end: 0 };
+    case 'yesterday': return { days: 1, end: 1 };
+    case 'last7': return { days: 7, end: 0 };
+    case 'last30': return { days: 30, end: 0 };
+    case 'last90': return { days: 90, end: 0 };
+    case 'all': return { days: 180, end: 0 };
+    case 'custom': {
+      if (custom?.[0] && custom?.[1]) {
+        const days = Math.max(1, custom[1].diff(custom[0], 'day') + 1);
+        const end = Math.max(0, Math.round((dayjs().endOf('day').valueOf() - custom[1].endOf('day').valueOf()) / 86400000));
+        return { days, end };
+      }
+      return { days: 7, end: 0 };
+    }
+    default: return { days: 7, end: 0 };
+  }
+}
 
 // ── 模拟数据（待后端接口接入后移除） ──────────────────────────
 const MOCK_MODELS = [
@@ -65,22 +90,27 @@ function hashSeed(name) {
   return h;
 }
 
-// 近 days 天的日期标签（完整日期，x 轴显示时裁成 MM-DD）
-function genDates(days) {
+// 结束日期为今天前 endOffset 天，生成 days 个完整日期（x 轴显示时裁成 MM-DD）
+function genDates(days, endOffset = 0) {
   const out = [];
-  const now = new Date();
+  const end = new Date(); end.setDate(end.getDate() - endOffset);
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now); d.setDate(d.getDate() - i);
+    const d = new Date(end); d.setDate(d.getDate() - i);
     out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
   }
   return out;
 }
 
-// 生成请求/三种 Token 状态/费用日序列（带周期波动，视觉自然）
-function genSeries(days, seed) {
+// 24 小时标签（00:00 ~ 23:00）
+function genHourLabels() {
+  return Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
+}
+
+// 生成请求/三种 Token 状态/费用序列（带周期波动，视觉自然）。hourly 为小时粒度，数值量级更小
+function genSeries(days, seed, hourly = false) {
   const rnd = mulberry32(seed);
   const requests = [], inputCache = [], inputNoCache = [], output = [], cost = [];
-  const base = 200 + rnd() * 800;
+  const base = hourly ? 20 + rnd() * 60 : 200 + rnd() * 800;
   for (let i = 0; i < days; i++) {
     const wave = Math.sin(i / 3.5) * 0.3;
     const req = Math.max(5, Math.round(base * (1 + wave + (rnd() - 0.5) * 0.4)));
@@ -97,17 +127,24 @@ function genSeries(days, seed) {
 }
 
 /** 单模型趋势图卡片（echarts 封装） */
-function MiniTrendCard({ title, xData, values, color, valueFmt, areaColor, areaOpacity = 0.08, lineColor, tooltipLabel, tooltipFmt }) {
+function MiniTrendCard({ title, xData, values, color, valueFmt, areaColor, areaOpacity = 0.08, lineColor, tooltipLabel, tooltipFmt, hourly = false }) {
   const optionRef = useRef(null);
-  const { setChartEl, dark, ready } = useECharts(optionRef, [xData, values]);
+  const { setChartEl, dark, ready } = useECharts(optionRef, [xData, values, hourly]);
   const theme = getChartTheme(dark);
+
+  // 小时模式下 tooltip 首行显示时间跨度（01:00~02:00），否则用 x 轴原值
+  const spanLabel = (axisValue) => {
+    if (!hourly) return axisValue;
+    const h = parseInt(axisValue, 10);
+    return `${String(h).padStart(2, '0')}:00~${String(h + 1).padStart(2, '0')}:00`;
+  };
 
   const option = useMemo(() => ({
     grid: { top: 8, right: 16, bottom: 22, left: 48 },
     xAxis: {
       type: 'category', data: xData,
       axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { fontSize: 10.5, color: theme.axisText },
+      axisLabel: { fontSize: 10.5, color: theme.axisText, formatter: hourly ? undefined : (v) => v.slice(5) },
     },
     yAxis: {
       type: 'value',
@@ -124,14 +161,14 @@ function MiniTrendCard({ title, xData, values, color, valueFmt, areaColor, areaO
         const p = params[0];
         if (tooltipLabel) {
           return `<div class="bg-popover text-popover-foreground shadow-lg border rounded-lg p-2.5 text-xs">
-            <div class="font-semibold mb-1">${p.axisValue}</div>
+            <div class="font-semibold mb-1">${spanLabel(p.axisValue)}</div>
             <div class="flex items-center justify-between gap-6">
               <span class="text-muted-foreground">${tooltipLabel}</span>
               <span class="font-semibold tabular-nums">${(tooltipFmt || valueFmt)(p.value)}</span>
             </div>
           </div>`;
         }
-        return `<div class="bg-popover text-popover-foreground shadow-lg border rounded-lg p-2 text-xs"><span class="font-semibold">${p.axisValue}</span><span class="ml-2 tabular-nums font-semibold">${valueFmt(p.value)}</span></div>`;
+        return `<div class="bg-popover text-popover-foreground shadow-lg border rounded-lg p-2 text-xs"><span class="font-semibold">${spanLabel(p.axisValue)}</span><span class="ml-2 tabular-nums font-semibold">${valueFmt(p.value)}</span></div>`;
       },
     },
     series: [{
@@ -139,7 +176,7 @@ function MiniTrendCard({ title, xData, values, color, valueFmt, areaColor, areaO
       lineStyle: { width: 2, color: lineColor || color }, itemStyle: { color: lineColor || color },
       areaStyle: { color: areaColor || color, opacity: areaOpacity },
     }],
-  }), [xData, values, theme, color, valueFmt, areaColor, areaOpacity, lineColor, tooltipLabel, tooltipFmt]);
+  }), [xData, values, theme, color, valueFmt, areaColor, areaOpacity, lineColor, tooltipLabel, tooltipFmt, hourly]); // eslint-disable-line react-hooks/exhaustive-deps -- spanLabel 为纯函数，hourly 已入依赖
   optionRef.current = option;
 
   return (
@@ -164,10 +201,17 @@ const TOKEN_SERIES = [
   { key: 'output', name: '输出', color: '#2d6feb' },
 ];
 
-function TokenBarCard({ xData, inputCache, inputNoCache, output }) {
+function TokenBarCard({ xData, inputCache, inputNoCache, output, hourly = false }) {
   const optionRef = useRef(null);
-  const { setChartEl, dark, ready } = useECharts(optionRef, [xData, inputCache, inputNoCache, output]);
+  const { setChartEl, dark, ready } = useECharts(optionRef, [xData, inputCache, inputNoCache, output, hourly]);
   const theme = getChartTheme(dark);
+
+  // 小时模式下 tooltip 首行显示时间跨度（01:00~02:00），否则用 x 轴原值
+  const spanLabel = (axisValue) => {
+    if (!hourly) return axisValue;
+    const h = parseInt(axisValue, 10);
+    return `${String(h).padStart(2, '0')}:00~${String(h + 1).padStart(2, '0')}:00`;
+  };
 
   const option = useMemo(() => {
     return {
@@ -175,7 +219,7 @@ function TokenBarCard({ xData, inputCache, inputNoCache, output }) {
       xAxis: {
         type: 'category', data: xData,
         axisLine: { show: false }, axisTick: { show: false },
-        axisLabel: { fontSize: 10.5, color: theme.axisText, formatter: (v) => v.slice(5) },
+        axisLabel: { fontSize: 10.5, color: theme.axisText, formatter: hourly ? undefined : (v) => v.slice(5) },
       },
       yAxis: {
         type: 'value',
@@ -189,7 +233,7 @@ function TokenBarCard({ xData, inputCache, inputNoCache, output }) {
         confine: true,
         backgroundColor: 'transparent', borderWidth: 0, padding: 0,
         formatter: (params) => {
-          const date = params[0]?.axisValue ?? '';
+          const date = spanLabel(params[0]?.axisValue ?? '');
           const sum = params.reduce((s, p) => s + (p.value || 0), 0);
           const rows = params.map(p => `
             <div class="flex items-center justify-between gap-6 mt-1">
@@ -217,7 +261,7 @@ function TokenBarCard({ xData, inputCache, inputNoCache, output }) {
         barMaxWidth: 32,
       })),
     };
-  }, [xData, inputCache, inputNoCache, output, theme]);
+  }, [xData, inputCache, inputNoCache, output, theme, hourly]); // eslint-disable-line react-hooks/exhaustive-deps -- spanLabel 为纯函数，hourly 已入依赖
   optionRef.current = option;
 
   return (
@@ -237,13 +281,20 @@ function TokenBarCard({ xData, inputCache, inputNoCache, output }) {
 
 /** 模型详情视图 */
 function ModelDetail({ model, onBack }) {
-  const [days, setDays] = useState(30);
+  const [rangeId, setRangeId] = useState('last7');
+  const [customRange, setCustomRange] = useState(null);
   const color = useMemo(() => oklchToHex(getSourceColor(model)), [model]);
 
+  const { days, end } = useMemo(() => resolveRange(rangeId, customRange), [rangeId, customRange]);
+
+  // 今天/昨天为小时维度（24 小时）
+  const isHourly = rangeId === 'today' || rangeId === 'yesterday';
+
   const { xData, requests, inputCache, inputNoCache, output, cost } = useMemo(() => {
-    const s = genSeries(days, hashSeed(model));
-    return { xData: genDates(days), ...s };
-  }, [days, model]);
+    const n = isHourly ? 24 : days;
+    const s = genSeries(n, hashSeed(model), isHourly);
+    return { xData: isHourly ? genHourLabels() : genDates(days, end), ...s };
+  }, [isHourly, days, end, model]);
 
   const totalReq = useMemo(() => requests.reduce((a, b) => a + b, 0), [requests]);
   const totalTok = useMemo(
@@ -263,11 +314,19 @@ function ModelDetail({ model, onBack }) {
         </div>
         <div className="flex items-center gap-2">
           <Select
-            value={days}
-            onChange={setDays}
+            value={rangeId}
+            onChange={setRangeId}
             options={RANGE_OPTIONS}
-            style={{ width: 160 }}
+            style={{ width: 140 }}
           />
+          {rangeId === 'custom' && (
+            <DatePicker.RangePicker
+              value={customRange}
+              onChange={setCustomRange}
+              allowClear
+              format="YYYY-MM-DD"
+            />
+          )}
         </div>
       </div>
 
@@ -277,11 +336,11 @@ function ModelDetail({ model, onBack }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <MiniTrendCard title="请求次数" xData={xData} values={requests} color={color} valueFmt={(v) => compact(v)} areaColor="#a1c6f9" areaOpacity={0.4} lineColor="#417ceb" tooltipLabel="请求次数" tooltipFmt={numFmt.format} />
-        <TokenBarCard xData={xData} inputCache={inputCache} inputNoCache={inputNoCache} output={output} />
+        <MiniTrendCard title="请求次数" xData={xData} values={requests} color={color} valueFmt={(v) => compact(v)} areaColor="#a1c6f9" areaOpacity={0.4} lineColor="#417ceb" tooltipLabel="请求次数" tooltipFmt={numFmt.format} hourly={isHourly} />
+        <TokenBarCard xData={xData} inputCache={inputCache} inputNoCache={inputNoCache} output={output} hourly={isHourly} />
       </div>
 
-      <MiniTrendCard title="费用" xData={xData} values={cost} color={oklchToHex('oklch(0.72 0.14 75)')} valueFmt={(v) => '$' + Number(v ?? 0).toFixed(2)} tooltipLabel="费用" tooltipFmt={(v) => '$' + Number(v ?? 0).toFixed(2)} />
+      <MiniTrendCard title="费用" xData={xData} values={cost} color={oklchToHex('oklch(0.72 0.14 75)')} valueFmt={(v) => '$' + Number(v ?? 0).toFixed(2)} tooltipLabel="费用" tooltipFmt={(v) => '$' + Number(v ?? 0).toFixed(2)} hourly={isHourly} />
     </div>
   );
 }
