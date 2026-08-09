@@ -12,9 +12,18 @@ type DailyUsage struct {
 	ReasoningOutputTokens    int64   `json:"reasoningOutputTokens"`
 	TotalTokens              int64   `json:"totalTokens"`
 	CostUSD                  float64 `json:"costUSD"`
+	RequestCount             int64   `json:"requestCount"`
 	PricingLockedAt          *string `json:"pricingLockedAt,omitempty"`
 	ProjectPath              string  `json:"projectPath,omitempty"`
 	UpdatedAt                string  `json:"-"`
+}
+
+// ModelRanking 模型维度聚合排行项（按模型聚合总用量/费用/请求次数）。
+type ModelRanking struct {
+	Model        string  `json:"model"`
+	TotalTokens  int64   `json:"totalTokens"`
+	CostUSD      float64 `json:"costUSD"`
+	RequestCount int64   `json:"requestCount"`
 }
 
 type SessionUsage struct {
@@ -182,6 +191,7 @@ type HourUsage struct {
 	ReasoningOutputTokens int64   `json:"reasoningOutputTokens"`
 	TotalTokens           int64   `json:"totalTokens"`
 	CostUSD               float64 `json:"costUSD"`
+	RequestCount          int64   `json:"requestCount"`
 	UpdatedAt             string  `json:"-"`
 }
 

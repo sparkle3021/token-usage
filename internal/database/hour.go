@@ -25,8 +25,8 @@ func (m *Manager) bulkUpsertHourUsageExec(ex preparedExecer, rows []model.HourUs
 	return bulkExecPrepared(ex, rows, `
 		INSERT INTO hour_usage (device,source,usage_date,hour,model,
 			input_tokens,output_tokens,cache_creation_tokens,cache_read_tokens,
-			reasoning_output_tokens,total_tokens,cost_usd,updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))
+			reasoning_output_tokens,total_tokens,cost_usd,request_count,updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))
 		ON CONFLICT(device,source,usage_date,hour,model) DO UPDATE SET
 			input_tokens=MAX(excluded.input_tokens,hour_usage.input_tokens),
 			output_tokens=MAX(excluded.output_tokens,hour_usage.output_tokens),
@@ -35,11 +35,12 @@ func (m *Manager) bulkUpsertHourUsageExec(ex preparedExecer, rows []model.HourUs
 			reasoning_output_tokens=MAX(excluded.reasoning_output_tokens,hour_usage.reasoning_output_tokens),
 			total_tokens=MAX(excluded.total_tokens,hour_usage.total_tokens),
 			cost_usd=MAX(excluded.cost_usd,hour_usage.cost_usd),
+			request_count=MAX(excluded.request_count,hour_usage.request_count),
 			updated_at=datetime('now','localtime')`,
 		func(r model.HourUsage) []interface{} {
 			return []interface{}{r.Device, r.Source, r.UsageDate, r.Hour, r.Model,
 				r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens,
-				r.ReasoningOutputTokens, r.TotalTokens, r.CostUSD}
+				r.ReasoningOutputTokens, r.TotalTokens, r.CostUSD, r.RequestCount}
 		})
 }
 
@@ -95,6 +96,7 @@ func (m *Manager) buildHourUsageFromTimeUsageExec(ex batchExecer, device, source
 		existing.ReasoningOutputTokens += reas
 		existing.TotalTokens += total
 		existing.CostUSD += cost
+		existing.RequestCount++
 	}
 
 	if rows.Err() != nil {
@@ -143,7 +145,7 @@ func (m *Manager) QueryHourUsage(days int) ([]model.HourUsage, error) {
 	sqlText := `
 		SELECT device, source, usage_date, hour, model,
 			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-			reasoning_output_tokens, total_tokens, cost_usd
+			reasoning_output_tokens, total_tokens, cost_usd, request_count
 		FROM hour_usage`
 	var args []interface{}
 	if days > 0 {
@@ -163,7 +165,7 @@ func (m *Manager) QueryHourUsage(days int) ([]model.HourUsage, error) {
 		var r model.HourUsage
 		if err := rows.Scan(&r.Device, &r.Source, &r.UsageDate, &r.Hour, &r.Model,
 			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens,
-			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD,
+			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD, &r.RequestCount,
 		); err != nil {
 			return nil, err
 		}

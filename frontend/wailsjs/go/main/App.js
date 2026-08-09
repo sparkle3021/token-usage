@@ -50,6 +50,10 @@ export function GetDevices() {
   return window['go']['main']['App']['GetDevices']();
 }
 
+export function GetModelRanking() {
+  return window['go']['main']['App']['GetModelRanking']();
+}
+
 export function GetProviderSchemas() {
   return window['go']['main']['App']['GetProviderSchemas']();
 }

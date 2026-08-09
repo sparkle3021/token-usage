@@ -86,6 +86,7 @@ export namespace model {
 	    reasoningOutputTokens: number;
 	    totalTokens: number;
 	    costUSD: number;
+	    requestCount: number;
 	    pricingLockedAt?: string;
 	    projectPath?: string;
 	
@@ -106,6 +107,7 @@ export namespace model {
 	        this.reasoningOutputTokens = source["reasoningOutputTokens"];
 	        this.totalTokens = source["totalTokens"];
 	        this.costUSD = source["costUSD"];
+	        this.requestCount = source["requestCount"];
 	        this.pricingLockedAt = source["pricingLockedAt"];
 	        this.projectPath = source["projectPath"];
 	    }
@@ -211,6 +213,7 @@ export namespace model {
 	    reasoningOutputTokens: number;
 	    totalTokens: number;
 	    costUSD: number;
+	    requestCount: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new HourUsage(source);
@@ -230,6 +233,7 @@ export namespace model {
 	        this.reasoningOutputTokens = source["reasoningOutputTokens"];
 	        this.totalTokens = source["totalTokens"];
 	        this.costUSD = source["costUSD"];
+	        this.requestCount = source["requestCount"];
 	    }
 	}
 	export class ImportResult {
@@ -250,6 +254,24 @@ export namespace model {
 	        this.sessions = source["sessions"];
 	        this.devices = source["devices"];
 	        this.importedAt = source["importedAt"];
+	    }
+	}
+	export class ModelRanking {
+	    model: string;
+	    totalTokens: number;
+	    costUSD: number;
+	    requestCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelRanking(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.model = source["model"];
+	        this.totalTokens = source["totalTokens"];
+	        this.costUSD = source["costUSD"];
+	        this.requestCount = source["requestCount"];
 	    }
 	}
 	export class PricingUpdateResult {

@@ -10,6 +10,7 @@ import { ArrowLeftIcon } from 'lucide-react';
 import { getModelIconUrl, getSourceColor } from '@/lib/iconMap.js';
 import { oklchToHex } from '@/lib/oklch.js';
 import { compact, numFmt } from '@/lib/formatters.js';
+import * as api from '@/api/client.js';
 import KPI from '@/components/common/KPI.jsx';
 import useECharts, { getChartTheme } from '@/lib/useECharts.js';
 
@@ -55,16 +56,16 @@ function resolveRange(id, custom) {
   }
 }
 
-// ── 模拟数据（待后端接口接入后移除） ──────────────────────────
-const MOCK_MODELS = [
-  { name: 'DeepSeek-V4-Flash', totalTokens: 201_220_000 },
-  { name: 'Claude Sonnet 4.6', totalTokens: 158_300_000 },
-  { name: 'Gemini 2.5 Pro', totalTokens: 96_450_000 },
-  { name: 'GPT-5', totalTokens: 52_120_000 },
-  { name: 'Qwen3-Max', totalTokens: 18_760_000 },
-  { name: 'Grok 4', totalTokens: 7_320_000 },
-  { name: 'Kimi K2', totalTokens: 1_580_000 },
-  { name: 'GLM-4.6', totalTokens: 640_000 },
+// 浏览器模式（无 Wails 运行时 window.go）兜底数据，字段对齐 GetModelRanking 接口
+const MOCK_RANKING = [
+  { model: 'DeepSeek-V4-Flash', totalTokens: 201_220_000, costUSD: 12.34, requestCount: 3421 },
+  { model: 'Claude Sonnet 4.6', totalTokens: 158_300_000, costUSD: 9.87, requestCount: 2810 },
+  { model: 'Gemini 2.5 Pro', totalTokens: 96_450_000, costUSD: 6.52, requestCount: 1950 },
+  { model: 'GPT-5', totalTokens: 52_120_000, costUSD: 4.21, requestCount: 1120 },
+  { model: 'Qwen3-Max', totalTokens: 18_760_000, costUSD: 1.05, requestCount: 640 },
+  { model: 'Grok 4', totalTokens: 7_320_000, costUSD: 0.82, requestCount: 310 },
+  { model: 'Kimi K2', totalTokens: 1_580_000, costUSD: 0.09, requestCount: 120 },
+  { model: 'GLM-4.6', totalTokens: 640_000, costUSD: 0.03, requestCount: 45 },
 ];
 
 // 前三名排名徽章配色：红/蓝/绿三色相分离，明暗主题下均醒目
@@ -347,38 +348,76 @@ function ModelDetail({ model, onBack }) {
 
 /** 排行列表视图 */
 function RankList({ onSelect }) {
-  const ranked = useMemo(() => [...MOCK_MODELS].sort((a, b) => b.totalTokens - a.totalTokens), []);
+  const [ranking, setRanking] = useState(null);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  // 浏览器 dev 模式无 Wails 运行时（window.go 不存在），回退 mock 保证纯前端预览可用
+  const hasApi = typeof window !== 'undefined' && !!window.go?.main?.App?.GetModelRanking;
+
+  useEffect(() => {
+    if (!hasApi) { setRanking(MOCK_RANKING); return; }
+    let cancelled = false;
+    setRanking(null);
+    setError(null);
+    api.getModelRanking()
+      .then(list => { if (!cancelled) setRanking(Array.isArray(list) ? list : []); })
+      .catch(err => { if (!cancelled) setError(String(err)); });
+    return () => { cancelled = true; };
+  }, [hasApi, reloadKey]);
+
+  const loading = hasApi && ranking === null && !error;
+  const list = useMemo(() => [...(ranking ?? [])].sort((a, b) => b.totalTokens - a.totalTokens), [ranking]);
+
   return (
     <div className="flex flex-col gap-4 h-full min-h-0">
       <h2 className="text-sm font-semibold">模型排行</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {ranked.map((m, i) => (
-          <Card
-            key={m.name}
-            className="relative overflow-hidden cursor-pointer transition-shadow hover:shadow-md"
-            styles={{ body: { padding: 16 } }}
-            onClick={() => onSelect(m.name)}
-          >
-            <img
-              src={getModelIconUrl(m.name)}
-              alt=""
-              aria-hidden="true"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-[88%] w-auto max-w-[55%] object-contain opacity-[0.08] brightness-0 dark:opacity-[0.18] dark:brightness-0 dark:invert"
-            />
-            <div className="relative z-10 flex flex-col gap-6">
-              <div className="flex items-center gap-2">
-                <span className={`flex items-center justify-center h-6 min-w-6 px-1.5 rounded-md text-xs font-bold tabular-nums ${RANK_BADGE[i] || 'bg-muted text-muted-foreground'}`}>
-                  #{i + 1}
-                </span>
-                <span className="text-sm font-semibold truncate">{m.name}</span>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i} styles={{ body: { padding: 16 } }}>
+              <Skeleton active paragraph={{ rows: 2 }} />
+            </Card>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+          <p className="text-sm">排行数据加载失败：{error}</p>
+          <Button size="small" onClick={() => setReloadKey(k => k + 1)}>重试</Button>
+        </div>
+      ) : list.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+          <p className="text-sm">暂无模型数据</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {list.map((m, i) => (
+            <Card
+              key={m.model}
+              className="relative overflow-hidden cursor-pointer transition-shadow hover:shadow-md"
+              styles={{ body: { padding: 16 } }}
+              onClick={() => onSelect(m.model)}
+            >
+              <img
+                src={getModelIconUrl(m.model)}
+                alt=""
+                aria-hidden="true"
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-[88%] w-auto max-w-[55%] object-contain opacity-[0.08] brightness-0 dark:opacity-[0.18] dark:brightness-0 dark:invert"
+              />
+              <div className="relative z-10 flex flex-col gap-6">
+                <div className="flex items-center gap-2">
+                  <span className={`flex items-center justify-center h-6 min-w-6 px-1.5 rounded-md text-xs font-bold tabular-nums ${RANK_BADGE[i] || 'bg-muted text-muted-foreground'}`}>
+                    #{i + 1}
+                  </span>
+                  <span className="text-sm font-semibold truncate">{m.model}</span>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold tabular-nums leading-none">{fmtUsage(m.totalTokens)}</div>
+                </div>
               </div>
-              <div>
-                <div className="text-2xl font-bold tabular-nums leading-none">{fmtUsage(m.totalTokens)}</div>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

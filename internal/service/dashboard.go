@@ -100,6 +100,20 @@ func (s *DashboardService) GetDashboardData() *model.DashboardData {
 	return result
 }
 
+// GetModelRanking 返回按模型聚合的用量排行，供模型排行页渲染。
+func (s *DashboardService) GetModelRanking() []model.ModelRanking {
+	if s.db == nil {
+		log.Printf("[service] GetModelRanking db=nil")
+		return []model.ModelRanking{}
+	}
+	ranking, err := s.db.QueryModelRanking()
+	if err != nil {
+		log.Printf("[service] GetModelRanking err=%v", err)
+		return []model.ModelRanking{}
+	}
+	return ranking
+}
+
 // GetTimeSeriesData 获取时间序列数据，包含原始事件和小时聚合两层的用量。
 // 前端按 timeRows → hourRows → dailyRows 三级回退渲染趋势图。
 func (s *DashboardService) GetTimeSeriesData(days int) *model.TimeSeriesData {

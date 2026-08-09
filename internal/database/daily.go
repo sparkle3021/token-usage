@@ -25,8 +25,8 @@ func (m *Manager) bulkUpsertDailyExec(ex preparedExecer, rows []model.DailyUsage
 	return bulkExecPrepared(ex, rows, `
 		INSERT INTO daily_usage (device,source,usage_date,model,
 			input_tokens,output_tokens,cache_creation_tokens,cache_read_tokens,
-			reasoning_output_tokens,total_tokens,cost_usd,pricing_locked_at,updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,
+			reasoning_output_tokens,total_tokens,cost_usd,request_count,pricing_locked_at,updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,
 			CASE WHEN ?<date('now','localtime') THEN datetime('now','localtime') ELSE NULL END,
 			datetime('now','localtime'))
 		ON CONFLICT(device,source,usage_date,model) DO UPDATE SET
@@ -34,12 +34,13 @@ func (m *Manager) bulkUpsertDailyExec(ex preparedExecer, rows []model.DailyUsage
 			cache_creation_tokens=excluded.cache_creation_tokens, cache_read_tokens=excluded.cache_read_tokens,
 			reasoning_output_tokens=excluded.reasoning_output_tokens, total_tokens=excluded.total_tokens,
 			cost_usd=CASE WHEN daily_usage.usage_date<date('now','localtime') THEN daily_usage.cost_usd WHEN excluded.cost_usd=0 THEN daily_usage.cost_usd ELSE excluded.cost_usd END,
+			request_count=excluded.request_count,
 			pricing_locked_at=CASE WHEN daily_usage.usage_date<date('now','localtime') THEN COALESCE(daily_usage.pricing_locked_at,datetime('now','localtime')) ELSE NULL END,
 			updated_at=datetime('now','localtime')`,
 		func(r model.DailyUsage) []interface{} {
 			return []interface{}{r.Device, r.Source, r.UsageDate, r.Model,
 				r.InputTokens, r.OutputTokens, r.CacheCreationTokens, r.CacheReadTokens,
-				r.ReasoningOutputTokens, r.TotalTokens, r.CostUSD, r.UsageDate}
+				r.ReasoningOutputTokens, r.TotalTokens, r.CostUSD, r.RequestCount, r.UsageDate}
 		})
 }
 
@@ -64,7 +65,7 @@ func (m *Manager) QueryDaily() ([]model.DailyUsage, error) {
 	rows, err := m.db.Query(`
 		SELECT device, source, usage_date, model,
 			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-			reasoning_output_tokens, total_tokens, cost_usd
+			reasoning_output_tokens, total_tokens, cost_usd, request_count
 		FROM daily_usage
 		ORDER BY usage_date DESC
 	`)
@@ -78,13 +79,43 @@ func (m *Manager) QueryDaily() ([]model.DailyUsage, error) {
 		var r model.DailyUsage
 		if err := rows.Scan(&r.Device, &r.Source, &r.UsageDate, &r.Model,
 			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens,
-			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD,
+			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD, &r.RequestCount,
 		); err != nil {
 			return nil, err
 		}
 		results = append(results, r)
 	}
 	log.Printf("[db] QueryDaily rows=%d elapsed=%v", len(results), time.Since(start))
+	return results, rows.Err()
+}
+
+// QueryModelRanking 返回按模型聚合的用量排行（总用量/费用/请求次数），按总用量降序。
+// 空表返回空切片。
+func (m *Manager) QueryModelRanking() ([]model.ModelRanking, error) {
+	start := time.Now()
+	rows, err := m.db.Query(`
+		SELECT model,
+			SUM(total_tokens) AS total_tokens,
+			SUM(cost_usd) AS cost_usd,
+			SUM(request_count) AS request_count
+		FROM daily_usage
+		GROUP BY model
+		ORDER BY SUM(total_tokens) DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.ModelRanking
+	for rows.Next() {
+		var r model.ModelRanking
+		if err := rows.Scan(&r.Model, &r.TotalTokens, &r.CostUSD, &r.RequestCount); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	log.Printf("[db] QueryModelRanking rows=%d elapsed=%v", len(results), time.Since(start))
 	return results, rows.Err()
 }
 
@@ -115,6 +146,7 @@ func (m *Manager) BuildDailyFromHourUsage() error {
 		e.ReasoningOutputTokens += r.ReasoningOutputTokens
 		e.TotalTokens += r.TotalTokens
 		e.CostUSD += r.CostUSD
+		e.RequestCount += r.RequestCount
 	}
 
 	if len(acc) == 0 {

@@ -109,6 +109,10 @@ func (a *App) GetTimeSeriesData(days int) *model.TimeSeriesData {
 	return a.dashboardSvc.GetTimeSeriesData(days)
 }
 
+func (a *App) GetModelRanking() []model.ModelRanking {
+	return a.dashboardSvc.GetModelRanking()
+}
+
 // ---------------------------------------------------------------------------
 // Collection API
 // ---------------------------------------------------------------------------

@@ -203,6 +203,7 @@ func (m *Manager) initSchema() error {
 		reasoning_output_tokens INTEGER NOT NULL DEFAULT 0,
 		total_tokens INTEGER NOT NULL DEFAULT 0,
 		cost_usd REAL NOT NULL DEFAULT 0,
+		request_count INTEGER NOT NULL DEFAULT 0,
 		pricing_locked_at TEXT,
 		updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
 		PRIMARY KEY (device, source, usage_date, model)
@@ -309,6 +310,7 @@ func (m *Manager) initSchema() error {
 		reasoning_output_tokens INTEGER NOT NULL DEFAULT 0,
 		total_tokens INTEGER NOT NULL DEFAULT 0,
 		cost_usd REAL NOT NULL DEFAULT 0,
+		request_count INTEGER NOT NULL DEFAULT 0,
 		updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
 		PRIMARY KEY (device, source, usage_date, hour, model)
 	);
@@ -332,6 +334,9 @@ func (m *Manager) initSchema() error {
 	if err := m.migrateSessionModel(); err != nil {
 		log.Printf("[db] migrateSessionModel: %v", err)
 	}
+
+	m.db.Exec("ALTER TABLE hour_usage ADD COLUMN request_count INTEGER NOT NULL DEFAULT 0")
+	m.db.Exec("ALTER TABLE daily_usage ADD COLUMN request_count INTEGER NOT NULL DEFAULT 0")
 
 	m.migrateTotalTokens()
 	return nil

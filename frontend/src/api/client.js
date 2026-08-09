@@ -13,6 +13,11 @@ export function getTimeSeriesData(days) {
   return window.go.main.App.GetTimeSeriesData(days);
 }
 
+/** 获取模型维度聚合排行（总用量/费用/请求次数），对应 Go 后端 GetModelRanking */
+export function getModelRanking() {
+  return window.go.main.App.GetModelRanking();
+}
+
 /** 触发增量采集，返回 false 表示采集已在运行 */
 export function startCollection() {
   return window.go.main.App.StartCollection();
