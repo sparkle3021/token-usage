@@ -18,6 +18,11 @@ export function getModelRanking() {
   return window.go.main.App.GetModelRanking();
 }
 
+/** 获取单模型时间序列数据（日级 + 小时级），对应 Go 后端 GetModelSeries(model) */
+export function getModelSeries(model) {
+  return window.go.main.App.GetModelSeries(model);
+}
+
 /** 触发增量采集，返回 false 表示采集已在运行 */
 export function startCollection() {
   return window.go.main.App.StartCollection();

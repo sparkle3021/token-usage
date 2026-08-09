@@ -114,6 +114,30 @@ func (s *DashboardService) GetModelRanking() []model.ModelRanking {
 	return ranking
 }
 
+// GetModelSeries 返回单模型的日级 + 小时级时间序列数据，供模型详情页独立拉取。
+// hour 由 UTC 桶平移为本地日 + 本地小时（与 GetTimeSeriesData 一致）。
+func (s *DashboardService) GetModelSeries(modelName string) *model.ModelSeriesData {
+	if s.db == nil || modelName == "" {
+		log.Printf("[service] GetModelSeries db=nil or model empty")
+		return &model.ModelSeriesData{}
+	}
+	daily, err := s.db.QueryModelDaily(modelName)
+	if err != nil {
+		log.Printf("[service] GetModelSeries QueryModelDaily err=%v", err)
+		daily = nil
+	}
+	hour, err := s.db.QueryModelHour(modelName)
+	if err != nil {
+		log.Printf("[service] GetModelSeries QueryModelHour err=%v", err)
+		hour = nil
+	}
+	for i := range hour {
+		hour[i].UsageDate, hour[i].Hour = localizeUTCDateHour(hour[i].UsageDate, hour[i].Hour)
+	}
+	log.Printf("[service] GetModelSeries model=%s daily=%d hour=%d", modelName, len(daily), len(hour))
+	return &model.ModelSeriesData{Daily: daily, Hour: hour}
+}
+
 // GetTimeSeriesData 获取时间序列数据，包含原始事件和小时聚合两层的用量。
 // 前端按 timeRows → hourRows → dailyRows 三级回退渲染趋势图。
 func (s *DashboardService) GetTimeSeriesData(days int) *model.TimeSeriesData {

@@ -54,6 +54,10 @@ export function GetModelRanking() {
   return window['go']['main']['App']['GetModelRanking']();
 }
 
+export function GetModelSeries(arg1) {
+  return window['go']['main']['App']['GetModelSeries'](arg1);
+}
+
 export function GetProviderSchemas() {
   return window['go']['main']['App']['GetProviderSchemas']();
 }

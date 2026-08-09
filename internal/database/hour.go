@@ -174,3 +174,33 @@ func (m *Manager) QueryHourUsage(days int) ([]model.HourUsage, error) {
 	log.Printf("[db] QueryHourUsage rows=%d elapsed=%v", len(results), time.Since(start))
 	return results, rows.Err()
 }
+
+// QueryModelHour 返回指定模型的全量 hour_usage 行（UTC 桶，调用方负责本地化平移）。
+func (m *Manager) QueryModelHour(modelName string) ([]model.HourUsage, error) {
+	start := time.Now()
+	rows, err := m.db.Query(`
+		SELECT device, source, usage_date, hour, model,
+			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+			reasoning_output_tokens, total_tokens, cost_usd, request_count
+		FROM hour_usage
+		WHERE model = ?
+		ORDER BY usage_date DESC, hour ASC`, modelName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.HourUsage
+	for rows.Next() {
+		var r model.HourUsage
+		if err := rows.Scan(&r.Device, &r.Source, &r.UsageDate, &r.Hour, &r.Model,
+			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens,
+			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD, &r.RequestCount,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	log.Printf("[db] QueryModelHour model=%s rows=%d elapsed=%v", modelName, len(results), time.Since(start))
+	return results, rows.Err()
+}

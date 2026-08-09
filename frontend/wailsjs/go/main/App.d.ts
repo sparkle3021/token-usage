@@ -28,6 +28,8 @@ export function GetDevices():Promise<Array<model.DeviceInfo>>;
 
 export function GetModelRanking():Promise<Array<model.ModelRanking>>;
 
+export function GetModelSeries(arg1:string):Promise<model.ModelSeriesData>;
+
 export function GetProviderSchemas():Promise<Array<model.ProviderSchema>>;
 
 export function GetSettings():Promise<model.AppConfig>;

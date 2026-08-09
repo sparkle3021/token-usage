@@ -274,6 +274,38 @@ export namespace model {
 	        this.requestCount = source["requestCount"];
 	    }
 	}
+	export class ModelSeriesData {
+	    daily: DailyUsage[];
+	    hour: HourUsage[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelSeriesData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.daily = this.convertValues(source["daily"], DailyUsage);
+	        this.hour = this.convertValues(source["hour"], HourUsage);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class PricingUpdateResult {
 	    litellm: number;
 	    message: string;

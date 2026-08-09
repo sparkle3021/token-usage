@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, App } from 'antd';
-import { PlusIcon } from 'lucide-react';
+import { PlusIcon, RefreshCwIcon } from 'lucide-react';
 import {
   listQuotaConfigs, getProviderSchemas, createQuotaConfig, updateQuotaConfig,
   deleteQuotaConfig, fetchQuota,
@@ -14,6 +14,7 @@ export default function QuotaPage() {
   const [schemas, setSchemas] = useState([]);
   const [quotaData, setQuotaData] = useState({}); // configId → QuotaData
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [dlgOpen, setDlgOpen] = useState(false);
   const [editCfg, setEditCfg] = useState(null);
   const fetchIdRef = useRef(0);
@@ -129,6 +130,12 @@ export default function QuotaPage() {
 
   const handleAdd = () => { setEditCfg(null); setDlgOpen(true); };
 
+  // 全量刷新：重载配置并逐条拉取最新用量
+  const handleRefreshAll = () => {
+    setRefreshing(true);
+    Promise.resolve(refreshAll()).finally(() => setRefreshing(false));
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center h-64 text-sm text-muted-foreground">加载中…</div>
   );
@@ -137,9 +144,14 @@ export default function QuotaPage() {
     <div className="space-y-4 h-full min-h-0">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">用量查询</h2>
-        <Button type="primary" size="small" className="h-8 text-xs" onClick={handleAdd} icon={<PlusIcon className="size-3.5" />}>
-          添加用量查询
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="small" className="h-8 text-xs" onClick={handleRefreshAll} loading={refreshing} icon={<RefreshCwIcon className="size-3.5" />}>
+            刷新
+          </Button>
+          <Button type="primary" size="small" className="h-8 text-xs" onClick={handleAdd} icon={<PlusIcon className="size-3.5" />}>
+            添加用量查询
+          </Button>
+        </div>
       </div>
 
       {configs.length === 0 ? (

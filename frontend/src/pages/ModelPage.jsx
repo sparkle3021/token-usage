@@ -3,13 +3,12 @@
  * 点击卡片进入详情，展示请求次数 / Token / 费用；过滤行暂只保留「时间范围」下拉。
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, DatePicker, Select, Skeleton } from 'antd';
-import dayjs from 'dayjs';
-import { ArrowLeftIcon } from 'lucide-react';
+import { ArrowLeftIcon, RefreshCwIcon } from 'lucide-react';
 import { getModelIconUrl, getSourceColor } from '@/lib/iconMap.js';
 import { oklchToHex } from '@/lib/oklch.js';
-import { compact, numFmt } from '@/lib/formatters.js';
+import { compact, daysAgo, numFmt, rangeDates } from '@/lib/formatters.js';
 import * as api from '@/api/client.js';
 import KPI from '@/components/common/KPI.jsx';
 import useECharts, { getChartTheme } from '@/lib/useECharts.js';
@@ -35,24 +34,22 @@ const RANGE_OPTIONS = [
   { label: '全部', value: 'all' },
 ];
 
-// 解析时间维度 → { days, end }：days 数据点数；end 结束日期距今天的天数偏移（今天 0、昨天 1）
+// 解析时间维度 → 小时级（今天/昨天：{ isHourly, localDate }）或日级（{ isHourly, startDate, endDate }）
 function resolveRange(id, custom) {
   switch (id) {
-    case 'today': return { days: 1, end: 0 };
-    case 'yesterday': return { days: 1, end: 1 };
-    case 'last7': return { days: 7, end: 0 };
-    case 'last30': return { days: 30, end: 0 };
-    case 'last90': return { days: 90, end: 0 };
-    case 'all': return { days: 180, end: 0 };
+    case 'today': return { isHourly: true, localDate: daysAgo(0) };
+    case 'yesterday': return { isHourly: true, localDate: daysAgo(1) };
+    case 'last7': return { isHourly: false, startDate: daysAgo(6), endDate: daysAgo(0) };
+    case 'last30': return { isHourly: false, startDate: daysAgo(29), endDate: daysAgo(0) };
+    case 'last90': return { isHourly: false, startDate: daysAgo(89), endDate: daysAgo(0) };
+    case 'all': return { isHourly: false, startDate: daysAgo(179), endDate: daysAgo(0) };
     case 'custom': {
       if (custom?.[0] && custom?.[1]) {
-        const days = Math.max(1, custom[1].diff(custom[0], 'day') + 1);
-        const end = Math.max(0, Math.round((dayjs().endOf('day').valueOf() - custom[1].endOf('day').valueOf()) / 86400000));
-        return { days, end };
+        return { isHourly: false, startDate: custom[0].format('YYYY-MM-DD'), endDate: custom[1].format('YYYY-MM-DD') };
       }
-      return { days: 7, end: 0 };
+      return { isHourly: false, startDate: daysAgo(6), endDate: daysAgo(0) };
     }
-    default: return { days: 7, end: 0 };
+    default: return { isHourly: false, startDate: daysAgo(6), endDate: daysAgo(0) };
   }
 }
 
@@ -75,56 +72,77 @@ const RANK_BADGE = [
   'bg-emerald-500 text-white',
 ];
 
-// 确定性伪随机（seed 固定 → 每次渲染数据稳定）
-function mulberry32(seed) {
-  return function () {
-    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+// 日级聚合：从 daily 按模型 + 日期区间聚合请求数/Token 三态/费用，缺失日期补 0
+function buildDailySeries(daily, model, startDate, endDate) {
+  const dates = rangeDates(startDate, endDate);
+  const map = new Map();
+  for (const r of daily) {
+    if (r.model !== model) continue;
+    const e = map.get(r.usageDate) || { requests: 0, inputCache: 0, inputNoCache: 0, output: 0, cost: 0 };
+    e.requests += r.requestCount || 0;
+    e.inputCache += r.cacheReadTokens || 0;
+    e.inputNoCache += r.inputTokens || 0;
+    e.output += r.outputTokens || 0;
+    e.cost += r.costUSD || 0;
+    map.set(r.usageDate, e);
+  }
+  const xData = dates;
+  const requests = [], inputCache = [], inputNoCache = [], output = [], cost = [];
+  for (const d of dates) {
+    const e = map.get(d);
+    requests.push(e?.requests ?? 0);
+    inputCache.push(e?.inputCache ?? 0);
+    inputNoCache.push(e?.inputNoCache ?? 0);
+    output.push(e?.output ?? 0);
+    cost.push(e?.cost ?? 0);
+  }
+  return { xData, requests, inputCache, inputNoCache, output, cost };
+}
+
+// 小时级聚合：从 hour 按模型 + 本地日聚合成 24 小时序列
+function buildHourlySeries(hour, model, localDate) {
+  const acc = Array.from({ length: 24 }, () => ({ requests: 0, inputCache: 0, inputNoCache: 0, output: 0, cost: 0 }));
+  for (const r of hour) {
+    if (r.model !== model || r.usageDate !== localDate) continue;
+    if (r.hour < 0 || r.hour > 23) continue;
+    const e = acc[r.hour];
+    e.requests += r.requestCount || 0;
+    e.inputCache += r.cacheReadTokens || 0;
+    e.inputNoCache += r.inputTokens || 0;
+    e.output += r.outputTokens || 0;
+    e.cost += r.costUSD || 0;
+  }
+  return {
+    xData: Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`),
+    requests: acc.map(e => e.requests),
+    inputCache: acc.map(e => e.inputCache),
+    inputNoCache: acc.map(e => e.inputNoCache),
+    output: acc.map(e => e.output),
+    cost: acc.map(e => e.cost),
   };
 }
 
-function hashSeed(name) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return h;
-}
-
-// 结束日期为今天前 endOffset 天，生成 days 个完整日期（x 轴显示时裁成 MM-DD）
-function genDates(days, endOffset = 0) {
-  const out = [];
-  const end = new Date(); end.setDate(end.getDate() - endOffset);
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(end); d.setDate(d.getDate() - i);
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-  }
-  return out;
-}
-
-// 24 小时标签（00:00 ~ 23:00）
-function genHourLabels() {
-  return Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
-}
-
-// 生成请求/三种 Token 状态/费用序列（带周期波动，视觉自然）。hourly 为小时粒度，数值量级更小
-function genSeries(days, seed, hourly = false) {
-  const rnd = mulberry32(seed);
+// 浏览器模式（无 window.go）详情兜底：生成简单稳定的 mock 序列
+function mockDetailSeries(model, range) {
+  const n = range.isHourly ? 24 : 30;
+  const xData = range.isHourly
+    ? Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`)
+    : Array.from({ length: n }, (_, i) => {
+        const d = new Date(); d.setDate(d.getDate() - (n - 1 - i));
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      });
+  const seed = [...model].reduce((a, c) => a + c.charCodeAt(0), 0) % 9;
+  const reqBase = range.isHourly ? 30 : 500;
   const requests = [], inputCache = [], inputNoCache = [], output = [], cost = [];
-  const base = hourly ? 20 + rnd() * 60 : 200 + rnd() * 800;
-  for (let i = 0; i < days; i++) {
-    const wave = Math.sin(i / 3.5) * 0.3;
-    const req = Math.max(5, Math.round(base * (1 + wave + (rnd() - 0.5) * 0.4)));
+  for (let i = 0; i < n; i++) {
+    const req = Math.max(5, Math.round(reqBase * (0.5 + 0.5 * Math.sin(i / 3 + seed))));
     requests.push(req);
-    const inC = Math.round(req * (1500 + rnd() * 5000));
-    const inN = Math.round(req * (800 + rnd() * 3000));
-    const out = Math.round(req * (1200 + rnd() * 4000));
-    inputCache.push(inC);
-    inputNoCache.push(inN);
-    output.push(out);
-    cost.push(+((inC + inN + out) * (0.0000015 + rnd() * 0.000004)).toFixed(4));
+    inputCache.push(req * 1500);
+    inputNoCache.push(req * 900);
+    output.push(req * 1300);
+    cost.push(+(req * 0.004).toFixed(2));
   }
-  return { requests, inputCache, inputNoCache, output, cost };
+  return { xData, requests, inputCache, inputNoCache, output, cost };
 }
 
 /** 单模型趋势图卡片（echarts 封装） */
@@ -195,12 +213,14 @@ function MiniTrendCard({ title, xData, values, color, valueFmt, areaColor, areaO
   );
 }
 
-/** Token 堆叠柱状图：输入（命中缓存）/ 输入（未命中缓存）/ 输出 */
+/** Token 堆叠柱状图：输出（底部）/ 输入（未命中缓存）/ 输入（命中缓存，顶部）——自下而上深到浅 */
 const TOKEN_SERIES = [
-  { key: 'inputCache', name: '输入（命中缓存）', color: '#aadafa' },
-  { key: 'inputNoCache', name: '输入（未命中缓存）', color: '#70b1f8' },
   { key: 'output', name: '输出', color: '#2d6feb' },
+  { key: 'inputNoCache', name: '输入（未命中缓存）', color: '#70b1f8' },
+  { key: 'inputCache', name: '输入（命中缓存）', color: '#aadafa' },
 ];
+// tooltip 展示顺序固定：命中缓存 → 未命中缓存 → 输出
+const TOOLTIP_ORDER = { '输入（命中缓存）': 0, '输入（未命中缓存）': 1, '输出': 2 };
 
 function TokenBarCard({ xData, inputCache, inputNoCache, output, hourly = false }) {
   const optionRef = useRef(null);
@@ -234,9 +254,10 @@ function TokenBarCard({ xData, inputCache, inputNoCache, output, hourly = false 
         confine: true,
         backgroundColor: 'transparent', borderWidth: 0, padding: 0,
         formatter: (params) => {
-          const date = spanLabel(params[0]?.axisValue ?? '');
-          const sum = params.reduce((s, p) => s + (p.value || 0), 0);
-          const rows = params.map(p => `
+          const ordered = [...params].sort((a, b) => TOOLTIP_ORDER[a.seriesName] - TOOLTIP_ORDER[b.seriesName]);
+          const date = spanLabel(ordered[0]?.axisValue ?? '');
+          const sum = ordered.reduce((s, p) => s + (p.value || 0), 0);
+          const rows = ordered.map(p => `
             <div class="flex items-center justify-between gap-6 mt-1">
               <span class="flex items-center gap-1.5">
                 <span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:${p.color}"></span>
@@ -282,26 +303,57 @@ function TokenBarCard({ xData, inputCache, inputNoCache, output, hourly = false 
 
 /** 模型详情视图 */
 function ModelDetail({ model, onBack }) {
+  // 浏览器 dev 模式无 Wails 运行时（window.go 不存在），详情回退 mock 序列
+  const hasApi = typeof window !== 'undefined' && !!window.go?.main?.App;
   const [rangeId, setRangeId] = useState('last7');
   const [customRange, setCustomRange] = useState(null);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(() => hasApi);
+  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const color = useMemo(() => oklchToHex(getSourceColor(model)), [model]);
 
-  const { days, end } = useMemo(() => resolveRange(rangeId, customRange), [rangeId, customRange]);
+  // 独立拉取该模型时间序列（日级 + 小时级）。silent 刷新保留旧数据，仅按钮转圈
+  const load = useCallback((silent = false) => {
+    if (!hasApi) { setData({ daily: [], hour: [] }); setError(null); setLoading(false); return; }
+    if (!silent) { setData(null); setError(null); setLoading(true); }
+    else setError(null);
+    setRefreshing(true);
+    api.getModelSeries(model)
+      .then(d => setData(d || { daily: [], hour: [] }))
+      .catch(err => { if (!silent) { setError(String(err)); setLoading(false); } })
+      .finally(() => { setRefreshing(false); if (!silent) setLoading(false); });
+  }, [hasApi, model]);
+
+  useEffect(() => { load(false); }, [load]);
 
   // 今天/昨天为小时维度（24 小时）
   const isHourly = rangeId === 'today' || rangeId === 'yesterday';
 
-  const { xData, requests, inputCache, inputNoCache, output, cost } = useMemo(() => {
-    const n = isHourly ? 24 : days;
-    const s = genSeries(n, hashSeed(model), isHourly);
-    return { xData: isHourly ? genHourLabels() : genDates(days, end), ...s };
-  }, [isHourly, days, end, model]);
+  const series = useMemo(() => {
+    if (loading || !data) return null;
+    const r = resolveRange(rangeId, customRange);
+    if (!hasApi) return mockDetailSeries(model, r);
+    if (r.isHourly) return buildHourlySeries(data.hour || [], model, r.localDate);
+    // 「全部」维度裁剪到该模型实际数据范围，避免数据范围外出现无意义空白（真实历史缺口仍保留）
+    let start = r.startDate, end = r.endDate;
+    if (rangeId === 'all') {
+      const dates = (data.daily || []).filter(x => x.model === model).map(x => x.usageDate).filter(Boolean);
+      if (dates.length) {
+        start = dates.reduce((a, b) => (a < b ? a : b));
+        end = dates.reduce((a, b) => (a > b ? a : b));
+      }
+    }
+    return buildDailySeries(data.daily || [], model, start, end);
+  }, [loading, data, hasApi, rangeId, customRange, model]);
 
+  const { xData, requests, inputCache, inputNoCache, output, cost } = series || { xData: [], requests: [], inputCache: [], inputNoCache: [], output: [], cost: [] };
   const totalReq = useMemo(() => requests.reduce((a, b) => a + b, 0), [requests]);
   const totalTok = useMemo(
     () => inputCache.reduce((a, b) => a + b, 0) + inputNoCache.reduce((a, b) => a + b, 0) + output.reduce((a, b) => a + b, 0),
     [inputCache, inputNoCache, output],
   );
+  const totalCost = useMemo(() => cost.reduce((a, b) => a + b, 0), [cost]);
 
   return (
     <div className="flex flex-col gap-4 h-full min-h-0">
@@ -328,20 +380,50 @@ function ModelDetail({ model, onBack }) {
               format="YYYY-MM-DD"
             />
           )}
+          {hasApi && (
+            <Button icon={<RefreshCwIcon className="size-4" />} onClick={() => load(true)} loading={refreshing}>
+              刷新
+            </Button>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <KPI label="请求次数" value={numFmt.format(totalReq)} />
-        <KPI label="Tokens" value={numFmt.format(totalTok)} />
-      </div>
+      {loading ? (
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[0, 1].map(i => (
+              <Card key={i} styles={{ body: { padding: 16 } }}>
+                <Skeleton active paragraph={{ rows: 2 }} />
+              </Card>
+            ))}
+          </div>
+          <Card styles={{ body: { padding: 16 } }}>
+            <Skeleton active paragraph={{ rows: 4 }} />
+          </Card>
+          <Card styles={{ body: { padding: 16 } }}>
+            <Skeleton active paragraph={{ rows: 4 }} />
+          </Card>
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+          <p className="text-sm">详情数据加载失败：{error}</p>
+          <Button size="small" onClick={() => load(false)}>重试</Button>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <KPI label="请求次数" value={numFmt.format(totalReq)} />
+            <KPI label="Tokens" value={numFmt.format(totalTok)} />
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <MiniTrendCard title="请求次数" xData={xData} values={requests} color={color} valueFmt={(v) => compact(v)} areaColor="#a1c6f9" areaOpacity={0.4} lineColor="#417ceb" tooltipLabel="请求次数" tooltipFmt={numFmt.format} hourly={isHourly} />
-        <TokenBarCard xData={xData} inputCache={inputCache} inputNoCache={inputNoCache} output={output} hourly={isHourly} />
-      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <MiniTrendCard title="请求次数" xData={xData} values={requests} color={color} valueFmt={(v) => compact(v)} areaColor="#a1c6f9" areaOpacity={0.4} lineColor="#417ceb" tooltipLabel="请求次数" tooltipFmt={numFmt.format} hourly={isHourly} />
+            <TokenBarCard xData={xData} inputCache={inputCache} inputNoCache={inputNoCache} output={output} hourly={isHourly} />
+          </div>
 
-      <MiniTrendCard title="费用" xData={xData} values={cost} color={oklchToHex('oklch(0.72 0.14 75)')} valueFmt={(v) => '$' + Number(v ?? 0).toFixed(2)} tooltipLabel="费用" tooltipFmt={(v) => '$' + Number(v ?? 0).toFixed(2)} hourly={isHourly} />
+          <MiniTrendCard title={`消费金额 $${totalCost.toFixed(2)}`} xData={xData} values={cost} color={oklchToHex('oklch(0.72 0.14 75)')} valueFmt={(v) => '$' + Number(v ?? 0).toFixed(2)} tooltipLabel="费用" tooltipFmt={(v) => '$' + Number(v ?? 0).toFixed(2)} hourly={isHourly} />
+        </>
+      )}
     </div>
   );
 }
@@ -350,27 +432,38 @@ function ModelDetail({ model, onBack }) {
 function RankList({ onSelect }) {
   const [ranking, setRanking] = useState(null);
   const [error, setError] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   // 浏览器 dev 模式无 Wails 运行时（window.go 不存在），回退 mock 保证纯前端预览可用
   const hasApi = typeof window !== 'undefined' && !!window.go?.main?.App?.GetModelRanking;
 
-  useEffect(() => {
-    if (!hasApi) { setRanking(MOCK_RANKING); return; }
-    let cancelled = false;
-    setRanking(null);
+  const load = useCallback((silent = false) => {
+    if (!hasApi) { setRanking(MOCK_RANKING); setError(null); return; }
+    // silent 刷新保留旧数据（仅按钮 loading），避免骨架屏闪烁；首次/重试清空显示骨架
+    if (!silent) setRanking(null);
     setError(null);
+    setRefreshing(true);
     api.getModelRanking()
-      .then(list => { if (!cancelled) setRanking(Array.isArray(list) ? list : []); })
-      .catch(err => { if (!cancelled) setError(String(err)); });
-    return () => { cancelled = true; };
-  }, [hasApi, reloadKey]);
+      .then(list => setRanking(Array.isArray(list) ? list : []))
+      .catch(err => { if (!silent) setError(String(err)); })
+      .finally(() => setRefreshing(false));
+  }, [hasApi]);
+
+  useEffect(() => { load(false); }, [load]);
 
   const loading = hasApi && ranking === null && !error;
   const list = useMemo(() => [...(ranking ?? [])].sort((a, b) => b.totalTokens - a.totalTokens), [ranking]);
 
   return (
     <div className="flex flex-col gap-4 h-full min-h-0">
-      <h2 className="text-sm font-semibold">模型排行</h2>
+      {/* 基础骨架：标题固定渲染，不随数据状态变化 */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">模型排行</h2>
+        {hasApi && (
+          <Button size="small" className="h-7" icon={<RefreshCwIcon className="size-3.5" />} onClick={() => load(true)} loading={refreshing}>
+            刷新
+          </Button>
+        )}
+      </div>
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -382,7 +475,7 @@ function RankList({ onSelect }) {
       ) : error ? (
         <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
           <p className="text-sm">排行数据加载失败：{error}</p>
-          <Button size="small" onClick={() => setReloadKey(k => k + 1)}>重试</Button>
+          <Button size="small" onClick={() => load(false)}>重试</Button>
         </div>
       ) : list.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">

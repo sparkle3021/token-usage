@@ -76,6 +76,12 @@ type TimeSeriesData struct {
 	DeviceNames map[string]string `json:"deviceNames"`
 }
 
+// ModelSeriesData 单模型时间序列数据（日级 + 小时级），供模型详情页独立拉取。
+type ModelSeriesData struct {
+	Daily []DailyUsage `json:"daily"`
+	Hour  []HourUsage  `json:"hour"`
+}
+
 type CollectStatus struct {
 	Status     string  `json:"status"`
 	Message    string  `json:"message"`

@@ -119,6 +119,36 @@ func (m *Manager) QueryModelRanking() ([]model.ModelRanking, error) {
 	return results, rows.Err()
 }
 
+// QueryModelDaily 返回指定模型的全量 daily_usage 行（本地日语义），供模型详情页。
+func (m *Manager) QueryModelDaily(modelName string) ([]model.DailyUsage, error) {
+	start := time.Now()
+	rows, err := m.db.Query(`
+		SELECT device, source, usage_date, model,
+			input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+			reasoning_output_tokens, total_tokens, cost_usd, request_count
+		FROM daily_usage
+		WHERE model = ?
+		ORDER BY usage_date DESC`, modelName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.DailyUsage
+	for rows.Next() {
+		var r model.DailyUsage
+		if err := rows.Scan(&r.Device, &r.Source, &r.UsageDate, &r.Model,
+			&r.InputTokens, &r.OutputTokens, &r.CacheCreationTokens, &r.CacheReadTokens,
+			&r.ReasoningOutputTokens, &r.TotalTokens, &r.CostUSD, &r.RequestCount,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	log.Printf("[db] QueryModelDaily model=%s rows=%d elapsed=%v", modelName, len(results), time.Since(start))
+	return results, rows.Err()
+}
+
 // BuildDailyFromHourUsage 从 hour_usage 重建 daily_usage（权威聚合层投影）。
 // 每个 UTC 小时桶按本机时区平移为本地 (date, hour) 后按本地日期聚合，
 // 使 daily_usage.usage_date 为本地日语义，与展示层及直写来源（Hermes/CC-Switch rollup）对齐。

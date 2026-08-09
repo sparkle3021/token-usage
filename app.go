@@ -113,6 +113,10 @@ func (a *App) GetModelRanking() []model.ModelRanking {
 	return a.dashboardSvc.GetModelRanking()
 }
 
+func (a *App) GetModelSeries(modelName string) *model.ModelSeriesData {
+	return a.dashboardSvc.GetModelSeries(modelName)
+}
+
 // ---------------------------------------------------------------------------
 // Collection API
 // ---------------------------------------------------------------------------
