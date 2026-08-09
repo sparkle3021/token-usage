@@ -3,116 +3,126 @@
  * 统一错误处理、便于 mock 和后续协议切换。
  */
 
+/**
+ * 统一调用入口：安全探测 Wails 运行时（window.go?.main?.App）。
+ * 无运行时（浏览器 dev 模式）返回 rejected Promise，避免访问 window.go.main 同步 throw 导致页面白屏。
+ */
+function invoke(name, ...args) {
+  const app = window.go?.main?.App;
+  if (!app) {
+    return Promise.reject(new Error('Wails 运行时不可用，请在桌面应用中打开'));
+  }
+  return app[name](...args);
+}
+
 /** 获取仪表盘汇总数据，对应 Go 后端 GetDashboardData */
 export function getDashboardData() {
-  return window.go.main.App.GetDashboardData();
+  return invoke('GetDashboardData');
 }
 
 /** 获取时间序列数据（原始事件 + 小时聚合），对应 Go 后端 GetTimeSeriesData(days) */
 export function getTimeSeriesData(days) {
-  return window.go.main.App.GetTimeSeriesData(days);
+  return invoke('GetTimeSeriesData', days);
 }
 
 /** 获取模型维度聚合排行（总用量/费用/请求次数），对应 Go 后端 GetModelRanking */
 export function getModelRanking() {
-  return window.go.main.App.GetModelRanking();
+  return invoke('GetModelRanking');
 }
 
 /** 获取单模型时间序列数据（日级 + 小时级），对应 Go 后端 GetModelSeries(model) */
 export function getModelSeries(model) {
-  return window.go.main.App.GetModelSeries(model);
+  return invoke('GetModelSeries', model);
 }
 
 /** 触发增量采集，返回 false 表示采集已在运行 */
 export function startCollection() {
-  return window.go.main.App.StartCollection();
+  return invoke('StartCollection');
 }
 
 /** 触发全量采集，忽略增量检查点 */
 export function startFullCollection() {
-  return window.go.main.App.StartFullCollection();
+  return invoke('StartFullCollection');
 }
 
 /** 查询采集状态，前端轮询用 */
 export function collectStatus() {
-  return window.go.main.App.CollectStatus();
+  return invoke('CollectStatus');
 }
 
 /** 清除所有用量数据和采集历史 */
 export function clearAllData() {
-  return window.go.main.App.ClearAllData();
+  return invoke('ClearAllData');
 }
 
 /** 设置自动同步间隔（分钟），≤0 禁用 */
 export function setAutoSyncInterval(minutes) {
-  return window.go.main.App.SetAutoSyncInterval(minutes);
+  return invoke('SetAutoSyncInterval', minutes);
 }
 
 /** 获取当前自动同步间隔 */
 export function getAutoSyncInterval() {
-  return window.go.main.App.GetAutoSyncInterval();
+  return invoke('GetAutoSyncInterval');
 }
 
 /** 查询当前正在运行的操作名称（"collection"/"cc-import"/"clear-data"/""） */
 export function currentOp() {
-  return window.go.main.App.CurrentOp();
+  return invoke('CurrentOp');
 }
 
 /** 获取应用设置 */
 export function getSettings() {
-  return window.go.main.App.GetSettings();
+  return invoke('GetSettings');
 }
 
 /** 保存应用设置 */
 export function saveSettings(cfg) {
-  return window.go.main.App.SaveSettings(cfg);
+  return invoke('SaveSettings', cfg);
 }
 
 /** 从远程源更新定价数据 */
 export function updatePricing() {
-  return window.go.main.App.UpdatePricing();
+  return invoke('UpdatePricing');
 }
 
 /** 检测默认 CC-Switch 数据库路径是否存在 */
 export function detectCCSwitchDB() {
-  return window.go.main.App.DetectCCSwitchDB();
+  return invoke('DetectCCSwitchDB');
 }
 
 // ── 设备 API ──
 
 /** 获取设备注册表（device_id → hostname/display_name/is_local） */
-export function getDevices() { return window.go.main.App.GetDevices(); }
+export function getDevices() { return invoke('GetDevices'); }
 
 /** 重命名设备展示名 */
-export function renameDevice(deviceId, displayName) { return window.go.main.App.RenameDevice(deviceId, displayName); }
+export function renameDevice(deviceId, displayName) { return invoke('RenameDevice', deviceId, displayName); }
 
 /** 导出用量数据到 JSON 文件，返回保存路径（取消返回空串） */
-export function exportData() { return window.go.main.App.ExportData(); }
+export function exportData() { return invoke('ExportData'); }
 
 /** 从导出 JSON 文件导入用量数据，返回合并规模（取消返回 null） */
-export function importData() { return window.go.main.App.ImportData(); }
+export function importData() { return invoke('ImportData'); }
 
 // ── 用量查询 API ──
 
 /** 获取所有用量查询配置 */
-export function listQuotaConfigs() { return window.go.main.App.ListQuotaConfigs(); }
+export function listQuotaConfigs() { return invoke('ListQuotaConfigs'); }
 
 /** 获取所有供应商 schema */
-export function getProviderSchemas() { return window.go.main.App.GetProviderSchemas(); }
+export function getProviderSchemas() { return invoke('GetProviderSchemas'); }
 
 /** 创建用量查询配置 */
-export function createQuotaConfig(cfg) { return window.go.main.App.CreateQuotaConfig(cfg); }
+export function createQuotaConfig(cfg) { return invoke('CreateQuotaConfig', cfg); }
 
 /** 修改用量查询配置 */
-export function updateQuotaConfig(cfg) { return window.go.main.App.UpdateQuotaConfig(cfg); }
+export function updateQuotaConfig(cfg) { return invoke('UpdateQuotaConfig', cfg); }
 
 /** 删除用量查询配置 */
-export function deleteQuotaConfig(id) { return window.go.main.App.DeleteQuotaConfig(id); }
+export function deleteQuotaConfig(id) { return invoke('DeleteQuotaConfig', id); }
 
 /** 拉取单个用量数据 */
-export function fetchQuota(id) { return window.go.main.App.FetchQuota(id); }
+export function fetchQuota(id) { return invoke('FetchQuota', id); }
 
 /** 并发拉取所有用量数据 */
-export function fetchAllQuota() { return window.go.main.App.FetchAllQuota(); }
-
-
+export function fetchAllQuota() { return invoke('FetchAllQuota'); }

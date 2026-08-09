@@ -1,5 +1,5 @@
 /**
- * 模型排行页：按总用量排名的模型卡片列表 + 模型详情视图（当前为纯前端模拟数据）。
+ * 模型排行页：按总用量排名的模型卡片列表 + 模型详情视图（后端真实数据）。
  * 点击卡片进入详情，展示请求次数 / Token / 费用；过滤行暂只保留「时间范围」下拉。
  */
 
@@ -52,18 +52,6 @@ function resolveRange(id, custom) {
     default: return { isHourly: false, startDate: daysAgo(6), endDate: daysAgo(0) };
   }
 }
-
-// 浏览器模式（无 Wails 运行时 window.go）兜底数据，字段对齐 GetModelRanking 接口
-const MOCK_RANKING = [
-  { model: 'DeepSeek-V4-Flash', totalTokens: 201_220_000, costUSD: 12.34, requestCount: 3421 },
-  { model: 'Claude Sonnet 4.6', totalTokens: 158_300_000, costUSD: 9.87, requestCount: 2810 },
-  { model: 'Gemini 2.5 Pro', totalTokens: 96_450_000, costUSD: 6.52, requestCount: 1950 },
-  { model: 'GPT-5', totalTokens: 52_120_000, costUSD: 4.21, requestCount: 1120 },
-  { model: 'Qwen3-Max', totalTokens: 18_760_000, costUSD: 1.05, requestCount: 640 },
-  { model: 'Grok 4', totalTokens: 7_320_000, costUSD: 0.82, requestCount: 310 },
-  { model: 'Kimi K2', totalTokens: 1_580_000, costUSD: 0.09, requestCount: 120 },
-  { model: 'GLM-4.6', totalTokens: 640_000, costUSD: 0.03, requestCount: 45 },
-];
 
 // 前三名排名徽章配色：红/蓝/绿三色相分离，明暗主题下均醒目
 const RANK_BADGE = [
@@ -120,29 +108,6 @@ function buildHourlySeries(hour, model, localDate) {
     output: acc.map(e => e.output),
     cost: acc.map(e => e.cost),
   };
-}
-
-// 浏览器模式（无 window.go）详情兜底：生成简单稳定的 mock 序列
-function mockDetailSeries(model, range) {
-  const n = range.isHourly ? 24 : 30;
-  const xData = range.isHourly
-    ? Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`)
-    : Array.from({ length: n }, (_, i) => {
-        const d = new Date(); d.setDate(d.getDate() - (n - 1 - i));
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      });
-  const seed = [...model].reduce((a, c) => a + c.charCodeAt(0), 0) % 9;
-  const reqBase = range.isHourly ? 30 : 500;
-  const requests = [], inputCache = [], inputNoCache = [], output = [], cost = [];
-  for (let i = 0; i < n; i++) {
-    const req = Math.max(5, Math.round(reqBase * (0.5 + 0.5 * Math.sin(i / 3 + seed))));
-    requests.push(req);
-    inputCache.push(req * 1500);
-    inputNoCache.push(req * 900);
-    output.push(req * 1300);
-    cost.push(+(req * 0.004).toFixed(2));
-  }
-  return { xData, requests, inputCache, inputNoCache, output, cost };
 }
 
 /** 单模型趋势图卡片（echarts 封装） */
@@ -303,19 +268,16 @@ function TokenBarCard({ xData, inputCache, inputNoCache, output, hourly = false 
 
 /** 模型详情视图 */
 function ModelDetail({ model, onBack }) {
-  // 浏览器 dev 模式无 Wails 运行时（window.go 不存在），详情回退 mock 序列
-  const hasApi = typeof window !== 'undefined' && !!window.go?.main?.App;
   const [rangeId, setRangeId] = useState('last7');
   const [customRange, setCustomRange] = useState(null);
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(() => hasApi);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const color = useMemo(() => oklchToHex(getSourceColor(model)), [model]);
 
   // 独立拉取该模型时间序列（日级 + 小时级）。silent 刷新保留旧数据，仅按钮转圈
   const load = useCallback((silent = false) => {
-    if (!hasApi) { setData({ daily: [], hour: [] }); setError(null); setLoading(false); return; }
     if (!silent) { setData(null); setError(null); setLoading(true); }
     else setError(null);
     setRefreshing(true);
@@ -323,7 +285,7 @@ function ModelDetail({ model, onBack }) {
       .then(d => setData(d || { daily: [], hour: [] }))
       .catch(err => { if (!silent) { setError(String(err)); setLoading(false); } })
       .finally(() => { setRefreshing(false); if (!silent) setLoading(false); });
-  }, [hasApi, model]);
+  }, [model]);
 
   useEffect(() => { load(false); }, [load]);
 
@@ -333,7 +295,6 @@ function ModelDetail({ model, onBack }) {
   const series = useMemo(() => {
     if (loading || !data) return null;
     const r = resolveRange(rangeId, customRange);
-    if (!hasApi) return mockDetailSeries(model, r);
     if (r.isHourly) return buildHourlySeries(data.hour || [], model, r.localDate);
     // 「全部」维度裁剪到该模型实际数据范围，避免数据范围外出现无意义空白（真实历史缺口仍保留）
     let start = r.startDate, end = r.endDate;
@@ -345,7 +306,7 @@ function ModelDetail({ model, onBack }) {
       }
     }
     return buildDailySeries(data.daily || [], model, start, end);
-  }, [loading, data, hasApi, rangeId, customRange, model]);
+  }, [loading, data, rangeId, customRange, model]);
 
   const { xData, requests, inputCache, inputNoCache, output, cost } = series || { xData: [], requests: [], inputCache: [], inputNoCache: [], output: [], cost: [] };
   const totalReq = useMemo(() => requests.reduce((a, b) => a + b, 0), [requests]);
@@ -380,11 +341,9 @@ function ModelDetail({ model, onBack }) {
               format="YYYY-MM-DD"
             />
           )}
-          {hasApi && (
-            <Button icon={<RefreshCwIcon className="size-4" />} onClick={() => load(true)} loading={refreshing}>
-              刷新
-            </Button>
-          )}
+          <Button icon={<RefreshCwIcon className="size-4" />} onClick={() => load(true)} loading={refreshing}>
+            刷新
+          </Button>
         </div>
       </div>
 
@@ -433,11 +392,7 @@ function RankList({ onSelect }) {
   const [ranking, setRanking] = useState(null);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  // 浏览器 dev 模式无 Wails 运行时（window.go 不存在），回退 mock 保证纯前端预览可用
-  const hasApi = typeof window !== 'undefined' && !!window.go?.main?.App?.GetModelRanking;
-
   const load = useCallback((silent = false) => {
-    if (!hasApi) { setRanking(MOCK_RANKING); setError(null); return; }
     // silent 刷新保留旧数据（仅按钮 loading），避免骨架屏闪烁；首次/重试清空显示骨架
     if (!silent) setRanking(null);
     setError(null);
@@ -446,11 +401,11 @@ function RankList({ onSelect }) {
       .then(list => setRanking(Array.isArray(list) ? list : []))
       .catch(err => { if (!silent) setError(String(err)); })
       .finally(() => setRefreshing(false));
-  }, [hasApi]);
+  }, []);
 
   useEffect(() => { load(false); }, [load]);
 
-  const loading = hasApi && ranking === null && !error;
+  const loading = ranking === null && !error;
   const list = useMemo(() => [...(ranking ?? [])].sort((a, b) => b.totalTokens - a.totalTokens), [ranking]);
 
   return (
@@ -458,11 +413,9 @@ function RankList({ onSelect }) {
       {/* 基础骨架：标题固定渲染，不随数据状态变化 */}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">模型排行</h2>
-        {hasApi && (
-          <Button size="small" className="h-7" icon={<RefreshCwIcon className="size-3.5" />} onClick={() => load(true)} loading={refreshing}>
-            刷新
-          </Button>
-        )}
+        <Button size="small" className="h-7" icon={<RefreshCwIcon className="size-3.5" />} onClick={() => load(true)} loading={refreshing}>
+          刷新
+        </Button>
       </div>
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
