@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -52,45 +53,115 @@ func (c *ClaudeCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*
 	roots := getClaudeRoots()
 	log.Printf("[collector] ClaudeCode roots=%v", roots)
 
-	// Collect all file paths for cache check
+	// Collect all file paths for cache check（每目录只 walk 一次，结果按目录分组
+	// 供 scanAndParse 复用，避免重复遍历）
+	type dirFiles struct {
+		dir   string
+		files []string
+	}
+	var groups []dirFiles
 	var allFiles []string
 	for _, root := range roots {
-		projectsDir := filepath.Join(root, "projects")
-		if info, err := os.Stat(projectsDir); err == nil && info.IsDir() {
-			allFiles = append(allFiles, CollectJSONLFiles(projectsDir)...)
-		}
-		transcriptsDir := filepath.Join(root, "transcripts")
-		if info, err := os.Stat(transcriptsDir); err == nil && info.IsDir() {
-			allFiles = append(allFiles, CollectJSONLFiles(transcriptsDir)...)
+		for _, sub := range []string{"projects", "transcripts"} {
+			d := filepath.Join(root, sub)
+			if info, err := os.Stat(d); err == nil && info.IsDir() {
+				fs := CollectJSONLFiles(d)
+				groups = append(groups, dirFiles{dir: d, files: fs})
+				allFiles = append(allFiles, fs...)
+			}
 		}
 	}
 
-	// Pre-load cache from DB and check if unchanged
+	// 目录级 mtime 预过滤：按 jsonl 的**直接父目录**（workspace 会话目录）分组。
+	// 该目录 mtime 只在其中 jsonl 增删改时更新，因此"目录未变 ⇒ 组内文件全
+	// 未变"成立（Windows 目录 mtime 不反映更深层变化，不能按 projects 根预过滤）。
+	// 目录指纹直接以目录真实路径为 ParseCache 键（目录路径与文件路径不冲突，
+	// FileUnchanged/SetWithOffset 内部对键路径 stat 目录得到 mtime:size）；
+	// 文件级指纹仍是最终判定。
+	parentMap := make(map[string][]string) // jsonl 父目录 -> 文件列表
+	parentRoot := make(map[string]string)  // jsonl 父目录 -> projects/transcripts 根
+	for _, g := range groups {
+		for _, f := range g.files {
+			d := filepath.Dir(f)
+			parentMap[d] = append(parentMap[d], f)
+			parentRoot[d] = g.dir
+		}
+	}
+	dirPaths := make([]string, 0, len(parentMap))
+	for d := range parentMap {
+		dirPaths = append(dirPaths, d)
+	}
+
+	// Pre-load cache from DB（文件 + 目录指纹批量加载）
 	loadStart := time.Now()
-	c.cache.LoadFromDB(c.Source(), allFiles)
-	debuglog.Perf("ClaudeCode LoadFromDB files=%d elapsed=%v", len(allFiles), time.Since(loadStart))
+	allPaths := make([]string, 0, len(allFiles)+len(dirPaths))
+	allPaths = append(allPaths, allFiles...)
+	allPaths = append(allPaths, dirPaths...)
+	c.cache.LoadFromDB(c.Source(), allPaths)
+	debuglog.Perf("ClaudeCode LoadFromDB files=%d dirs=%d elapsed=%v", len(allFiles), len(dirPaths), time.Since(loadStart))
+
+	// 目录预过滤：只对"父目录 mtime 变化"的组做文件级检查。
+	// Windows 目录 stat 比文件 stat 慢（约 5-10 倍），并行执行摊薄成本。
 	checkStart := time.Now()
-	if c.cache.AllCached(allFiles) {
+	changedByRoot := make(map[string][]string) // root -> 需要解析的文件
+	var changedDirs []string                    // 目录 mtime 变化的父目录（需推进指纹）
+	skippedByDir := 0
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
+	for d, files := range parentMap {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(d string, files []string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if c.cache.FileUnchanged(d) {
+				mu.Lock()
+				skippedByDir += len(files)
+				mu.Unlock()
+				return // 父目录未变，整组跳过（零文件 stat）
+			}
+			mu.Lock()
+			changedDirs = append(changedDirs, d)
+			mu.Unlock()
+			root := parentRoot[d]
+			for _, f := range files {
+				if !c.cache.FileUnchanged(f) {
+					mu.Lock()
+					changedByRoot[root] = append(changedByRoot[root], f)
+					mu.Unlock()
+				}
+			}
+		}(d, files)
+	}
+	wg.Wait()
+
+	// 推进"变化目录"的指纹（未变目录指纹无需重写），使下次预过滤命中；
+	// Cached 路径在此自行落盘（引擎对 Cached 结果不会调用 PersistCache），
+	// 非 Cached 路径由引擎写库成功后统一落盘
+	for _, d := range changedDirs {
+		c.cache.SetWithOffset(d, nil, 0)
+	}
+	debuglog.Perf("ClaudeCode dir-prefilter parents=%d skippedFiles=%d changedFiles=%d elapsed=%v",
+		len(parentMap), skippedByDir, len(changedByRoot), time.Since(checkStart))
+
+	if len(changedByRoot) == 0 {
+		if err := c.cache.PersistPending(); err != nil {
+			log.Printf("[collector] ClaudeCode persist dir fingerprints error: %v", err)
+		}
 		debuglog.Perf("ClaudeCode AllCached hit files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 		log.Printf("[collector] ClaudeCode all files cached, skipping")
 		return &CollectResult{Device: c.Device(), Source: claudeSourceLabel, Cached: true}, nil
 	}
-	debuglog.Perf("ClaudeCode AllCached miss files=%d elapsed=%v", len(allFiles), time.Since(checkStart))
 
 	dailyMap := make(map[string]*dailyAgg)
 	sessionMap := make(map[string]*sessionAgg)
 	var events []EventRow
 
-	for _, root := range roots {
-		projectsDir := filepath.Join(root, "projects")
-		if info, err := os.Stat(projectsDir); err == nil && info.IsDir() {
-			log.Printf("[collector] ClaudeCode scanning projects dir=%s", projectsDir)
-			c.scanAndParse(projectsDir, dailyMap, sessionMap, &events, pricing)
-		}
-		transcriptsDir := filepath.Join(root, "transcripts")
-		if info, err := os.Stat(transcriptsDir); err == nil && info.IsDir() {
-			log.Printf("[collector] ClaudeCode scanning transcripts dir=%s", transcriptsDir)
-			c.scanAndParse(transcriptsDir, dailyMap, sessionMap, &events, pricing)
+	for _, g := range groups {
+		if files := changedByRoot[g.dir]; len(files) > 0 {
+			log.Printf("[collector] ClaudeCode scanning dir=%s files=%d", g.dir, len(files))
+			c.scanAndParse(g.dir, files, dailyMap, sessionMap, &events, pricing)
 		}
 	}
 
@@ -119,11 +190,10 @@ func (c *ClaudeCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*
 	return result, nil
 }
 
-func (c *ClaudeCodeCollector) scanAndParse(dir string,
+func (c *ClaudeCodeCollector) scanAndParse(dir string, files []string,
 	dailyMap map[string]*dailyAgg, sessionMap map[string]*sessionAgg,
 	events *[]EventRow, pricing TokenCalc,
 ) {
-	files := CollectJSONLFiles(dir)
 	recordCount := 0
 	parseStart := time.Now()
 	skippedFiles := 0

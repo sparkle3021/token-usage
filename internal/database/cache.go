@@ -2,6 +2,7 @@
 package database
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -92,6 +93,29 @@ func (m *Manager) GetParseCacheWithRecord(source, filePath string) (fingerprint 
 		return "", nil, false
 	}
 	return fingerprint, records, true
+}
+
+// ListParseCache 单次查询返回 source 的全部指纹条目（批量加载路径）。
+func (m *Manager) ListParseCache(source string) ([]ParseCacheEntry, error) {
+	rows, err := m.db.Query(`SELECT file_path, fingerprint, last_parsed_offset FROM parse_cache WHERE source = ?`, source)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var entries []ParseCacheEntry
+	for rows.Next() {
+		var e ParseCacheEntry
+		var fp sql.NullString
+		var off sql.NullInt64
+		if err := rows.Scan(&e.FilePath, &fp, &off); err != nil {
+			return nil, err
+		}
+		e.Source = source
+		e.Fingerprint = fp.String
+		e.LastOffset = off.Int64
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
 }
 
 func (m *Manager) DeleteParseCacheBySource(source string) error {

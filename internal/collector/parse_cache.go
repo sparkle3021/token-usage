@@ -60,6 +60,13 @@ type BatchPersistHandler interface {
 	SaveParseCacheBatch(entries []PersistEntry) error
 }
 
+// BatchLoadHandler 可选：支持批量加载的后端。ParseCache 检测到实现此接口时
+// 单次查询加载整个 source 的指纹，替代逐条 LoadParseCache（文件数千时
+// 逐条 SQL 是大头开销）。
+type BatchLoadHandler interface {
+	LoadParseCacheBatch(source string) ([]PersistEntry, error)
+}
+
 // PersistEntry 批量持久化的单条指纹。
 type PersistEntry struct {
 	Source     string
@@ -114,6 +121,7 @@ func (c *ParseCache) SetPersister(p PersistHandler, source string) {
 
 // LoadFromDB pre-populates the cache from the persistence backend.
 // Only fingerprints are stored; Records must be re-parsed on first access.
+// 后端支持 BatchLoadHandler 时单次查询加载整个 source，否则逐条回退。
 func (c *ParseCache) LoadFromDB(source string, paths []string) int {
 	if c.persister == nil {
 		return 0
@@ -121,6 +129,24 @@ func (c *ParseCache) LoadFromDB(source string, paths []string) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	loaded := 0
+
+	if bp, ok := c.persister.(BatchLoadHandler); ok {
+		entries, err := bp.LoadParseCacheBatch(source)
+		if err == nil {
+			for _, e := range entries {
+				if _, exists := c.store[e.FilePath]; !exists {
+					c.store[e.FilePath] = &cacheEntry{Fingerprint: e.Fingerprint, LastOffset: e.LastOffset}
+					loaded++
+				}
+			}
+			if loaded > 0 {
+				log.Printf("[cache] LoadFromDB batch source=%s loaded=%d paths=%d", source, loaded, len(paths))
+			}
+			return loaded
+		}
+		log.Printf("[cache] LoadFromDB batch error source=%s err=%v, fallback per-path", source, err)
+	}
+
 	for _, path := range paths {
 		fp, offset, ok := c.persister.LoadParseCache(source, path)
 		if ok {
