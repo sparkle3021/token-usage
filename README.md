@@ -2,13 +2,13 @@
 
 > 本地优先的 AI Token 消耗看板 —— 离线分析、零上传、多工具聚合。
 
-Token Dashboard 是一款桌面应用，直接读取本机 AI CLI 工具（Claude Code、Codex、Gemini CLI 等）的会话日志，聚合写入本地 SQLite 数据库，并结合 LiteLLM / OpenRouter 定价数据估算模型费用。
+Token Dashboard 是一款桌面应用，直接读取本机 AI CLI 工具（Claude Code、Codex、Gemini CLI、DeepSeek Harness 等）的会话日志，聚合写入本地 SQLite 数据库，并结合 LiteLLM / OpenRouter 定价数据估算模型费用。
 
 数据**全部存储在本地**，不联网、不上传、不依赖任何外部服务。
 
 ## ✨ 功能
 
-- **多工具聚合** —— 同时追踪 7 款 AI 编程工具的使用数据
+- **多工具聚合** —— 同时追踪 8 款 AI 编程工具的使用数据
 - **多维度统计** —— 按工具、模型、日期维度查看 Token 消耗和费用
 - **趋势图表** —— ECharts 折线/柱状图展示每日/每小时用量变化，支持日/周/月/年粒度聚合
 - **热力图** —— 按小时×星期的 Token 消耗密度热力图（最近一年窗口），点击日期可钻取小时级明细
@@ -20,6 +20,7 @@ Token Dashboard 是一款桌面应用，直接读取本机 AI CLI 工具（Claud
 - **自动采集** —— 定时自动同步（10 秒/30 秒/1 分钟/5 分钟/不同步，默认 30 秒）
 - **定价更新** —— 一键从 LiteLLM / OpenRouter 拉取最新模型定价
 - **CC-Switch 兼容** —— 支持从 CC-Switch 直接导入历史数据
+- **DeepSeek Harness 支持** —— zstd 分帧增量解析会话日志（`session.jsonl.zstd`），模型归属追踪、会话级聚合
 
 ## 📥 安装
 
