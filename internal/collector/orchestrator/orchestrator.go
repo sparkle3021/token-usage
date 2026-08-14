@@ -268,6 +268,11 @@ func (e *Engine) runCollection() {
 		}); ok {
 			s.SetStore(e.db)
 		}
+		if s, ok := col.(interface {
+			SetStore(collector.CheckpointStore)
+		}); ok {
+			s.SetStore(e.db)
+		}
 	}
 
 	// goroutine pool: parallel collect, sequential write

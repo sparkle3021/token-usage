@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -91,7 +92,15 @@ func (c *HermesCollector) Collect(ctx context.Context, pricing TokenCalc) (*Coll
 // OpenCode
 // ---------------------------------------------------------------------------
 
-type OpenCodeCollector struct{ DeviceIdentity }
+// ckOpencodeCursor 是 OpenCode 增量游标配置键：最后处理的 message.time_created（毫秒）。
+// 游标与写库一致性由引擎保证：事务提交成功后才调用 SavePendingCheckpoints 推进。
+const ckOpencodeCursor = "ck_opencode_cursor"
+
+type OpenCodeCollector struct {
+	DeviceIdentity
+	store         CheckpointStore
+	pendingCursor int64
+}
 
 func NewOpenCodeCollector() *OpenCodeCollector {
 	return &OpenCodeCollector{}
@@ -99,6 +108,26 @@ func NewOpenCodeCollector() *OpenCodeCollector {
 
 func (c *OpenCodeCollector) ID() string    { return "opencode" }
 func (c *OpenCodeCollector) Source() string { return "OpenCode" }
+
+// SetStore 注入检查点存储（database.Manager 实现），由 orchestrator 构造后调用。
+func (c *OpenCodeCollector) SetStore(store CheckpointStore) {
+	c.store = store
+}
+
+// ClearCache 删除增量游标，配合引擎 forceFull 触发全量重扫。
+func (c *OpenCodeCollector) ClearCache() {
+	if c.store != nil {
+		c.store.DeleteCheckpointsByPrefix("ck_opencode_")
+	}
+}
+
+// SavePendingCheckpoints 持久化暂存游标（引擎在写库事务成功后调用）。
+func (c *OpenCodeCollector) SavePendingCheckpoints() {
+	if c.store == nil || c.pendingCursor <= 0 {
+		return
+	}
+	c.store.SetCheckpoint(ckOpencodeCursor, strconv.FormatInt(c.pendingCursor, 10))
+}
 
 func opencodeDBPath() string {
 	if env := os.Getenv("OPENCODE_DATA_DIR"); env != "" {
@@ -131,11 +160,28 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 	var scanned, parseFailed, zeroTokens, noModelID int
 	var minCreated, maxCreated int64
 
-	rows, err := db.Query(`SELECT m.id, m.session_id, m.time_created, m.data
+	// 增量游标：上次处理的 max(time_created)，首次为 0（全量）。
+	// 用 >= 避免同毫秒多条消息漏扫；重复扫描的事件由 EventKey=msgID 幂等 upsert 吸收。
+	cursor := int64(0)
+	if c.store != nil {
+		if v, err := c.store.GetCheckpoint(ckOpencodeCursor); err == nil && v != "" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+				cursor = n
+			}
+		}
+	}
+	query := `SELECT m.id, m.session_id, m.time_created, m.data
 		FROM message m
 		WHERE json_extract(m.data, '$.tokens') IS NOT NULL
 		AND json_extract(m.data, '$.modelID') IS NOT NULL
-		ORDER BY m.time_created ASC`)
+		AND m.time_created >= ?
+		ORDER BY m.time_created ASC`
+	var rows *sql.Rows
+	if cursor > 0 {
+		rows, err = db.Query(query, cursor)
+	} else {
+		rows, err = db.Query(query, 0)
+	}
 	if err != nil {
 		log.Printf("[collector] OpenCode message query error: %v", err)
 	} else {
@@ -213,7 +259,13 @@ func (c *OpenCodeCollector) Collect(ctx context.Context, pricing TokenCalc) (*Co
 		}
 	}
 
-	debuglog.Perf("OpenCode collect scanned=%d events=%d elapsed=%v", scanned, len(events), time.Since(start))
+	// 暂存游标推进到本次处理的 max(time_created)（仅在有新数据时）；
+	// 引擎在写库事务成功后调用 SavePendingCheckpoints 才真正持久化
+	if maxCreated > cursor {
+		c.pendingCursor = maxCreated
+	}
+
+	debuglog.Perf("OpenCode collect scanned=%d events=%d cursor=%d->%d elapsed=%v", scanned, len(events), cursor, maxCreated, time.Since(start))
 	log.Printf("[collector] OpenCode done scanned=%d events=%d parseFailed=%d zeroTokens=%d noModelID=%d daily=%d dateRange=[%s..%s]",
 		scanned, len(events), parseFailed, zeroTokens, noModelID, len(dailyMap),
 		time.UnixMilli(minCreated).Format("2006-01-02"),
