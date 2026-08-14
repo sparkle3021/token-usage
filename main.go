@@ -3,7 +3,6 @@ package main
 import (
 	"embed"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -30,8 +29,21 @@ func setupLogging() {
 		log.Printf("[main] setupLogging open file error: %v", err)
 		return
 	}
-	log.SetOutput(io.MultiWriter(os.Stderr, f))
+	// 注意：不能用 io.MultiWriter(os.Stderr, f)——GUI 应用（无控制台）的
+	// os.Stderr 写失败时 MultiWriter 会短路，文件日志全部丢失（双击启动
+	// 时 app.log 一直为空就是这个原因）。
+	log.SetOutput(&logTee{file: f})
 	log.Printf("[main] logging initialized dir=%s", logDir)
+}
+
+// logTee 双写 stderr 与文件；stderr 失败（GUI 应用无有效 stderr）不影响文件日志。
+type logTee struct{ file *os.File }
+
+func (w *logTee) Write(p []byte) (int, error) {
+	if _, err := os.Stderr.Write(p); err != nil {
+		// ignore: GUI 应用无控制台
+	}
+	return w.file.Write(p)
 }
 
 // rotateLog 按大小轮转日志：超过 maxSize 字节时归档为 .1/.2，保留 keep 份。
