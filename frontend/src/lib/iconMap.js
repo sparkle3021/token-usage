@@ -32,6 +32,7 @@ const SOURCE_ICONS = {
   'Hermes Agent': hermesIcon,
   'OpenClaw': openclawIcon,
   'OpenCode': opencodeIcon,
+  'DeepSeek Harness': modelDeepseek,
   // 用量查询供应商
   'opencode': opencodeIcon,
   'deepseek': modelDeepseek,
@@ -73,6 +74,7 @@ const PALETTE = {
   'OpenClaw': 'oklch(0.463 0.184 25.2)',
   'OpenCode': 'oklch(0.45 0.160 140.0)',
   'Gemini CLI': 'oklch(0.330 0.171 288.7)',
+  'DeepSeek Harness': 'oklch(0.556 0.192 266.0)',
   'Cursor': 'oklch(0.68 0.12 220)',
   'Aider': 'oklch(0.65 0.13 155)',
   'Amp': 'oklch(0.62 0.16 20)',

@@ -65,6 +65,7 @@ func New(db *database.Manager, pr *pricing.Engine) *Engine {
 		collector.NewHermesCollector(),
 		collector.NewOpenCodeCollector(),
 		collector.NewOpenClawCollector(),
+		collector.NewDSHCollector(),
 	}
 
 	// CCSwitchCollector: needs database store for checkpoint + config access
@@ -261,6 +262,11 @@ func (e *Engine) runCollection() {
 			SetPersister(collector.PersistHandler, string)
 		}); ok {
 			s.SetPersister(persister, col.Source())
+		}
+		if s, ok := col.(interface {
+			SetStore(collector.ModelStateStore)
+		}); ok {
+			s.SetStore(e.db)
 		}
 	}
 

@@ -413,6 +413,7 @@ func buildResult(device, id, source string, dailyMap map[string]*dailyAgg, sessi
 	for _, agg := range sessionMap {
 		r.Session = append(r.Session, SessionRow{
 			SessionID: agg.sessionID, ProjectPath: agg.projectPath, Model: agg.model,
+			LastActivity: agg.lastActivity,
 			InputTokens: agg.input, OutputTokens: agg.output,
 			CacheReadTokens: agg.cacheRead, CacheWriteTokens: agg.cacheWrite,
 			ReasoningTokens: agg.reasoning, CostUSD: agg.cost,

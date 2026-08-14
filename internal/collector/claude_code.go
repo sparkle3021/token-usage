@@ -357,6 +357,7 @@ func (a *dailyAgg) add(in, out, cr, cw, re int64, c float64) {
 
 type sessionAgg struct {
 	sessionID, projectPath, model                              string
+	lastActivity                                               string
 	input, output, cacheRead, cacheWrite, reasoning           int64
 	cost                                                       float64
 }
