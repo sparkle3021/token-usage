@@ -6,6 +6,3 @@ import _ "embed"
 
 //go:embed pricing-litellm.json
 var PricingLitellm []byte
-
-//go:embed pricing-openrouter.json
-var PricingOpenRouter []byte

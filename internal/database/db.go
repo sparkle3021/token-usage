@@ -283,6 +283,16 @@ func (m *Manager) initSchema() error {
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_quota_display_name
 		ON quota_configs(display_name) WHERE display_name != '';
 
+	CREATE TABLE IF NOT EXISTS model_pricing (
+		model_key        TEXT PRIMARY KEY,
+		input_rate       REAL NOT NULL DEFAULT 0,
+		output_rate      REAL NOT NULL DEFAULT 0,
+		cache_read_rate  REAL NOT NULL DEFAULT 0,
+		cache_write_rate REAL NOT NULL DEFAULT 0,
+		fetched_at       TEXT,
+		updated_at       TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+	);
+
 	`
 	if _, err := m.db.Exec(schema); err != nil {
 		return fmt.Errorf("exec schema: %w", err)

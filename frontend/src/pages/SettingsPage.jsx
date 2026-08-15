@@ -1,6 +1,7 @@
 import { getDevices, getSettings, renameDevice, saveSettings } from '@/api/client.js';
 import SettingsGeneral from '@/components/settings/SettingsGeneral.jsx';
 import SettingsMaintenance from '@/components/settings/SettingsMaintenance.jsx';
+import SettingsPricing from '@/components/settings/SettingsPricing.jsx';
 import { getMessage } from '@/lib/message.js';
 import { Button, Segmented } from 'antd';
 import { ArrowLeftIcon } from 'lucide-react';
@@ -10,6 +11,7 @@ const DEFAULTS = { autoSyncSeconds: 30, ccSwitchDBPath: '', ccSwitchEnabled: fal
 
 const TABS = [
   { label: '通用', value: 'general' },
+  { label: '价格', value: 'pricing' },
   { label: '维护', value: 'maintenance' },
 ];
 
@@ -117,6 +119,9 @@ export default function SettingsPage({ onBack, pref, setPref, handleSettingsChan
                 savingDeviceId={savingDeviceId}
                 onSaveDeviceName={saveDeviceName}
               />
+            )}
+            {tab === 'pricing' && (
+              <SettingsPricing />
             )}
             {tab === 'maintenance' && (
               <SettingsMaintenance onClear={onClear} onFullSync={onFullSync} fullSyncing={fullSyncing} />

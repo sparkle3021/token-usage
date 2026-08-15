@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Button } from 'antd';
 import { TriangleAlertIcon } from 'lucide-react';
 import { getMessage } from '@/lib/message.js';
-import { updatePricing, clearAllData, exportData, importData } from '@/api/client.js';
+import { clearAllData, exportData, importData } from '@/api/client.js';
 import SettingField from '@/components/common/SettingField.jsx';
 import ConfirmDialog from '@/components/common/ConfirmDialog.jsx';
 
@@ -45,16 +45,6 @@ export default function SettingsMaintenance({ onClear, onFullSync, fullSyncing }
           toast?.success('全量同步已启动，重读所有数据源，可在顶栏查看进度');
           break;
         }
-        case 'updatePricing': {
-          const result = await updatePricing();
-          if (result.error) {
-            console.error('[settings] update pricing failed', result.error);
-            toast?.error('价格更新失败，请检查网络后重试');
-          } else {
-            toast?.success('价格更新成功，' + (result.message || `LiteLLM ${result.litellm} 条`));
-          }
-          break;
-        }
         case 'clear': {
           await clearAllData();
           if (onClear) onClear();
@@ -85,13 +75,6 @@ export default function SettingsMaintenance({ onClear, onFullSync, fullSyncing }
       confirmText: '开始同步',
       busyText: '同步中…',
       description: '将重读所有数据源（Claude Code / Codex / Gemini / OpenClaw / CC-Switch / OpenCode 等），耗时较长。确定执行？',
-    },
-    updatePricing: {
-      title: '更新价格数据',
-      danger: false,
-      confirmText: '更新',
-      busyText: '更新中…',
-      description: '将从远程源（LiteLLM）拉取最新模型定价并重载。确定执行？',
     },
     clear: {
       title: '清除所有历史数据',
@@ -128,12 +111,6 @@ export default function SettingsMaintenance({ onClear, onFullSync, fullSyncing }
         <SettingField title="全量同步" description="重读所有数据源，耗时较长。">
           <Button type="primary" onClick={() => setConfirmAction('fullSync')} disabled={fullSyncing}>
             {fullSyncing ? '同步中…' : '执行'}
-          </Button>
-        </SettingField>
-
-        <SettingField title="更新价格数据" description="从 LiteLLM 拉取最新模型定价。">
-          <Button onClick={() => setConfirmAction('updatePricing')}>
-            执行
           </Button>
         </SettingField>
 

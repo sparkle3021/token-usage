@@ -112,6 +112,23 @@ type PricingUpdateResult struct {
 	Error   string `json:"error,omitempty"`
 }
 
+// ModelPricing 模型价格表行（唯一价格源，用户可改，拉取更新时 UPSERT 覆盖）。
+type ModelPricing struct {
+	ModelKey       string  `json:"modelKey"`
+	InputRate      float64 `json:"inputRate"`
+	OutputRate     float64 `json:"outputRate"`
+	CacheReadRate  float64 `json:"cacheReadRate"`
+	CacheWriteRate float64 `json:"cacheWriteRate"`
+	FetchedAt      string  `json:"fetchedAt"` // 拉取时间（RFC3339 UTC），用户改价不更新
+	UpdatedAt      string  `json:"updatedAt"`
+}
+
+// PricingMeta 价格数据元信息（前端设置页展示）。
+type PricingMeta struct {
+	FetchedAt string `json:"fetchedAt"`
+	Count     int    `json:"count"`
+}
+
 // ── 用量查询（Quota）相关结构体 ──
 
 // QuotaConfig 持久化的用量查询配置。

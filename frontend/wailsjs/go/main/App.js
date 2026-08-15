@@ -18,6 +18,10 @@ export function CurrentOp() {
   return window['go']['main']['App']['CurrentOp']();
 }
 
+export function DeleteModelPricing(arg1) {
+  return window['go']['main']['App']['DeleteModelPricing'](arg1);
+}
+
 export function DeleteQuotaConfig(arg1) {
   return window['go']['main']['App']['DeleteQuotaConfig'](arg1);
 }
@@ -62,6 +66,10 @@ export function GetModelSeries(arg1) {
   return window['go']['main']['App']['GetModelSeries'](arg1);
 }
 
+export function GetPricingMeta() {
+  return window['go']['main']['App']['GetPricingMeta']();
+}
+
 export function GetProviderSchemas() {
   return window['go']['main']['App']['GetProviderSchemas']();
 }
@@ -76,6 +84,10 @@ export function GetTodayEvents() {
 
 export function ImportData() {
   return window['go']['main']['App']['ImportData']();
+}
+
+export function ListModelPricing() {
+  return window['go']['main']['App']['ListModelPricing']();
 }
 
 export function ListQuotaConfigs() {
@@ -100,6 +112,10 @@ export function StartCollection() {
 
 export function StartFullCollection() {
   return window['go']['main']['App']['StartFullCollection']();
+}
+
+export function UpdateModelPricing(arg1) {
+  return window['go']['main']['App']['UpdateModelPricing'](arg1);
 }
 
 export function UpdatePricing() {

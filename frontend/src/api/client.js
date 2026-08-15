@@ -85,9 +85,29 @@ export function saveSettings(cfg) {
   return invoke('SaveSettings', cfg);
 }
 
-/** 从远程源更新定价数据 */
+/** 从远程源更新定价数据（LiteLLM → model_pricing 表，UPSERT 覆盖） */
 export function updatePricing() {
   return invoke('UpdatePricing');
+}
+
+/** 获取全部模型价格（设置-价格管理） */
+export function listModelPricing() {
+  return invoke('ListModelPricing');
+}
+
+/** 修改单个模型价格（用户调整，写库 + 同步引擎，立即生效） */
+export function updateModelPricing(row) {
+  return invoke('UpdateModelPricing', row);
+}
+
+/** 删除单个模型价格（手动添加/残留模型） */
+export function deleteModelPricing(modelKey) {
+  return invoke('DeleteModelPricing', modelKey);
+}
+
+/** 获取价格元信息（最近拉取时间 + 条目数） */
+export function getPricingMeta() {
+  return invoke('GetPricingMeta');
 }
 
 /** 检测默认 CC-Switch 数据库路径是否存在 */

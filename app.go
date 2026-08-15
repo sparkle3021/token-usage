@@ -46,12 +46,14 @@ func NewApp() *App {
 	}
 	log.Printf("[app] NewApp database opened path=%s", cfg.DBPath)
 
-	pr, err := pricing.NewEngine(cfg.DataDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[app] pricing: %v\n", err)
-		log.Printf("[app] NewApp pricing error=%v", err)
+	pr := pricing.NewEngine()
+	log.Printf("[app] NewApp pricing engine created")
+
+	// 定价服务：保证 model_pricing 表有数据并加载进引擎，之后才可创建采集引擎
+	pricingSvc := service.NewPricingService(pr, db, cfg.DataDir)
+	if err := pricingSvc.EnsureSeeded(); err != nil {
+		log.Printf("[app] pricing seed error=%v", err)
 	}
-	log.Printf("[app] NewApp pricing loaded")
 
 	eng := orchestrator.New(db, pr)
 	log.Printf("[app] NewApp engine initialized collectors=%d", len(eng.Collectors()))
@@ -63,7 +65,6 @@ func NewApp() *App {
 	deviceSvc := service.NewDeviceService(db)
 	exportSvc := service.NewExportService(db)
 	quotaSvc := quota.NewService(db)
-	pricingSvc := service.NewPricingService(pr, cfg.DataDir)
 
 	return &App{
 		dashboardSvc:  dashboardSvc,
@@ -243,9 +244,29 @@ func (a *App) ExportData() (string, error) {
 // Pricing API
 // ---------------------------------------------------------------------------
 
-// UpdatePricing 从远程源拉取最新定价数据并重载定价引擎。
+// UpdatePricing 从 LiteLLM 拉取最新定价，全量 UPSERT 入库并重载引擎。
 func (a *App) UpdatePricing() model.PricingUpdateResult {
 	return a.pricingSvc.UpdatePricing()
+}
+
+// ListModelPricing 返回全部模型价格（设置页价格管理列表）。
+func (a *App) ListModelPricing() []model.ModelPricing {
+	return a.pricingSvc.ListModelPricing()
+}
+
+// UpdateModelPricing 用户修改单个模型价格（写库 + 同步引擎，立即生效）。
+func (a *App) UpdateModelPricing(row model.ModelPricing) error {
+	return a.pricingSvc.UpdateModelPricing(row)
+}
+
+// DeleteModelPricing 删除单个模型价格。
+func (a *App) DeleteModelPricing(modelKey string) error {
+	return a.pricingSvc.DeleteModelPricing(modelKey)
+}
+
+// GetPricingMeta 返回价格元信息（最近拉取时间与条目数）。
+func (a *App) GetPricingMeta() *model.PricingMeta {
+	return a.pricingSvc.GetPricingMeta()
 }
 
 // ---------------------------------------------------------------------------

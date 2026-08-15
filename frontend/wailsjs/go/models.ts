@@ -216,6 +216,30 @@ export namespace model {
 	        this.importedAt = source["importedAt"];
 	    }
 	}
+	export class ModelPricing {
+	    modelKey: string;
+	    inputRate: number;
+	    outputRate: number;
+	    cacheReadRate: number;
+	    cacheWriteRate: number;
+	    fetchedAt: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelPricing(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.modelKey = source["modelKey"];
+	        this.inputRate = source["inputRate"];
+	        this.outputRate = source["outputRate"];
+	        this.cacheReadRate = source["cacheReadRate"];
+	        this.cacheWriteRate = source["cacheWriteRate"];
+	        this.fetchedAt = source["fetchedAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
 	export class ModelRanking {
 	    model: string;
 	    totalTokens: number;
@@ -265,6 +289,20 @@ export namespace model {
 		    }
 		    return a;
 		}
+	}
+	export class PricingMeta {
+	    fetchedAt: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PricingMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fetchedAt = source["fetchedAt"];
+	        this.count = source["count"];
+	    }
 	}
 	export class PricingUpdateResult {
 	    litellm: number;

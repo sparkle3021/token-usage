@@ -10,6 +10,8 @@ export function CreateQuotaConfig(arg1:model.QuotaConfig):Promise<model.QuotaCon
 
 export function CurrentOp():Promise<string>;
 
+export function DeleteModelPricing(arg1:string):Promise<void>;
+
 export function DeleteQuotaConfig(arg1:number):Promise<void>;
 
 export function DetectCCSwitchDB():Promise<string>;
@@ -32,6 +34,8 @@ export function GetModelRanking():Promise<Array<model.ModelRanking>>;
 
 export function GetModelSeries(arg1:string):Promise<model.ModelSeriesData>;
 
+export function GetPricingMeta():Promise<model.PricingMeta>;
+
 export function GetProviderSchemas():Promise<Array<model.ProviderSchema>>;
 
 export function GetSettings():Promise<model.AppConfig>;
@@ -39,6 +43,8 @@ export function GetSettings():Promise<model.AppConfig>;
 export function GetTodayEvents():Promise<Array<model.TimeUsage>>;
 
 export function ImportData():Promise<model.ImportResult>;
+
+export function ListModelPricing():Promise<Array<model.ModelPricing>>;
 
 export function ListQuotaConfigs():Promise<Array<model.QuotaConfig>>;
 
@@ -51,6 +57,8 @@ export function SetAutoSyncInterval(arg1:number):Promise<void>;
 export function StartCollection():Promise<boolean>;
 
 export function StartFullCollection():Promise<boolean>;
+
+export function UpdateModelPricing(arg1:model.ModelPricing):Promise<void>;
 
 export function UpdatePricing():Promise<model.PricingUpdateResult>;
 

@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
+	"time"
+
+	"token-dashboard/internal/model"
 )
 
 // ---------------------------------------------------------------------------
@@ -17,21 +18,10 @@ import (
 
 // Rates holds per-token prices for a model.
 type Rates struct {
-	Input              float64 `json:"input"`
-	InputAbove128k     float64 `json:"inputAbove128k,omitempty"`
-	InputAbove200k     float64 `json:"inputAbove200k,omitempty"`
-	InputAbove256k     float64 `json:"inputAbove256k,omitempty"`
-	InputAbove272k     float64 `json:"inputAbove272k,omitempty"`
-	Output             float64 `json:"output"`
-	OutputAbove128k    float64 `json:"outputAbove128k,omitempty"`
-	OutputAbove200k    float64 `json:"outputAbove200k,omitempty"`
-	OutputAbove256k    float64 `json:"outputAbove256k,omitempty"`
-	OutputAbove272k    float64 `json:"outputAbove272k,omitempty"`
-	CacheRead          float64 `json:"cacheRead"`
-	CacheReadAbove200k float64 `json:"cacheReadAbove200k,omitempty"`
-	CacheReadAbove272k float64 `json:"cacheReadAbove272k,omitempty"`
-	CacheWrite         float64 `json:"cacheWrite"`
-	CacheWriteAbove200k float64 `json:"cacheWriteAbove200k,omitempty"`
+	Input      float64 `json:"input"`
+	Output     float64 `json:"output"`
+	CacheRead  float64 `json:"cacheRead"`
+	CacheWrite float64 `json:"cacheWrite"`
 }
 
 // TokenBreakdown is the input to cost calculation.
@@ -44,61 +34,27 @@ type TokenBreakdown struct {
 }
 
 // Engine loads and queries model pricing data.
+// 数据为 model_pricing 表的纯内存快照（LoadRows 整体加载 / ApplyRow 单行更新），
+// 不直接依赖 database 包，保持 domain 层解耦。
 type Engine struct {
-	litellm   map[string]*litellmEntry
-	openrouter map[string]*litellmEntry
+	data  map[string]*Rates // 原始模型 key → 费率
 
 	mu     sync.Mutex
 	cache  map[string]*Rates
 }
 
+// litellmEntry LiteLLM JSON 单条原始字段（仅保留实际参与计算的 4 项基础费率）。
 type litellmEntry struct {
-	InputCostPerToken                float64 `json:"input_cost_per_token"`
-	OutputCostPerToken               float64 `json:"output_cost_per_token"`
-	CacheReadInputTokenCost          float64 `json:"cache_read_input_token_cost"`
-	CacheCreationInputTokenCost      float64 `json:"cache_creation_input_token_cost"`
-	InputCostPerTokenAbove128kTokens  float64 `json:"input_cost_per_token_above_128k_tokens"`
-	InputCostPerTokenAbove200kTokens  float64 `json:"input_cost_per_token_above_200k_tokens"`
-	InputCostPerTokenAbove256kTokens  float64 `json:"input_cost_per_token_above_256k_tokens"`
-	InputCostPerTokenAbove272kTokens  float64 `json:"input_cost_per_token_above_272k_tokens"`
-	OutputCostPerTokenAbove128kTokens float64 `json:"output_cost_per_token_above_128k_tokens"`
-	OutputCostPerTokenAbove200kTokens float64 `json:"output_cost_per_token_above_200k_tokens"`
-	OutputCostPerTokenAbove256kTokens float64 `json:"output_cost_per_token_above_256k_tokens"`
-	OutputCostPerTokenAbove272kTokens float64 `json:"output_cost_per_token_above_272k_tokens"`
-	CacheReadAbove200kTokens          float64 `json:"cache_read_input_token_cost_above_200k_tokens"`
-	CacheReadAbove272kTokens          float64 `json:"cache_read_input_token_cost_above_272k_tokens"`
-	CacheCreationAbove200kTokens      float64 `json:"cache_creation_input_token_cost_above_200k_tokens"`
+	InputCostPerToken           float64 `json:"input_cost_per_token"`
+	OutputCostPerToken          float64 `json:"output_cost_per_token"`
+	CacheReadInputTokenCost     float64 `json:"cache_read_input_token_cost"`
+	CacheCreationInputTokenCost float64 `json:"cache_creation_input_token_cost"`
 }
 
 // pricingFile wraps the LiteLLM/OpenRouter JSON format.
 type pricingFile struct {
 	FetchedAt int64                  `json:"fetchedAt"`
 	Data      map[string]interface{} `json:"data"`
-}
-
-// ---------------------------------------------------------------------------
-// Hardcoded overrides (not yet in upstream LiteLLM)
-// ---------------------------------------------------------------------------
-
-var cursorOverrides = map[string]Rates{
-	"gpt-5.3":             {Input: 1.75e-6, Output: 1.4e-5, CacheRead: 1.75e-7},
-	"gpt-5.3-codex":       {Input: 1.75e-6, Output: 1.4e-5, CacheRead: 1.75e-7},
-	"gpt-5.3-codex-spark": {Input: 1.75e-6, Output: 1.4e-5, CacheRead: 1.75e-7},
-	"composer 1":          {Input: 1.25e-6, Output: 1.0e-5, CacheRead: 1.25e-7},
-	"composer-1":          {Input: 1.25e-6, Output: 1.0e-5, CacheRead: 1.25e-7},
-	"composer 1.5":        {Input: 3.5e-6, Output: 1.75e-5, CacheRead: 3.5e-7},
-	"composer-1.5":        {Input: 3.5e-6, Output: 1.75e-5, CacheRead: 3.5e-7},
-	"composer 2":          {Input: 5e-7, Output: 2.5e-6, CacheRead: 2e-7},
-	"composer-2":          {Input: 5e-7, Output: 2.5e-6, CacheRead: 2e-7},
-	"composer 2 fast":     {Input: 1.5e-6, Output: 7.5e-6, CacheRead: 3.5e-7},
-	"composer-2-fast":     {Input: 1.5e-6, Output: 7.5e-6, CacheRead: 3.5e-7},
-}
-
-var deepseekOverrides = map[string]Rates{
-	"deepseek-chat":     {Input: 1.4e-7, Output: 2.8e-7, CacheRead: 2.8e-9},
-	"deepseek-reasoner": {Input: 1.4e-7, Output: 2.8e-7, CacheRead: 2.8e-9},
-	"deepseek-v4-flash": {Input: 1.4e-7, Output: 2.8e-7, CacheRead: 2.8e-9},
-	"deepseek-v4-pro":   {Input: 4.35e-7, Output: 8.7e-7, CacheRead: 3.625e-9},
 }
 
 // excluded prefixes (subscription models with $0 per-token pricing).
@@ -108,115 +64,100 @@ var excludedPrefixes = []string{"github_copilot/"}
 // Construction
 // ---------------------------------------------------------------------------
 
-func NewEngine(dataDir string) (*Engine, error) {
-	e := &Engine{
+// NewEngine 创建空的价格引擎，数据由 LoadRows 从 model_pricing 表加载。
+func NewEngine() *Engine {
+	return &Engine{
+		data:  make(map[string]*Rates),
 		cache: make(map[string]*Rates),
 	}
-
-	litellmPath := filepath.Join(dataDir, "config", "pricing-litellm.json")
-	if err := e.loadLiteLLM(litellmPath); err != nil {
-		fmt.Fprintf(os.Stderr, "[pricing] warning: %v\n", err)
-		log.Printf("[pricing] NewEngine loadLiteLLM error=%v", err)
-	} else {
-		log.Printf("[pricing] NewEngine litellm loaded entries=%d", len(e.litellm))
-	}
-
-	openrouterPath := filepath.Join(dataDir, "config", "pricing-openrouter.json")
-	if err := e.loadOpenRouter(openrouterPath); err != nil {
-		fmt.Fprintf(os.Stderr, "[pricing] warning: %v\n", err)
-		log.Printf("[pricing] NewEngine loadOpenRouter error=%v", err)
-	} else {
-		log.Printf("[pricing] NewEngine openrouter loaded entries=%d", len(e.openrouter))
-	}
-
-	return e, nil
 }
 
-// Reload discards cached entries and re-loads pricing files from disk.
-func (e *Engine) Reload(dataDir string) error {
+// LoadRows 整体替换内存价格数据（启动加载与拉取更新后调用），并清空解析缓存。
+func (e *Engine) LoadRows(rows []model.ModelPricing) {
 	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.data = make(map[string]*Rates, len(rows))
+	for _, r := range rows {
+		e.data[r.ModelKey] = &Rates{Input: r.InputRate, Output: r.OutputRate, CacheRead: r.CacheReadRate, CacheWrite: r.CacheWriteRate}
+	}
 	e.cache = make(map[string]*Rates)
-	e.litellm = nil
-	e.openrouter = nil
-	e.mu.Unlock()
-
-	litellmPath := filepath.Join(dataDir, "config", "pricing-litellm.json")
-	if err := e.loadLiteLLM(litellmPath); err != nil {
-		log.Printf("[pricing] Reload litellm error=%v", err)
-	}
-
-	openrouterPath := filepath.Join(dataDir, "config", "pricing-openrouter.json")
-	if err := e.loadOpenRouter(openrouterPath); err != nil {
-		log.Printf("[pricing] Reload openrouter error=%v", err)
-	}
-
-	log.Printf("[pricing] Reload done litellm=%d openrouter=%d", len(e.litellm), len(e.openrouter))
-	return nil
+	log.Printf("[pricing] LoadRows entries=%d", len(e.data))
 }
 
-func (e *Engine) loadLiteLLM(path string) error {
-	data, err := readPricingFile(path)
-	if err != nil {
-		return fmt.Errorf("load litellm: %w", err)
+// ApplyRow 单行更新内存价格（用户改价后调用），并清空缓存保证查找一致性。
+func (e *Engine) ApplyRow(row model.ModelPricing) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.data == nil {
+		e.data = make(map[string]*Rates)
 	}
-	e.litellm = data
-	return nil
+	e.data[row.ModelKey] = &Rates{Input: row.InputRate, Output: row.OutputRate, CacheRead: row.CacheReadRate, CacheWrite: row.CacheWriteRate}
+	e.cache = make(map[string]*Rates)
 }
 
-func (e *Engine) loadOpenRouter(path string) error {
-	data, err := readPricingFile(path)
-	if err != nil {
-		return fmt.Errorf("load openrouter: %w", err)
-	}
-	e.openrouter = data
-	return nil
+// DeleteRow 删除内存价格行（用户删除后调用）。
+func (e *Engine) DeleteRow(modelKey string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.data, modelKey)
+	e.cache = make(map[string]*Rates)
 }
 
-func readPricingFile(path string) (map[string]*litellmEntry, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
+// ParseLiteLLMRaw 解析 LiteLLM 原始 JSON（支持 {fetchedAt,data} 包装或平铺格式），
+// 输出 model_pricing 表行。fetchedAt 优先取包装内时间戳，否则当前时间。
+func ParseLiteLLMRaw(raw []byte) ([]model.ModelPricing, error) {
 	var pf pricingFile
-	if err := json.NewDecoder(f).Decode(&pf); err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
-	}
-	if pf.Data == nil {
-		// Try flat format (no wrapper)
-		f.Seek(0, 0)
-		var flat map[string]*litellmEntry
-		if err := json.NewDecoder(f).Decode(&flat); err != nil {
-			return nil, fmt.Errorf("decode flat: %w", err)
-		}
-		return flat, nil
+	if err := json.Unmarshal(raw, &pf); err != nil {
+		return nil, fmt.Errorf("decode pricing: %w", err)
 	}
 
-	result := make(map[string]*litellmEntry, len(pf.Data))
-	for key, val := range pf.Data {
+	var data map[string]interface{}
+	if pf.Data != nil {
+		data = pf.Data
+	} else {
+		// 平铺格式（无包装）
+		var flat map[string]interface{}
+		if err := json.Unmarshal(raw, &flat); err != nil {
+			return nil, fmt.Errorf("decode flat pricing: %w", err)
+		}
+		data = flat
+	}
+
+	fetchedAt := time.Now().UTC().Format(time.RFC3339)
+	if pf.FetchedAt > 0 {
+		fetchedAt = time.UnixMilli(pf.FetchedAt).UTC().Format(time.RFC3339)
+	}
+
+	rows := make([]model.ModelPricing, 0, len(data))
+	for key, val := range data {
 		if isExcluded(key) {
 			continue
 		}
 		entry := toLiteLLMEntry(val)
-		if entry != nil {
-			result[key] = entry
+		if entry == nil {
+			continue
 		}
+		rows = append(rows, model.ModelPricing{
+			ModelKey:       key,
+			InputRate:      entry.InputCostPerToken,
+			OutputRate:     entry.OutputCostPerToken,
+			CacheReadRate:  entry.CacheReadInputTokenCost,
+			CacheWriteRate: entry.CacheCreationInputTokenCost,
+			FetchedAt:      fetchedAt,
+		})
 	}
-	return result, nil
+	return rows, nil
 }
+
+
 
 // ---------------------------------------------------------------------------
 // Cost calculation
 // ---------------------------------------------------------------------------
 
 // CalculateCost returns the USD cost for a model + token breakdown.
-func (e *Engine) CalculateCost(model string, tokens TokenBreakdown, options ...CalcOption) float64 {
-	opts := calcOptions{}
-	for _, o := range options {
-		o(&opts)
-	}
-
+// 使用 model_pricing 表快照中的基础费率（input/output/cacheRead/cacheWrite）计算。
+func (e *Engine) CalculateCost(model string, tokens TokenBreakdown) float64 {
 	p := e.lookupPricing(model)
 	if p == nil {
 		return 0
@@ -228,42 +169,10 @@ func (e *Engine) CalculateCost(model string, tokens TokenBreakdown, options ...C
 	cacheWrite := float64(maxInt64(tokens.CacheWrite, 0))
 	reasoning := float64(maxInt64(tokens.Reasoning, 0))
 
-	if !opts.tiered {
-		return input*validPrice(p.Input) +
-			(output+reasoning)*validPrice(p.Output) +
-			cacheRead*validPrice(p.CacheRead) +
-			cacheWrite*validPrice(p.CacheWrite)
-	}
-
-	return tieredCost(input, p.Input, tierDefs{
-		{128000, p.InputAbove128k},
-		{200000, p.InputAbove200k},
-		{256000, p.InputAbove256k},
-		{272000, p.InputAbove272k},
-	}) +
-		tieredCost(output+reasoning, p.Output, tierDefs{
-			{128000, p.OutputAbove128k},
-			{200000, p.OutputAbove200k},
-			{256000, p.OutputAbove256k},
-			{272000, p.OutputAbove272k},
-		}) +
-		tieredCost(cacheRead, p.CacheRead, tierDefs{
-			{200000, p.CacheReadAbove200k},
-			{272000, p.CacheReadAbove272k},
-		}) +
-		tieredCost(cacheWrite, p.CacheWrite, tierDefs{
-			{200000, p.CacheWriteAbove200k},
-		})
-}
-
-type CalcOption func(*calcOptions)
-type calcOptions struct {
-	tiered bool
-}
-
-// WithTiered enables tiered pricing based on context window thresholds.
-func WithTiered(tiered bool) CalcOption {
-	return func(o *calcOptions) { o.tiered = tiered }
+	return input*validPrice(p.Input) +
+		(output+reasoning)*validPrice(p.Output) +
+		cacheRead*validPrice(p.CacheRead) +
+		cacheWrite*validPrice(p.CacheWrite)
 }
 
 // ---------------------------------------------------------------------------
@@ -306,47 +215,24 @@ func (e *Engine) lookupPricing(modelID string) *Rates {
 }
 
 func (e *Engine) lookupUncached(id string) *Rates {
-	if r := findOverride(id); r != nil {
-		return r
-	}
-
 	var hit *Rates
 	var candidates []string
 
-	if e.litellm != nil || e.openrouter != nil {
+	if len(e.data) > 0 {
 		candidates = modelCandidates(id)
 	}
 
-	// LiteLLM exact/fuzzy
+	// 精确/前缀候选链
 	for _, c := range candidates {
-		if e.litellm != nil {
-			if r := findInDataset(c, e.litellm); r != nil {
-				hit = r
-				break
-			}
-		}
-	}
-
-	// OpenRouter fallback for cache read rates
-	if (hit == nil || hit.CacheRead == 0) && e.openrouter != nil {
-		for _, c := range candidates {
-			if r := findInDataset(c, e.openrouter); r != nil {
-				if hit == nil || r.CacheRead > 0 {
-					hit = r
-				}
-				break
-			}
+		if r := findInDataset(c, e.data); r != nil {
+			hit = r
+			break
 		}
 	}
 
 	// Fuzzy fallback
-	if hit == nil && e.litellm != nil {
-		if r := findFuzzy(id, e.litellm); r != nil {
-			hit = r
-		}
-	}
-	if hit == nil && e.openrouter != nil {
-		if r := findFuzzy(id, e.openrouter); r != nil {
+	if hit == nil && len(e.data) > 0 {
+		if r := findFuzzy(id, e.data); r != nil {
 			hit = r
 		}
 	}
@@ -354,47 +240,32 @@ func (e *Engine) lookupUncached(id string) *Rates {
 	return hit
 }
 
-
-func findOverride(id string) *Rates {
-	if r, ok := cursorOverrides[id]; ok {
-		return &r
-	}
-	bare := bareModelID(id)
-	if r, ok := deepseekOverrides[bare]; ok {
-		return &r
-	}
-	if r, ok := cursorOverrides[bare]; ok {
-		return &r
-	}
-	return nil
-}
-
-func findInDataset(id string, data map[string]*litellmEntry) *Rates {
+func findInDataset(id string, data map[string]*Rates) *Rates {
 	if data == nil {
 		return nil
 	}
-	if entry, ok := data[id]; ok && entry != nil {
-		return entryToRates(entry)
+	if r, ok := data[id]; ok {
+		return r
 	}
-	if entry, ok := data["openai/"+id]; ok && entry != nil {
-		return entryToRates(entry)
+	if r, ok := data["openai/"+id]; ok {
+		return r
 	}
-	for key, entry := range data {
-		if strings.EqualFold(key, id) && entry != nil {
-			return entryToRates(entry)
+	for key, r := range data {
+		if strings.EqualFold(key, id) && r != nil {
+			return r
 		}
 	}
 	return nil
 }
 
-func findFuzzy(id string, data map[string]*litellmEntry) *Rates {
+func findFuzzy(id string, data map[string]*Rates) *Rates {
 	if data == nil || len(id) < 5 {
 		return nil
 	}
 	normalized := normalizeComparable(id)
 
 	var bestKey string
-	var bestEntry *litellmEntry
+	var bestEntry *Rates
 	for key, entry := range data {
 		if entry == nil || isExcluded(key) {
 			continue
@@ -408,10 +279,7 @@ func findFuzzy(id string, data map[string]*litellmEntry) *Rates {
 			}
 		}
 	}
-	if bestEntry != nil {
-		return entryToRates(bestEntry)
-	}
-	return nil
+	return bestEntry
 }
 
 // ---------------------------------------------------------------------------
@@ -462,34 +330,6 @@ func modelCandidates(id string) []string {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-func entryToRates(entry *litellmEntry) *Rates {
-	if entry == nil {
-		return nil
-	}
-	input := entry.InputCostPerToken
-	output := entry.OutputCostPerToken
-	if input == 0 && output == 0 {
-		return nil
-	}
-	return &Rates{
-		Input:               input,
-		Output:              output,
-		CacheRead:           entry.CacheReadInputTokenCost,
-		CacheWrite:          entry.CacheCreationInputTokenCost,
-		InputAbove128k:      entry.InputCostPerTokenAbove128kTokens,
-		InputAbove200k:      entry.InputCostPerTokenAbove200kTokens,
-		InputAbove256k:      entry.InputCostPerTokenAbove256kTokens,
-		InputAbove272k:      entry.InputCostPerTokenAbove272kTokens,
-		OutputAbove128k:     entry.OutputCostPerTokenAbove128kTokens,
-		OutputAbove200k:     entry.OutputCostPerTokenAbove200kTokens,
-		OutputAbove256k:     entry.OutputCostPerTokenAbove256kTokens,
-		OutputAbove272k:     entry.OutputCostPerTokenAbove272kTokens,
-		CacheReadAbove200k:  entry.CacheReadAbove200kTokens,
-		CacheReadAbove272k:  entry.CacheReadAbove272kTokens,
-		CacheWriteAbove200k: entry.CacheCreationAbove200kTokens,
-	}
-}
 
 func toLiteLLMEntry(v interface{}) *litellmEntry {
 	b, err := json.Marshal(v)
@@ -665,35 +505,6 @@ func validPrice(v float64) float64 {
 	}
 	return v
 }
-
-func tieredCost(tokens float64, basePrice float64, tiers tierDefs) float64 {
-	if tokens <= 0 || basePrice <= 0 {
-		return 0
-	}
-	price := validPrice(basePrice)
-	var lower float64
-	var cost float64
-
-	for _, t := range tiers {
-		tierPrice := validPrice(t.price)
-		if t.price == 0 || t.threshold <= lower {
-			continue
-		}
-		if tokens <= t.threshold {
-			return cost + math.Max(0, tokens-lower)*price
-		}
-		cost += (t.threshold - lower) * price
-		lower = t.threshold
-		price = tierPrice
-	}
-	return cost + math.Max(0, tokens-lower)*price
-}
-
-type tierDef struct {
-	threshold float64
-	price     float64
-}
-type tierDefs []tierDef
 
 func isDigit(r rune) bool { return r >= '0' && r <= '9' }
 
