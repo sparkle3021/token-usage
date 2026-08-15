@@ -200,6 +200,7 @@ export default function DashboardPage({ M, allSources, allModels, heatmapData, o
         </div>
       </div>
 
+      {/* 热力图：独立区域（图表行下方全宽），格子尺寸随容器自适应 */}
       <Heatmap data={heatmapData} onSelect={setHeatmapDate} />
       {heatmapDate && <HeatmapDrillDialog date={heatmapDate} daily={M?.daily} timeRows={M?.time} hourRows={M?.hour} onClose={() => setHeatmapDate(null)} />}
 

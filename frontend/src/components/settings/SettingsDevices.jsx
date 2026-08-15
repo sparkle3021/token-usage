@@ -12,7 +12,7 @@ export default function SettingsDevices({ devices, nameDrafts, setNameDrafts, sa
   }
 
   return (
-    <div className="space-y-6 max-w-xl">
+    <div className="space-y-6 w-full">
       {others.map(d => (
         <SettingField
           key={d.deviceId}

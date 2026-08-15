@@ -55,10 +55,10 @@ export default function SettingsGeneral({ cfg, setCfg, persist, pref, setPref, l
   }, [setCfg, toast]);
 
   return (
-    <div className="space-y-6 max-w-xl">
+    <div className="space-y-6 w-full">
       {localDevice && (
         <SettingField title="本机名" description="设置本机在看板中的展示名称，点击保存后生效。">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               value={nameDrafts[localDevice.deviceId] ?? ''}
               onChange={e => setNameDrafts(dr => ({ ...dr, [localDevice.deviceId]: e.target.value }))}
@@ -89,12 +89,12 @@ export default function SettingsGeneral({ cfg, setCfg, persist, pref, setPref, l
       </SettingField>
 
       <SettingField title="CC-Switch 数据源路径" description="指向 cc-switch.db，用于导入代理日志，点击保存后生效。">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Input
             value={cfg.ccSwitchDBPath}
             onChange={e => setCfg(c => ({ ...c, ccSwitchDBPath: e.target.value }))}
             placeholder="例: C:\Users\用户名\.cc-switch\cc-switch.db"
-            className="flex-1"
+            className="flex-1 min-w-0 max-w-lg"
           />
           <Button className="shrink-0" onClick={detectDB} disabled={detecting}>
             {detecting ? '检测中…' : '检测'}

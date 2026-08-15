@@ -80,15 +80,15 @@ export default function SettingsPage({ onBack, pref, setPref, handleSettingsChan
   }, [nameDrafts, toast]);
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 min-w-0">
       {/* 顶部导航：返回 + 标题 */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button className="h-8 w-8 p-0" icon={<ArrowLeftIcon className="size-4" />} onClick={onBack} />
         <h1 className="text-base font-semibold">设置</h1>
       </div>
 
-      {/* 设置类型过滤：宽度拉满 */}
-      <div className="py-4 w-full">
+      {/* 设置类型过滤：限宽居中，避免全宽下三个 Tab 被拉得过宽 */}
+      <div className="py-4 w-full max-w-md mx-auto">
         <Segmented
           block
           value={tab}

@@ -96,7 +96,7 @@ export default function SettingsMaintenance({ onClear, onFullSync, fullSyncing }
 
   return (
     <>
-      <div className="space-y-6 max-w-xl">
+      <div className="space-y-6 w-full">
         <SettingField title="导入 / 导出数据" description="导出用量为 JSON 供跨设备合并；从导出 JSON 合并用量与设备，重复导入不会重复计数。">
           <div className="flex gap-2">
             <Button onClick={handleExport} disabled={exporting}>

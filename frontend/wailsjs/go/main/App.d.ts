@@ -22,6 +22,8 @@ export function FetchAllQuota():Promise<Array<model.QuotaData>>;
 
 export function FetchQuota(arg1:number):Promise<model.QuotaData>;
 
+export function GetAppVersion():Promise<string>;
+
 export function GetAutoSyncInterval():Promise<number>;
 
 export function GetDashboardData():Promise<model.DashboardData>;

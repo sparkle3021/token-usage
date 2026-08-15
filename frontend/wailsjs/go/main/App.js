@@ -42,6 +42,10 @@ export function FetchQuota(arg1) {
   return window['go']['main']['App']['FetchQuota'](arg1);
 }
 
+export function GetAppVersion() {
+  return window['go']['main']['App']['GetAppVersion']();
+}
+
 export function GetAutoSyncInterval() {
   return window['go']['main']['App']['GetAutoSyncInterval']();
 }

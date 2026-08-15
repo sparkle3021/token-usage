@@ -108,7 +108,7 @@ function AppContent({ dark, pref, setPref }) {
   // 设置页：独立于看板数据加载，直接渲染，返回时恢复来源页
   if (page === 'settings') {
     return (
-      <div className="max-w-[1440px] mx-auto p-4 md:p-6 pb-16 font-sans flex flex-col h-screen overflow-hidden">
+      <div className="max-w-[1440px] mx-auto px-6 md:px-10 py-4 md:py-6 pb-16 font-sans flex flex-col h-screen overflow-hidden">
         <SettingsPage
           onBack={() => setPage(prevPage)}
           pref={pref}
@@ -137,7 +137,7 @@ function AppContent({ dark, pref, setPref }) {
   );
 
   return (
-    <div className="max-w-[1440px] mx-auto p-4 md:p-6 pb-16 font-sans flex flex-col h-screen overflow-hidden">
+    <div className="max-w-[1440px] mx-auto px-6 md:px-10 py-4 md:py-6 pb-16 font-sans flex flex-col h-screen overflow-hidden">
       <Header
         page={page}
         setPage={setPage}

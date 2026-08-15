@@ -429,7 +429,7 @@ function RankList({ onSelect }) {
         </Button>
       </div>
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} styles={{ body: { padding: 16 } }}>
               <Skeleton active paragraph={{ rows: 2 }} />
@@ -446,7 +446,7 @@ function RankList({ onSelect }) {
           <p className="text-sm">暂无模型数据</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
           {list.map((m, i) => (
             <Card
               key={m.model}

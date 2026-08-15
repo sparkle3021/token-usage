@@ -75,7 +75,7 @@ function EditPriceModal({ row, onClose, onSaved }) {
       cancelText="取消"
       confirmLoading={saving}
       centered
-      width={560}
+      width="min(560px, calc(100vw - 48px))"
     >
       <div className="text-[11px] text-muted-foreground/70 mb-2 truncate" title={row.modelKey}>
         {row.modelKey}
@@ -286,7 +286,7 @@ export default function SettingsPricing() {
   ];
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-4 w-full">
       <SettingField title="模型价格" description="统一价格源（LiteLLM 快照 + 手动调整），下表价格单位均为美元 / 100 万 tokens。拉取更新会覆盖手动修改；修改后立即生效，仅影响之后采集的消息。">
         <div className="flex flex-wrap items-center gap-3">
           <Button type="primary" size="middle" icon={<RefreshCwIcon className="size-4" />} loading={updating} onClick={() => setConfirmUpdate(true)}>
@@ -330,6 +330,7 @@ export default function SettingsPricing() {
           columns={activeColumns}
           dataSource={activeRows}
           pagination={false}
+          scroll={{ x: 'max-content' }}
           locale={{ emptyText: '暂无使用中的模型，采集数据后会自动出现' }}
         />
       ) : (
@@ -340,6 +341,7 @@ export default function SettingsPricing() {
           columns={allColumns}
           dataSource={filteredAll}
           pagination={{ pageSize: 50, showSizeChanger: false, showLessItems: true, showTotal: (t) => `共 ${t} 个模型` }}
+          scroll={{ x: 'max-content' }}
         />
       )}
 
