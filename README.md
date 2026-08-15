@@ -2,7 +2,7 @@
 
 > 本地优先的 AI Token 消耗看板 —— 离线分析、零上传、多工具聚合。
 
-Token Dashboard 是一款桌面应用，直接读取本机 AI CLI 工具（Claude Code、Codex、Gemini CLI、DeepSeek Harness 等）的会话日志，聚合写入本地 SQLite 数据库，并结合 LiteLLM / OpenRouter 定价数据估算模型费用。
+Token Dashboard 是一款桌面应用，直接读取本机 AI CLI 工具（Claude Code、Codex、Gemini CLI、DeepSeek Harness 等）的会话日志，聚合写入本地 SQLite 数据库，并结合 LiteLLM 定价数据估算模型费用。
 
 数据**全部存储在本地**，不联网、不上传、不依赖任何外部服务。
 
@@ -10,7 +10,7 @@ Token Dashboard 是一款桌面应用，直接读取本机 AI CLI 工具（Claud
 
 - **多工具聚合** —— 同时追踪 8 款 AI 编程工具的使用数据
 - **多维度统计** —— 按工具、模型、日期维度查看 Token 消耗和费用
-- **趋势图表** —— ECharts 折线/柱状图展示每日/每小时用量变化，支持日/周/月/年粒度聚合
+- **趋势图表** —— Recharts 折线/柱状图展示每日/每小时用量变化，支持日/周/月/年粒度聚合
 - **热力图** —— 按小时×星期的 Token 消耗密度热力图（最近一年窗口），点击日期可钻取小时级明细
 - **模型排行** —— 按总用量排名的模型卡片列表，一目了然各模型消耗占比
 - **模型详情** —— 单模型请求次数 / Token 三态 / 费用图表，7 档时间维度（今天/昨天/近7/近30/近90/自定义/全部），今天/昨天展示 24 小时分布
@@ -18,7 +18,9 @@ Token Dashboard 是一款桌面应用，直接读取本机 AI CLI 工具（Claud
 - **跨设备合并** —— 设备 UUID 身份识别 + 用量数据导出/导入，可合并多台机器的用量统计
 - **明暗主题** —— 亮色/暗色/跟随系统三态切换，图表与弹窗全量适配
 - **自动采集** —— 定时自动同步（10 秒/30 秒/1 分钟/5 分钟/不同步，默认 30 秒）
-- **定价更新** —— 一键从 LiteLLM / OpenRouter 拉取最新模型定价
+- **定价管理** —— 一键从 LiteLLM 拉取最新模型定价，设置页可查看/搜索/改价/删除（统一以 $/100 万 tokens 计价）
+- **系统托盘** —— 关闭窗口驻留托盘常驻，菜单一键显示主窗口 / 立即采集 / 退出
+- **单实例保护** —— 防多开，重复启动自动唤起已有实例窗口
 - **CC-Switch 兼容** —— 支持从 CC-Switch 直接导入历史数据
 - **DeepSeek Harness 支持** —— zstd 分帧增量解析会话日志（`session.jsonl.zstd`），模型归属追踪、会话级聚合
 
@@ -60,6 +62,7 @@ wails dev
 | OpenClaw | JSONL | `~/.openclaw/agents/` |
 | Hermes Agent | SQLite | `~/.hermes/state.db` |
 | CC-Switch | SQLite | `~/.cc-switch/cc-switch.db`（外部导入） |
+| DeepSeek Harness | JSONL | `~/.dsh/sessions/` |
 
 ## 🚀 快速上手
 
@@ -92,7 +95,7 @@ wails dev
 
 ## 🛠 技术栈
 
-[Wails v2](https://wails.io) · Go · [modernc.org/sqlite](https://modernc.org/sqlite) · React 19 · Vite 8 · Tailwind CSS v4 · [Ant Design v6](https://ant.design) · [ECharts](https://echarts.apache.org)
+[Wails v2](https://wails.io) · Go · [modernc.org/sqlite](https://modernc.org/sqlite) · React 19 · Vite 8 · Tailwind CSS v4 · [Ant Design v6](https://ant.design) · [Recharts](https://recharts.org)
 
 ## 🔒 隐私
 
