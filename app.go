@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"token-dashboard/internal/collector/orchestrator"
@@ -31,6 +32,11 @@ type App struct {
 	quotaSvc      *quota.Service
 	pricingSvc    *service.PricingService
 	dataDir       string
+
+	// quitting 托盘主动退出标志：置位后 OnBeforeClose 放行（否则 runtime.Quit 也会被拦截，应用退不掉）
+	quitting atomic.Bool
+	// started 在 startup 回调完成后关闭，托盘据此等待 ctx 就绪
+	started chan struct{}
 }
 
 // NewApp 初始化配置、数据库、定价引擎和采集引擎，组装各服务并返回 App 实例。
@@ -42,7 +48,7 @@ func NewApp() *App {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[app] database: %v\n", err)
 		log.Printf("[app] NewApp database failed path=%s err=%v", cfg.DBPath, err)
-		return &App{ctx: context.Background()}
+		return &App{ctx: context.Background(), started: make(chan struct{})}
 	}
 	log.Printf("[app] NewApp database opened path=%s", cfg.DBPath)
 
@@ -76,18 +82,23 @@ func NewApp() *App {
 		quotaSvc:      quotaSvc,
 		pricingSvc:    pricingSvc,
 		dataDir:       cfg.DataDir,
+		started:       make(chan struct{}),
 	}
 }
 
 // startup Wails 启动回调，保存上下文、桥接采集事件、触发 CC-Switch 检测与检查点校验。
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	a.collectionSvc.SetCtx(ctx)
-	a.collectionSvc.SetOnCollectionDone(func() { a.dashboardSvc.InvalidateCaches() })
-	a.collectionSvc.WireEngineEvents()
+	if a.collectionSvc != nil {
+		a.collectionSvc.SetCtx(ctx)
+		a.collectionSvc.SetOnCollectionDone(func() { a.dashboardSvc.InvalidateCaches() })
+		a.collectionSvc.WireEngineEvents()
 
-	a.settingSvc.EnsureDefaultCCSwitchPath()
-	a.collectionSvc.ReconcileStaleCheckpoints()
+		a.settingSvc.EnsureDefaultCCSwitchPath()
+		a.collectionSvc.ReconcileStaleCheckpoints()
+	}
+	// 托盘 onReady 等待此 channel；startup 完成前菜单回调不得访问 ctx
+	close(a.started)
 }
 
 // shutdown Wails 关闭回调，停止自动同步定时器并关闭数据库连接。
