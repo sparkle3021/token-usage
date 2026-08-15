@@ -35,9 +35,15 @@ func NewPricingService(pr *pricing.Engine, db *database.Manager, dataDir string)
 	return &PricingService{pricing: pr, db: db, dataDir: dataDir}
 }
 
+// legacyPricingPath 旧版遗留的定价 JSON（config 目录曾承担价格存储，现已入库）。
+// 仅作为一次性迁移源：迁移成功即删除，config 目录不再存价格信息。
+func (s *PricingService) legacyPricingPath() string {
+	return filepath.Join(s.dataDir, "config", "pricing-litellm.json")
+}
+
 // EnsureSeeded 保证价格数据已入库并加载进引擎。
-// 表为空时执行 seed：优先迁移现有 config/pricing-litellm.json（保留用户已拉取的最新版），
-// 否则使用 embed 默认数据。表非空时仅加载进内存。
+// 表为空时 seed：优先迁移旧版遗留 JSON（一次性，成功后删除），否则使用 embed 默认数据。
+// 表非空时仅加载进内存，并顺带清理遗留 JSON（价格唯一存储于 model_pricing 表）。
 func (s *PricingService) EnsureSeeded() error {
 	if s.db == nil || s.pricing == nil {
 		return nil
@@ -47,12 +53,15 @@ func (s *PricingService) EnsureSeeded() error {
 		return fmt.Errorf("count model pricing: %w", err)
 	}
 	if n > 0 {
+		s.removeLegacyPricing()
 		return s.loadFromDB()
 	}
 
+	legacyUsed := false
 	var raw []byte
-	if legacy, err := os.ReadFile(filepath.Join(s.dataDir, "config", "pricing-litellm.json")); err == nil && len(legacy) > 0 {
+	if legacy, err := os.ReadFile(s.legacyPricingPath()); err == nil && len(legacy) > 0 {
 		raw = legacy
+		legacyUsed = true
 		log.Printf("[service] pricing seed from legacy json bytes=%d", len(raw))
 	} else {
 		raw = assets.PricingLitellm
@@ -67,8 +76,23 @@ func (s *PricingService) EnsureSeeded() error {
 		return fmt.Errorf("upsert pricing seed: %w", err)
 	}
 	s.pricing.LoadRows(rows)
+	if legacyUsed {
+		s.removeLegacyPricing()
+	}
 	log.Printf("[service] pricing seeded rows=%d", len(rows))
 	return nil
+}
+
+// removeLegacyPricing 删除旧版遗留的定价 JSON（存在才删，失败仅记日志）。
+func (s *PricingService) removeLegacyPricing() {
+	path := s.legacyPricingPath()
+	if err := os.Remove(path); err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("[service] remove legacy pricing json failed path=%s err=%v", path, err)
+		}
+		return
+	}
+	log.Printf("[service] legacy pricing json removed path=%s", path)
 }
 
 func (s *PricingService) loadFromDB() error {
