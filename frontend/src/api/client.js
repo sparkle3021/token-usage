@@ -75,6 +75,11 @@ export function currentOp() {
   return invoke('CurrentOp');
 }
 
+/** 获取应用版本号（设置页展示） */
+export function getAppVersion() {
+  return invoke('GetAppVersion');
+}
+
 /** 获取应用设置 */
 export function getSettings() {
   return invoke('GetSettings');

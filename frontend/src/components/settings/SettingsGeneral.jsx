@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Select, Input, Button, Segmented } from 'antd';
 import { getMessage } from '@/lib/message.js';
-import { detectCCSwitchDB } from '@/api/client.js';
+import { detectCCSwitchDB, getAppVersion } from '@/api/client.js';
 import SettingField from '@/components/common/SettingField.jsx';
 
 /**
@@ -12,8 +12,14 @@ export default function SettingsGeneral({ cfg, setCfg, persist, pref, setPref, l
   const [detecting, setDetecting] = useState(false);
   const [savingAutoSync, setSavingAutoSync] = useState(false);
   const [savingPath, setSavingPath] = useState(false);
+  const [version, setVersion] = useState('');
 
   const toast = getMessage();
+
+  // 应用版本（关于信息）
+  useEffect(() => {
+    getAppVersion().then(setVersion).catch(() => {});
+  }, []);
 
   // 自动同步间隔：选择即保存
   const saveAutoSync = useCallback(async (v) => {
@@ -109,6 +115,12 @@ export default function SettingsGeneral({ cfg, setCfg, persist, pref, setPref, l
             { label: '跟随系统', value: 'system' },
           ]}
         />
+      </SettingField>
+
+      <SettingField title="关于" description="本地优先的 AI Token 消耗看板 —— 离线分析、零上传、多工具聚合。">
+        <div className="text-sm">
+          版本 <span className="tabular-nums text-foreground/80">{version || '—'}</span>
+        </div>
       </SettingField>
     </div>
   );

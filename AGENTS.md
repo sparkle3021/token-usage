@@ -220,7 +220,7 @@ No HTTP API — Wails handles IPC bridge between WebView2 JS context and Go.
 
 ## Key Config
 
-- `wails.json` — Wails project config (frontend install/build/dev watcher commands, productVersion 0.4.0)
+- `wails.json` — Wails project config (frontend install/build/dev watcher commands, productVersion 0.5.0)
 - `frontend/package.json` — npm dependencies and scripts
 - `frontend/.oxlintrc.json` — oxlint config (React hooks + export rules)
 - `frontend/vite.config.js` — `@/` path alias → `src/`, strictPort: false (auto-fallback), Tailwind CSS v4 plugin
