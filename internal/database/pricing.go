@@ -9,7 +9,9 @@ import (
 	"token-dashboard/internal/model"
 )
 
-// UpsertModelPricing 全量 UPSERT 价格行（拉取更新用，同 key 覆盖，含用户手动修改）。
+// UpsertModelPricing 全量 UPSERT 价格行（拉取更新用）。
+// 保护规则：新值为 0 时保留库中已有值（防止模型下线/上游字段清空把价格清零，
+// 也保留用户手动设置的价格）；新值非 0 才覆盖。
 func (m *Manager) UpsertModelPricing(rows []model.ModelPricing) error {
 	if len(rows) == 0 {
 		return nil
@@ -19,10 +21,10 @@ func (m *Manager) UpsertModelPricing(rows []model.ModelPricing) error {
 		INSERT INTO model_pricing (model_key, input_rate, output_rate, cache_read_rate, cache_write_rate, fetched_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))
 		ON CONFLICT(model_key) DO UPDATE SET
-			input_rate = excluded.input_rate,
-			output_rate = excluded.output_rate,
-			cache_read_rate = excluded.cache_read_rate,
-			cache_write_rate = excluded.cache_write_rate,
+			input_rate = CASE WHEN excluded.input_rate > 0 THEN excluded.input_rate ELSE model_pricing.input_rate END,
+			output_rate = CASE WHEN excluded.output_rate > 0 THEN excluded.output_rate ELSE model_pricing.output_rate END,
+			cache_read_rate = CASE WHEN excluded.cache_read_rate > 0 THEN excluded.cache_read_rate ELSE model_pricing.cache_read_rate END,
+			cache_write_rate = CASE WHEN excluded.cache_write_rate > 0 THEN excluded.cache_write_rate ELSE model_pricing.cache_write_rate END,
 			fetched_at = excluded.fetched_at,
 			updated_at = datetime('now','localtime')`,
 		func(r model.ModelPricing) []interface{} {
