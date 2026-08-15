@@ -2,15 +2,11 @@ package main
 
 import (
 	"context"
-	_ "embed"
 	"log"
 
 	"github.com/getlantern/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
-
-//go:embed build/windows/icon.ico
-var trayIconBytes []byte
 
 // startTray 启动系统托盘（systray 消息泵运行在独立 goroutine，与 Wails 主循环互不干扰）。
 // onReady 先等待 app.started 关闭（即 Wails startup 回调完成、ctx 就绪）再创建菜单，
@@ -21,9 +17,7 @@ func startTray(app *App) {
 			<-app.started
 			log.Println("[tray] ready, creating menu")
 
-			if len(trayIconBytes) > 0 {
-				systray.SetIcon(trayIconBytes)
-			}
+			setupTrayIcon() // 平台差异见 platform_*.go
 			systray.SetTooltip("TokenUsage - token 用量统计")
 
 			showItem := systray.AddMenuItem("显示主窗口", "显示主窗口")
