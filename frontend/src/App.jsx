@@ -5,7 +5,8 @@
  */
 
 import { Component, useState, useCallback, useEffect } from 'react';
-import { App as AntdApp, Button, ConfigProvider, theme as antdTheme } from 'antd';
+import { App as AntdApp, Button, ConfigProvider } from 'antd';
+import { getConfigProviderProps } from '@/lib/theme.js';
 import { useDashboardData } from '@/hooks/useDashboardData.js';
 import { useCollection } from '@/hooks/useCollection.js';
 import { useSettings } from '@/hooks/useSettings.js';
@@ -202,7 +203,7 @@ export default function App() {
   }, [resolvedDark]);
 
   return (
-    <ConfigProvider theme={{ algorithm: resolvedDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }} button={{ autoInsertSpace: false }}>
+    <ConfigProvider {...getConfigProviderProps(resolvedDark)}>
       <AntdApp>
         <FilterProvider>
           <ErrorBoundary>

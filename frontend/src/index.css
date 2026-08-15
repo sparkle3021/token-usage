@@ -158,3 +158,68 @@
 .flex-dialog-body {
   flex: 0 1 auto;
 }
+
+/* ============================================================
+   主题增强：shadcn 风格按钮/输入框/通知
+   配合 frontend/src/lib/theme.js 的 classNames 注入（t- 前缀类）。
+   选择器带 .ant-btn/.ant-input 前缀保证特异性高于 antd 默认样式。
+   ============================================================ */
+.ant-btn.t-btn-primary {
+  background-color: #18181b;
+  color: #ffffff;
+  border-color: #18181b;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ant-btn.t-btn-primary:hover {
+  background-color: #27272a;
+  border-color: #27272a;
+  color: #ffffff;
+}
+.ant-btn.t-btn-default {
+  background-color: #ffffff;
+  color: #18181b;
+  border-color: #e4e4e7;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ant-btn.t-btn-default:hover {
+  background-color: #f4f4f5;
+  border-color: #d4d4d8;
+  color: #18181b;
+}
+.ant-btn.t-btn-danger {
+  background-color: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
+  font-weight: 500;
+}
+.ant-btn.t-btn-danger:hover {
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+  color: #ffffff;
+}
+.ant-input.t-input-root {
+  border-color: #e4e4e7;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ant-input.t-input-root.t-input-error {
+  border-color: #dc2626;
+}
+.t-input-element {
+  color: #18181b;
+}
+.ant-select.t-select-root .ant-select-selector {
+  border-color: #e4e4e7 !important;
+}
+.t-notification-root {
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+.t-notification-title {
+  font-weight: 600;
+}
+.t-notification-description {
+  color: #525252;
+}
