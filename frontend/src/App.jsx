@@ -9,7 +9,7 @@ import { App as AntdApp, Button, ConfigProvider, theme as antdTheme } from 'antd
 import { useDashboardData } from '@/hooks/useDashboardData.js';
 import { useCollection } from '@/hooks/useCollection.js';
 import { useSettings } from '@/hooks/useSettings.js';
-import { FilterProvider } from '@/store/filterStore.jsx';
+import { FilterProvider, useFilter } from '@/store/filterStore.jsx';
 import { formatTs } from '@/lib/formatters.js';
 import { setMessageApi } from '@/lib/message.js';
 import { clearAllData } from '@/api/client.js';
@@ -75,7 +75,18 @@ function AppContent({ dark, pref, setPref }) {
   const [prevPage, setPrevPage] = useState('dashboard');
 
   const { M, loadError, refreshing, fetchData, fetchTimeSeries, allSources, allModels, heatmapData } = useDashboardData();
+  const { f, dispatch } = useFilter();
   const [lastSyncTs, setLastSyncTs] = useState(null);
+
+  // 「全部」范围锚定数据全集：自动同步带来新日期后重算起止。
+  // 与跨天回滚同因——数据已刷新但范围仍停留在上次切换时的 min/max，需手动切换才恢复。
+  useEffect(() => {
+    if (f.rangeId !== 'all' || !M?.daily?.length) return;
+    const sorted = M.daily.map(x => x.usageDate).filter(Boolean).sort();
+    if (!sorted.length) return;
+    if (sorted[0] === f.startDate && sorted[sorted.length - 1] === f.endDate) return;
+    dispatch({ type: 'SET_RANGE', rangeId: 'all', daily: M.daily });
+  }, [f, M?.daily, dispatch]);
 
   // 同步完成（手动采集轮询结束 / 后端自动同步 collection:done）统一在此记录时间，
   // 作为 Header「最后同步」显示来源，不查库。

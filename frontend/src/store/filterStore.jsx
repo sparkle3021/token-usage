@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useMemo } from 'react';
+import { createContext, useContext, useReducer, useMemo, useEffect, useRef } from 'react';
 import { daysAgo, addDays } from '@/lib/formatters.js';
 
 /**
@@ -122,6 +122,23 @@ function createInitialState() {
 export function FilterProvider({ children }) {
   const [f, dispatch] = useReducer(filterReducer, undefined, createInitialState);
   const value = useMemo(() => ({ f, dispatch, ranges }), [f, dispatch]);
+
+  // 跨天回滚：本地日期变化时重新锚定相对时间范围（今天/昨天/近N天/本月/上月）。
+  // 锚定原本只在挂载/手动切换时计算（createInitialState / SET_RANGE → getRangeSpan）；
+  // 应用持续开启跨天后，自动同步只刷新数据、从不重算 startDate/endDate，
+  // 「今天」会一直停留在昨天的日期上，需手动切换时间维度才恢复。
+  // 用轮询而非定时到午夜：睡眠唤醒、时钟校正后也能自愈；'all' 由数据驱动，不在此处理。
+  const anchorRef = useRef(daysAgo(0));
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const today = daysAgo(0);
+      if (today === anchorRef.current) return;
+      anchorRef.current = today;
+      if (f.rangeId !== 'all') dispatch({ type: 'SET_RANGE', rangeId: f.rangeId });
+    }, 30 * 1000);
+    return () => clearInterval(timer);
+  }, [f.rangeId, dispatch]);
+
   return (
     <FilterContext.Provider value={value}>
       {children}

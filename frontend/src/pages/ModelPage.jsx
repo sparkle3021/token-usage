@@ -276,6 +276,17 @@ function ModelDetail({ model, onBack }) {
   const [refreshing, setRefreshing] = useState(false);
   const color = useMemo(() => oklchToHex(getSourceColor(model)), [model]);
 
+  // 跨天回滚：本地日期变化时更新 todayKey，驱动 series 重算 resolveRange，
+  // 避免详情页持续开启跨天后「今天/昨天」仍停留在旧日期（与看板跨天修复同因）。
+  const [todayKey, setTodayKey] = useState(() => daysAgo(0));
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const today = daysAgo(0);
+      if (today !== todayKey) setTodayKey(today);
+    }, 30 * 1000);
+    return () => clearInterval(timer);
+  }, [todayKey]);
+
   // 独立拉取该模型时间序列（日级 + 小时级）。silent 刷新保留旧数据，仅按钮转圈
   const load = useCallback((silent = false) => {
     if (!silent) { setData(null); setError(null); setLoading(true); }
@@ -306,7 +317,7 @@ function ModelDetail({ model, onBack }) {
       }
     }
     return buildDailySeries(data.daily || [], model, start, end);
-  }, [loading, data, rangeId, customRange, model]);
+  }, [loading, data, rangeId, customRange, model, todayKey]); // eslint-disable-line react-hooks/exhaustive-deps -- todayKey 跨天回滚时驱动重算，resolveRange 内部按当前日期求值
 
   const { xData, requests, inputCache, inputNoCache, output, cost } = series || { xData: [], requests: [], inputCache: [], inputNoCache: [], output: [], cost: [] };
   const totalReq = useMemo(() => requests.reduce((a, b) => a + b, 0), [requests]);
